@@ -78,6 +78,6 @@ Para exigir também os sete NARC da versão PT-BR de referência após a importa
 
     python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum --require-localized-resources
 
-O verificador apenas confirma a presença e a estrutura básica dos arquivos; não inicia o jogo nem comprova que ele é jogável. Depois disso, use o importador para substituir localmente os sete recursos NARC allowlisted.
+O verificador apenas confirma a presença e a estrutura básica dos arquivos; não inicia o jogo nem comprova que ele é jogável. O importador aceita somente os sete hashes definidos em `tools/localization_manifest.py` e valida todos antes da primeira escrita. Depois disso, use o importador para substituir localmente os sete recursos NARC allowlisted.
 
 Não copie ROMs, bancos NARC extraídos, saves ou outros recursos derivados para o Git. Os workflows não publicam executáveis nem conteúdo do jogo. Consulte o [aviso legal](LEGAL.md) antes de distribuir qualquer binário.

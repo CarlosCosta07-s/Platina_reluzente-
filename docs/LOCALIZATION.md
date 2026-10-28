@@ -37,9 +37,10 @@ Os arquivos msgdata/msg.narc e msgdata/scenario/scr_msg.narc são idênticos ent
 
 ## Segurança do importador
 
-O arquivo tools/import_localization.py:
+O arquivo `tools/import_localization.py`:
 
 - valida o cabeçalho da ROM e as tabelas FNT/FAT;
+- exige correspondência SHA-256 dos sete NARC com `tools/localization_manifest.py` antes de escrever qualquer arquivo, impedindo que uma ROM USA ou outra tradução seja importada por engano;
 - só aceita CPUE e extrai caminhos de uma allowlist explícita;
 - valida cabeçalho, tamanho e blocos essenciais dos arquivos NARC;
 - evita sobrescrever os arquivos existentes sem a opção explícita --force;
