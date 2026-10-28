@@ -39,7 +39,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         source.write_text(content, encoding="utf-8")
         return source
 
-    def test_uses_imported_rom_header_and_keeps_packaged_fallback(self):
+    def test_uses_imported_rom_header_and_keeps_desktop_only_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = self.make_source(root)
