@@ -6,7 +6,11 @@ from pathlib import Path
 
 from android.scripts.prepare_android_build import patch_libntr, patch_root, patch_sdk_project
 
-ROOT = """else
+ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
+    version: '1.0')
+build_target = get_option('build_target')
+
+else
 trainer_ai_ss = custom_target(
     'trainer_ai_script.ss', output: 'trainer_ai_script.ss',
     input: files('src/battle/trainer_ai/script.s'), command: ['gcc'],

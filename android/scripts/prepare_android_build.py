@@ -53,6 +53,23 @@ def patch_root(root: Path) -> list[str]:
     path = root / "meson.build"
     text = path.read_text(encoding="utf-8")
 
+    # NASM/Yasm only supports desktop architectures here. Android uses the NDK
+    # integrated assembler for the preprocessed trainer AI source instead.
+    text, changed = replace_once(
+        text, "project('pokeplatinum', ['c', 'cpp', 'nasm'],",
+        "project('pokeplatinum', ['c', 'cpp'],", "Android optional NASM language")
+    if changed:
+        changes.append("parent Meson: make NASM desktop-only")
+    target_line = "build_target = get_option('build_target')\\n\\n"
+    target_block = (
+        target_line + "if (build_target != 'android')\\n"
+        "    add_languages('nasm', required: true)\\n"
+        "endif\\n\\n"
+    )
+    text, changed = replace_once(text, target_line, target_block, "Android conditional NASM detection")
+    if changed:
+        changes.append("parent Meson: skip unsupported NASM detection on Android")
+
     asm_start = "else\ntrainer_ai_ss = custom_target("
     asm_new = """elif (build_target == 'android')
 trainer_ai_ss = custom_target(
