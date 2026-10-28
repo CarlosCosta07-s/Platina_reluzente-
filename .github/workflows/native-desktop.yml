@@ -74,6 +74,24 @@ jobs:
       - name: Compile native Linux target
         working-directory: vendor/pokeplatinum-native
         run: ./drun.sh make linux
+      - name: Verify complete Linux runtime package
+        working-directory: vendor/pokeplatinum-native
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          runtime_dir="build_linux/pokeplatinum"
+          test -d "$runtime_dir"
+          test -f "$runtime_dir/main" || test -f "$runtime_dir/main.exe"
+          for asset in "wazaeffect/we.arc" "battle/skill/waza_seq.narc"; do
+            asset_path="$runtime_dir/$asset"
+            test -s "$asset_path"
+            test "$(head -c 4 "$asset_path")" = "NARC"
+          done
+          {
+            echo "### Linux runtime package"
+            echo "- Executable found in $runtime_dir"
+            echo "- Required animation archives present and NARC-validated"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Audit Android graphics compatibility requirements
         run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Restore Meson dependency references
@@ -122,8 +140,26 @@ jobs:
         shell: powershell
       - name: Compile native Windows target
         working-directory: vendor/pokeplatinum-native
-        run: .\Launch_MSys2.ps1 "make win64"
+        run: .\Launch_MSys2.ps1 "GITHUB_ACTIONS= make win64"
         shell: powershell
+      - name: Verify complete Windows runtime package
+        shell: pwsh
+        run: |
+          $runtimeDir = Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/build_win64/pokeplatinum"
+          if (-not (Test-Path $runtimeDir -PathType Container)) {
+            throw "Native runtime package directory is missing: $runtimeDir"
+          }
+          $executable = @("main", "main.exe") | Where-Object { Test-Path (Join-Path $runtimeDir $_) -PathType Leaf } | Select-Object -First 1
+          if (-not $executable) { throw "Native executable is missing from $runtimeDir" }
+          foreach ($relative in @("wazaeffect/we.arc", "battle/skill/waza_seq.narc")) {
+            $assetPath = Join-Path $runtimeDir $relative
+            if (-not (Test-Path $assetPath -PathType Leaf)) { throw "Required runtime asset is missing: $assetPath" }
+            $bytes = [System.IO.File]::ReadAllBytes($assetPath)
+            if ($bytes.Length -lt 16 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4) -ne "NARC") {
+              throw "Required runtime asset is not a valid NARC: $assetPath"
+            }
+          }
+          "### Windows runtime package`n- Executable: $executable`n- Required animation archives present and NARC-validated" | Add-Content -Path $env:GITHUB_STEP_SUMMARY
       - name: Restore Meson dependency references
         if: always()
         shell: pwsh
