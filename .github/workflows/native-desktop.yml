@@ -36,6 +36,10 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
 
+      - name: Validate native Linux smoke-test shell syntax
+        shell: bash
+        run: bash -n scripts/smoke-test-native-startup.sh scripts/build-native.sh
+
   linux:
     name: Linux x86-64 compile
     runs-on: ubuntu-24.04
