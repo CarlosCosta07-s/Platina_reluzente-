@@ -83,19 +83,24 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
 #if defined(__ANDROID__)
   const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
   std::string importedRomPath;
-  if (androidInternalStoragePath != NULL) {
+  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
     importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
     romFile = fopen(importedRomPath.c_str(), "rb");
+  }
+  if (romFile == NULL) {
+    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
+            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
+    return 1;
   }
 #else
   const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
   if (importedRomPath != NULL && importedRomPath[0] != '\0') {
     romFile = fopen(importedRomPath, "rb");
   }
-#endif
   if (romFile == NULL) {
     romFile = fopen("header.bin", "rb");
   }
+#endif
   if (romFile != NULL) {
     fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
     fclose(romFile);
