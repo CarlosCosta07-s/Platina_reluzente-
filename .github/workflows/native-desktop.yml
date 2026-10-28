@@ -7,8 +7,12 @@ concurrency:
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
+    paths:
+      - ".github/workflows/native-desktop.yml"
+      - ".gitmodules"
+      - "scripts/**"
+      - "tools/**"
+      - "vendor/**"
   workflow_dispatch:
 
 permissions:
