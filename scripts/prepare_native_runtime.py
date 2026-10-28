@@ -39,7 +39,7 @@ ANDROID_SYSTEM_INCLUDES = r'''#if defined(__ANDROID__)
 
 # SDLActivity resolves the exported SDL_main symbol on Android. Keep SDL_MAIN_HANDLED
 # only on desktop, where the upstream simulator intentionally owns a normal main().
-ANDROID_SDL_ENTRYPOINT_BLOCK = r'''#if !defined(SDK_BUILD_ANDROID)
+ANDROID_SDL_ENTRYPOINT_BLOCK = r'''#ifndef SDK_BUILD_ANDROID
 #define SDL_MAIN_HANDLED
 #endif'''
 
