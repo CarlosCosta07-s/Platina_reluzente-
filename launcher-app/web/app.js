@@ -1,4 +1,4 @@
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { registerPlugin } from '@capacitor/core';
 import { persistRomAtomically } from './rom-storage.js';
 
@@ -57,7 +57,6 @@ const NativeGame = registerPlugin('PlatinaGame');
     const { path: destination } = await persistRomAtomically({
       filesystem: Filesystem,
       directory: Directory.Data,
-      encoding: Encoding.BASE64,
       file,
       toBase64
     });
