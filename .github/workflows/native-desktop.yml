@@ -1,5 +1,9 @@
 name: Native desktop build and localization checks
 
+concurrency:
+  group: native-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
