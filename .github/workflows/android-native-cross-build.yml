@@ -173,6 +173,9 @@ jobs:
       - name: Compile native game library
         run: |
           set -Eeuo pipefail
+          # The copy script can be reached by dependency targets during either
+          # compile invocation, so select Android mode before the first one.
+          touch "$RUNNER_TEMP/build_android/.android-target"
           meson compile -C "$RUNNER_TEMP/build_android" main --verbose
           lib="$RUNNER_TEMP/build_android/libmain.so"
           test -s "$lib"
