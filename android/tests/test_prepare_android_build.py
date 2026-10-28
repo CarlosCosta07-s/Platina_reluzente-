@@ -41,7 +41,11 @@ class AndroidMesonPatchTests(unittest.TestCase):
             enet_include = enet / "include" / "enet"
             sdl_include.mkdir(parents=True)
             enet_include.mkdir(parents=True)
-            for name in ("SDL.h", "SDL_main.h", "SDL_system.h", "SDL_thread.h"):
+            for name in (
+                "SDL.h", "SDL_config.h", "SDL_main.h", "SDL_revision.h",
+                "SDL_stdinc.h", "SDL_system.h", "SDL_version.h",
+            ):
+                (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
                 (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
             (enet_include / "enet.h").write_text("/* fixture */\n", encoding="utf-8")
 
@@ -62,7 +66,11 @@ class AndroidMesonPatchTests(unittest.TestCase):
             enet_include = enet / "include" / "enet"
             sdl_include.mkdir(parents=True)
             enet_include.mkdir(parents=True)
-            for name in ("SDL.h", "SDL_main.h", "SDL_system.h"):
+            for name in (
+                "SDL.h", "SDL_config.h", "SDL_main.h", "SDL_revision.h",
+                "SDL_stdinc.h", "SDL_system.h", "SDL_version.h",
+            ):
+                (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
                 (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
             (enet_include / "enet.h").write_text("/* fixture */\n", encoding="utf-8")
 
