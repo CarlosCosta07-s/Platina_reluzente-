@@ -59,6 +59,23 @@ ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
   }
 #endif'''
 
+# Older versions logged chdir failures but continued, which produced confusing
+# later resource errors. Keep this exact pattern so existing prepared trees can
+# be upgraded in place rather than receiving a second Android chdir block.
+LEGACY_ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
+  // The Android plugin extracts the complete runtime tree to this private path.
+  // Set it as the working directory before relative game/config/data files load.
+  const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();
+  if (androidRuntimeStoragePath != NULL) {
+    std::string androidRuntimeDirectory =
+        std::string(androidRuntimeStoragePath) + "/pokeplatinum";
+    if (chdir(androidRuntimeDirectory.c_str()) != 0) {
+      fprintf(stderr, "Unable to enter Android runtime directory: %s\\n",
+              androidRuntimeDirectory.c_str());
+    }
+  }
+#endif'''
+
 PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
   // Windows/Linux receive the file path from the launcher; Android uses SDL's
   // private app-storage path, matching Capacitor Filesystem Directory.Data.
@@ -117,9 +134,18 @@ def _ensure_android_system_includes(source: str) -> tuple[str, bool]:
 def _ensure_android_working_directory(source: str) -> tuple[str, bool]:
     main_entry = "int main(int argc, char *argv[]) {\n"
     patched_entry = main_entry + ANDROID_MAIN_INIT
+    legacy_entry = main_entry + LEGACY_ANDROID_MAIN_INIT
+
     if source.count(patched_entry) == 1:
         return source, False
-    if source.count(patched_entry) > 1 or source.count(main_entry) != 1:
+    if source.count(patched_entry) > 1:
+        raise RuntimePreparationError("Duplicate Android runtime working-directory setup detected.")
+
+    # Upgrade a previously prepared tree in place. Do not append a second
+    # chdir block after changing the failure behavior.
+    if source.count(legacy_entry) == 1:
+        return source.replace(legacy_entry, patched_entry, 1), True
+    if source.count(legacy_entry) > 1 or source.count(main_entry) != 1:
         raise RuntimePreparationError("Expected exactly one simulator main entrypoint for Android working-directory setup.")
     return source.replace(main_entry, patched_entry + "\n", 1), True
 
