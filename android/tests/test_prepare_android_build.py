@@ -43,7 +43,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             enet_include.mkdir(parents=True)
             for name in (
                 "SDL.h", "SDL_config.h", "SDL_main.h", "SDL_revision.h",
-                "SDL_stdinc.h", "SDL_system.h", "SDL_version.h",
+                "SDL_stdinc.h", "SDL_system.h", "SDL_thread.h", "SDL_version.h",
             ):
                 (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
                 (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
