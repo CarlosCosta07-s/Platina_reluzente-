@@ -300,6 +300,60 @@ def patch_android_ppwlobby_c_args(root: Path) -> list[str]:
     return changes
 
 
+
+def patch_android_ppwlobby_map_allocators(root: Path) -> list[str]:
+    """Use libc++-conforming allocator value types for PPW lobby std::map aliases.
+
+    The upstream decompilation passes pair<Key, Value> to std::map, but
+    std::map::value_type is pair<const Key, Value>. libc++ rejects the mismatch
+    at compile time, so adjust only the isolated Android build source tree.
+    """
+    replacements: dict[str, tuple[tuple[str, str], ...]] = {
+        "lib/ppwlobby/include/ilobby/class_ov66_02243B64_sub1.h": (
+            (
+                "PPW_Allocator<std::pair<u32, UnkClass_ov66_02243B64_Sub1_Sub1> >",
+                "PPW_Allocator<std::pair<const u32, UnkClass_ov66_02243B64_Sub1_Sub1> >",
+            ),
+        ),
+        "lib/ppwlobby/include/ilobby/dwci_lobbydata.h": (
+            (
+                "PPW_Allocator<std::pair<s32, PPWString> >",
+                "PPW_Allocator<std::pair<const s32, PPWString> >",
+            ),
+            (
+                "PPW_Allocator<std::pair<PPWString, UnkClass_ov66_02243B64_SubStruct0> >",
+                "PPW_Allocator<std::pair<const PPWString, UnkClass_ov66_02243B64_SubStruct0> >",
+            ),
+        ),
+    }
+
+    staged: dict[Path, str] = {}
+    for relative, pairs in replacements.items():
+        path = root / relative
+        if not path.is_file():
+            raise PatchError(f"PPW lobby map allocator header missing: {path}")
+        original = path.read_text(encoding="utf-8")
+        updated = original
+        for old, new in pairs:
+            if new in updated:
+                if updated.count(new) != 1 or old in updated:
+                    raise PatchError(f"PPW lobby map allocator patch is ambiguous in {path}")
+                continue
+            if updated.count(old) != 1:
+                raise PatchError(f"PPW lobby map allocator marker missing or duplicated in {path}: {old}")
+            updated = updated.replace(old, new, 1)
+        if updated != original:
+            staged[path] = updated
+
+    # Validate every expected marker before writing either header.
+    for path, updated in staged.items():
+        path.write_text(updated, encoding="utf-8")
+    return [
+        "PPW lobby: use libc++-compatible std::map allocator value types in "
+        + path.relative_to(root).as_posix()
+        for path in sorted(staged)
+    ]
+
 def patch_ppwlobby_pic(root: Path) -> list[str]:
     """Enable PIC for PPW lobby static libraries when they enter Android libmain.so."""
     lobby_root = root / "lib" / "ppwlobby"
@@ -1158,6 +1212,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         changes = patch_root(staged)
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_android_ppwlobby_c_args(staged))
+        changes.extend(patch_android_ppwlobby_map_allocators(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         changes.extend(patch_libvct(staged / "subprojects/libvct"))
         for name, (arg_name, dwc) in sdk_projects.items():
@@ -1208,6 +1263,8 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp",
         "subprojects/libntr/libraries/sim/src/sim_g2.cpp",
         "subprojects/libntr/libraries/sim/src/g3_draw.cpp",
+        "lib/ppwlobby/include/ilobby/class_ov66_02243B64_sub1.h",
+        "lib/ppwlobby/include/ilobby/dwci_lobbydata.h",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
     # Include every one so those edits actually reach the checkout used by Meson.
