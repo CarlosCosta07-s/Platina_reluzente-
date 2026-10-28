@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Check that the native executable can initialize its first-launch UI on Linux.
-# It intentionally runs with no ROM or extracted runtime data in a temporary
-# working directory. It does not test actual gameplay or a ROM load.
+# Check that the native desktop package can initialize its first-launch UI on Linux.
+# It runs in a temporary working directory without a ROM or extracted game data.
+# For AppImages, ask the runtime to extract and run instead of requiring FUSE.
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Uso: $0 /caminho/para/build_linux/pokeplatinum/main [segundos-ativos]" >&2
+  echo "Uso: $0 /caminho/para/build_linux/pokeplatinum/pokeplatinum.AppImage [segundos-ativos]" >&2
   exit 2
 fi
 
@@ -21,7 +21,7 @@ if ! [[ "$duration" =~ ^[1-9][0-9]*$ ]]; then
   echo "Duração deve ser um inteiro positivo em segundos." >&2
   exit 2
 fi
-for tool in xvfb-run timeout cp xdotool; do
+for tool in xvfb-run timeout xdotool; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Ferramenta obrigatória ausente: $tool" >&2
     exit 2
@@ -37,7 +37,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Testando inicialização pré-ROM: janela visível + ${duration}s de processo ativo."
+echo "Testando inicialização pré-ROM do pacote: janela visível + ${duration}s de processo ativo."
 echo "Diretório temporário vazio: $workdir"
 echo "Nenhuma ROM nem recurso do jogo será copiado para o teste."
 
@@ -52,7 +52,7 @@ status=0
       active_seconds="$2"
 
       executable_path="$3"
-      "$executable_path" >"$logfile" 2>&1 &
+      APPIMAGE_EXTRACT_AND_RUN=1 "$executable_path" >"$logfile" 2>&1 &
       app_pid=$!
       cleanup_app() {
         if kill -0 "$app_pid" 2>/dev/null; then
