@@ -40,10 +40,10 @@ ANDROID_SYSTEM_INCLUDES = r'''#if defined(__ANDROID__)
 ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
   // The Android plugin extracts the complete runtime tree to this private path.
   // Set it as the working directory before relative game/config/data files load.
-  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
-  if (androidInternalStoragePath != NULL) {
+  const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();
+  if (androidRuntimeStoragePath != NULL) {
     std::string androidRuntimeDirectory =
-        std::string(androidInternalStoragePath) + "/pokeplatinum";
+        std::string(androidRuntimeStoragePath) + "/pokeplatinum";
     if (chdir(androidRuntimeDirectory.c_str()) != 0) {
       fprintf(stderr, "Unable to enter Android runtime directory: %s\n",
               androidRuntimeDirectory.c_str());
