@@ -30,6 +30,7 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "include/simulator/g3_draw.h").write_text(GLAD + "\n", encoding="utf-8")
+        (root / "include/simulator/g3_handler.h").write_text(GLAD + "\n", encoding="utf-8")
         (root / "libraries/sim/src/g3_draw.cpp").write_text(
             '#include <stdio.h>\n#define G3_DRAW_MAX_ITEMS 1000\n'
             'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);\n'
@@ -53,6 +54,9 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertIn("SDL_GL_CONTEXT_PROFILE_ES", main)
             self.assertIn("GLES3/gl32.h", main)
             self.assertIn("#ifndef SDK_BUILD_ANDROID", main)
+            handler = (root / "include/simulator/g3_handler.h").read_text(encoding="utf-8")
+            self.assertIn("GLES3/gl32.h", handler)
+            self.assertNotIn("simulator/glad/glad.h", handler)
             self.assertIn("SIM_GetBorderClampMode()", draw)
             self.assertIn("#version 320 es", shader)
             self.assertIn("precision highp sampler2D;", shader)

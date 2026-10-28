@@ -111,6 +111,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
         root / "libraries/sim/src/sim_main.cpp",
         root / "libraries/sim/src/g3_draw.cpp",
         root / "include/simulator/g3_draw.h",
+        root / "include/simulator/g3_handler.h",
         root / "libraries/sim/meson.build",
         *(root / "libraries/sim/src/shaders" / name for name in SHADERS),
     ]
@@ -131,12 +132,16 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     staged: dict[Path, str] = {}
     changes: list[str] = []
 
-    for relative in ("libraries/sim/src/sim_main.cpp", "include/simulator/g3_draw.h"):
+    for relative in (
+        "libraries/sim/src/sim_main.cpp",
+        "include/simulator/g3_draw.h",
+        "include/simulator/g3_handler.h",
+    ):
         path = root / relative
         updated, changed = replace_exact(path.read_text(encoding="utf-8"), GLAD_BLOCK, GLES_BLOCK, relative)
         staged[path] = updated
         if changed:
-            changes.append(relative + ": select GLES 3.2 headers on Android")
+            changes.append(relative + ": select GLES 3.2 headers on Android and avoid GLAD conflicts")
 
     main_path = root / "libraries/sim/src/sim_main.cpp"
     main, changed = replace_exact(staged[main_path], DESKTOP_CONTEXT, PORTABLE_CONTEXT, "SDL GL context")
