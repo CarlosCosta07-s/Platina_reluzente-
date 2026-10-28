@@ -71,7 +71,7 @@ export async function persistRomAtomically({
     const stagedStat = await filesystem.stat(options(staging));
     if (Number(stagedStat.size) !== file.size) {
       throw new Error(
-        'A ROM importação ficou incompleta: o arquivo salvo tem ' +
+        'A importação da ROM ficou incompleta: o arquivo salvo tem ' +
         stagedStat.size + ' bytes, mas eram esperados ' + file.size + '.'
       );
     }
