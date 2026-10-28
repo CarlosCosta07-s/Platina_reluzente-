@@ -54,11 +54,16 @@ class AndroidMesonPatchTests(unittest.TestCase):
                 "option('build_target', type: 'combo', choices: ['arm', 'win64', 'linux', 'nx'], value: 'arm')\n",
                 encoding="utf-8")
             (root / "meson.build").write_text(
-                "project('libntr', 'c', 'cpp', 'nasm',\\n"
-                "    default_options: { 'default_library': 'static', 'prefer_static': false },\\n"
-                "    meson_version: '>=1.3.0', version: '4.2.30001')\\n"
-                "build_target = get_option('build_target')\n"
-                "if (build_target == 'nx')\n    nitrosdk_args += [\n        '-DSDK_PORT'\n    ]\nendif\n",
+                """project('libntr', 'c', 'cpp', 'nasm',
+    default_options: { 'default_library': 'static', 'prefer_static': false },
+    meson_version: '>=1.3.0', version: '4.2.30001')
+build_target = get_option('build_target')
+if (build_target == 'nx')
+    nitrosdk_args += [
+        '-DSDK_PORT'
+    ]
+endif
+""",
                 encoding="utf-8")
             (root / "libraries/sim").mkdir(parents=True)
             (root / "libraries/sim/meson.build").write_text(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -115,10 +116,17 @@ trainer_ai_ss = custom_target("""
         android_block = block.replace(
             "if (build_target == 'linux')\nmain = executable('main',",
             "if (build_target == 'android')\nmain = shared_library('main',", 1)
-        android_block = android_block.replace("    native: true", "    native: false", 1)
-        android_block = android_block.replace(
-            "    native: false\n)",
-            "    native: false,\n    install: false\n)", 1)
+        android_block, native_replacements = re.subn(
+            r"\bnative\s*:\s*true\b", "native: false", android_block, count=1
+        )
+        if native_replacements != 1:
+            raise PatchError("parent Meson: Linux target lacks one native: true setting")
+        android_block, install_replacements = re.subn(
+            r"(native\s*:\s*false)\s*\)", r"\1,\n    install: false\n)",
+            android_block, count=1
+        )
+        if install_replacements != 1:
+            raise PatchError("parent Meson: unable to disable installation for Android shared library")
         if android_block == block or "shared_library('main'" not in android_block:
             raise PatchError("parent Meson: unable to prepare libmain.so target")
         text = text[:start] + android_block + text[start:]
@@ -141,26 +149,37 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
     text = path.read_text(encoding="utf-8")
     if dwc:
         for arg in ("c_args", "nitrodwc_args"):
-            old = "if (build_target == 'arm')\nadd_project_arguments(" + arg + ","
-            new = "if (build_target == 'arm' or build_target == 'android')\nadd_project_arguments(" + arg + ","
-            text, changed = replace_once(text, old, new, name + " cross compiler")
-            if changed:
-                changes.append(name + ": use cross compiler for Android")
-    marker = "if (build_target == 'android')\n    " + args_name + " += ["
-    if marker not in text:
-        linux = "if (build_target == 'linux')\n    " + args_name + " += ["
-        start = text.find(linux)
-        end = text.find("\nendif", start)
-        if start < 0 or end < 0:
+            if "build_target == 'arm' or build_target == 'android'" not in text:
+                pattern = re.compile(
+                    r"(?m)^if\s*\(\s*build_target\s*==\s*'arm'\s*\)\s*\n"
+                    r"([ \t]*add_project_arguments\(\s*" + re.escape(arg) + r"\s*,)"
+                )
+                text, count = pattern.subn(
+                    "if (build_target == 'arm' or build_target == 'android')\n\\1",
+                    text, count=1
+                )
+                if count != 1:
+                    raise PatchError(name + ": ARM cross-compiler block missing for " + arg)
+                changes.append(name + ": use cross compiler for Android (" + arg + ")")
+    marker = re.compile(
+        r"(?m)^if\s*\(\s*build_target\s*==\s*'android'\s*\)\s*\n"
+        r"[ \t]*" + re.escape(args_name) + r"\s*\+=\s*\["
+    )
+    if not marker.search(text):
+        linux_block = re.compile(
+            r"(?ms)^if\s*\(\s*build_target\s*==\s*'linux'\s*\)\s*\n"
+            r"[ \t]*" + re.escape(args_name) + r"\s*\+=\s*\[.*?^\s*endif\b"
+        )
+        match = linux_block.search(text)
+        if not match:
             raise PatchError(name + ": Linux SDK flag block missing")
-        end += len("\nendif")
         addition = (
             "\n\nif (build_target == 'android')\n    " + args_name + " += [\n"
             "        '-DSDK_PORT', '-DSDK_AARCH64', '-DSDK_BUILD_ANDROID',\n"
             "        '-DSDK_64BIT', '-D_NITRO',\n"
             "    ]\nendif"
         )
-        text = text[:end] + addition + text[end:]
+        text = text[:match.end()] + addition + text[match.end():]
         changes.append(name + ": add Android AArch64 SDK flags")
     path.write_text(text, encoding="utf-8")
     return changes

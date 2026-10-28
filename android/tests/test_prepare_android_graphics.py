@@ -56,7 +56,7 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertIn("SIM_GetBorderClampMode()", draw)
             self.assertIn("#version 320 es", shader)
             self.assertIn("precision highp sampler2D;", shader)
-            meson = (source / "libraries/sim/meson.build").read_text(encoding="utf-8")
+            meson = (root / "libraries/sim/meson.build").read_text(encoding="utf-8")
             meson_lines = meson.splitlines()
             self.assertIn("if(build_target == 'android')", meson_lines)
             self.assertIn("    libsim_args += ['-DIMGUI_IMPL_OPENGL_ES3']", meson_lines)
