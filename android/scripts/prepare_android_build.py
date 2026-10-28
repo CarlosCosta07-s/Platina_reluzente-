@@ -195,6 +195,32 @@ trainer_ai_ss = custom_target("""
 
 
 
+def patch_libvct(root: Path) -> list[str]:
+    """Expose staged SDL2 headers to libvct's independent Meson subproject."""
+    path = root / "meson.build"
+    if not path.is_file():
+        raise PatchError(f"libvct Meson source is missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    marker = "build_target = get_option('build_target')\n"
+    include_block = (
+        "if (build_target == 'android')\n"
+        "    add_project_arguments('-I' + (meson.current_source_dir() / '../libntr/libraries/sim/android_include'), language: ['c', 'cpp'])\n"
+        "endif"
+    )
+
+    if include_block in original:
+        if original.count(include_block) != 1:
+            raise PatchError("libvct: duplicated Android SDL include-path patch")
+        return []
+    if original.count(marker) != 1:
+        raise PatchError("libvct: expected exactly one build_target declaration")
+
+    updated = original.replace(marker, marker + "\n" + include_block + "\n", 1)
+    path.write_text(updated, encoding="utf-8")
+    return ["libvct: expose staged SDL2 headers to Android compilation"]
+
+
 def patch_ppwlobby_pic(root: Path) -> list[str]:
     """Enable PIC for PPW lobby static libraries when they enter Android libmain.so."""
     lobby_root = root / "lib" / "ppwlobby"
@@ -1033,6 +1059,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
                 root / "tools/scripts/copy_pc_files.sh",
                 libntr / "meson.options", libntr / "meson.build"]
     required.extend(root / "subprojects" / name / "meson.options" for name in sdk_projects)
+    required.append(root / "subprojects" / "libvct" / "meson.build")
     missing = [str(p) for p in required if not p.is_file()]
     if missing:
         raise PatchError("Missing Meson source files: " + ", ".join(missing))
@@ -1051,6 +1078,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         changes = patch_root(staged)
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
+        changes.extend(patch_libvct(staged / "subprojects/libvct"))
         for name, (arg_name, dwc) in sdk_projects.items():
             sdk_root = staged / "subprojects" / name
             changes.extend(patch_sdk_project(sdk_root, name, arg_name, dwc))
@@ -1088,6 +1116,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "meson.build",
         "subprojects/libntr/meson.options",
         "subprojects/libntr/meson.build",
+        "subprojects/libvct/meson.build",
         "subprojects/libntr/include/nitro/types.h",
         "subprojects/libntr/include/nitro/os/common/thread.h",
         "subprojects/libntr/include/nitro/mb/mb_fake_child.h",
