@@ -288,25 +288,35 @@ def patch_libntr(root: Path) -> list[str]:
         changes.append("libntr simulator: use NDK ENet")
 
     # Select the Android host-machine compiler for libraries produced by the NDK.
-    target_library_replacements = (
+    android_library_replacements = (
         (
-            "meson.get_compiler('c').find_library('SDL2', dirs: get_option('android_sdl2_libdir'))",
-            "meson.get_compiler('c', native: false).find_library('SDL2', dirs: get_option('android_sdl2_libdir'))",
-            "SDL2 target library lookup",
+            "sdl2_lib = meson.get_compiler('c').find_library('SDL2', dirs: get_option('android_sdl2_libdir'))",
+            "sdl2_lib = declare_dependency(link_args: ['-L' + get_option('android_sdl2_libdir'), '-lSDL2'])",
+            "SDL2 Android link dependency",
         ),
         (
-            "meson.get_compiler('c').find_library('enet', dirs: get_option('android_enet_libdir'))",
-            "meson.get_compiler('c', native: false).find_library('enet', dirs: get_option('android_enet_libdir'))",
-            "ENet target library lookup",
+            "sdl2_lib = meson.get_compiler('c', native: false).find_library('SDL2', dirs: get_option('android_sdl2_libdir'))",
+            "sdl2_lib = declare_dependency(link_args: ['-L' + get_option('android_sdl2_libdir'), '-lSDL2'])",
+            "SDL2 Android link dependency",
+        ),
+        (
+            "enet_lib = meson.get_compiler('c').find_library('enet', dirs: get_option('android_enet_libdir'))",
+            "enet_lib = declare_dependency(link_args: ['-L' + get_option('android_enet_libdir'), '-lenet'])",
+            "ENet Android link dependency",
+        ),
+        (
+            "enet_lib = meson.get_compiler('c', native: false).find_library('enet', dirs: get_option('android_enet_libdir'))",
+            "enet_lib = declare_dependency(link_args: ['-L' + get_option('android_enet_libdir'), '-lenet'])",
+            "ENet Android link dependency",
         ),
     )
-    for old, new, label in target_library_replacements:
+    for old, new, label in android_library_replacements:
         if old in sim:
             sim, changed = replace_once(sim, old, new, label)
             if changed:
-                changes.append("libntr simulator: use target compiler for " + label)
+                changes.append("libntr simulator: link " + label)
         elif new not in sim:
-            raise PatchError(label + ": expected target-library lookup marker missing")
+            raise PatchError(label + ": expected Android link-dependency marker missing")
 
     if "libsim_android_includes" not in sim:
         marker = "libsim_dependencies = [sdl2_dep, enet_dep]"
@@ -320,14 +330,19 @@ def patch_libntr(root: Path) -> list[str]:
         sim, changed = replace_once(sim, marker, replacement, "libntr Android platform libraries")
         if changed:
             changes.append("libntr simulator: link GLES and Android platform libraries")
-    old_system_lookup = "meson.get_compiler('c').find_library(system_library)"
-    new_system_lookup = "meson.get_compiler('c', native: false).find_library(system_library)"
-    if old_system_lookup in sim:
-        sim, changed = replace_once(
-            sim, old_system_lookup, new_system_lookup, "Android system library lookup"
-        )
-        if changed:
-            changes.append("libntr simulator: use target compiler for Android system libraries")
+    old_system_lookups = (
+        "meson.get_compiler('c').find_library(system_library)",
+        "meson.get_compiler('c', native: false).find_library(system_library)",
+    )
+    new_system_lookup = "declare_dependency(link_args: ['-l' + system_library])"
+    for old_system_lookup in old_system_lookups:
+        if old_system_lookup in sim:
+            sim, changed = replace_once(
+                sim, old_system_lookup, new_system_lookup, "Android system library lookup"
+            )
+            if changed:
+                changes.append("libntr simulator: link Android system libraries by linker flag")
+            break
     elif new_system_lookup not in sim:
         raise PatchError("Android system library lookup: expected target-library lookup marker missing")
     new_include_marker = "include_directories: [nitrosdk_includes, libsim_includes] + libsim_android_includes,"
