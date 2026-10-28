@@ -625,10 +625,10 @@ def patch_libntr(root: Path) -> list[str]:
         changes.append("libntr simulator: include Android internal-storage API")
 
     cwd_old = "  // TODO: This broke the linux AppImage build\n  //chdir(SDL_GetBasePath());"
-    cwd_new = """#ifdef SDK_BUILD_ANDROID
+    cwd_new = r"""#ifdef SDK_BUILD_ANDROID
   const char *runtimeStoragePath = SDL_AndroidGetInternalStoragePath();
-  if (runtimeStoragePath == NULL || *runtimeStoragePath == '\\\\0') {
-    fprintf(stderr, "Android internal storage path is unavailable\\\\n");
+  if (runtimeStoragePath == NULL || *runtimeStoragePath == '\0') {
+    fprintf(stderr, "Android internal storage path is unavailable\n");
     return 1;
   }
   std::string runtimePath = std::string(runtimeStoragePath) + "/pokeplatinum";

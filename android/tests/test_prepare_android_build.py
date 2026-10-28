@@ -299,6 +299,8 @@ libsim = library('sim',
             sim_main = (root / "libraries/sim/src/sim_main.cpp").read_text(encoding="utf-8")
             self.assertIn("SDL_AndroidGetInternalStoragePath", sim_main)
             self.assertIn("chdir(runtimePath.c_str())", sim_main)
+            self.assertIn("*runtimeStoragePath == '\\0'", sim_main)
+            self.assertIn('fprintf(stderr, "Android internal storage path is unavailable\\n");', sim_main)
             self.assertIn("PLATINA_IMPORTED_ROM", sim_main)
             self.assertIn("roms/current.nds", sim_main)
             self.assertIn('fopen((importedRomPath != NULL && importedRomPath[0] != 0)', sim_main)
