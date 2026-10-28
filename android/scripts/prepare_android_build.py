@@ -547,6 +547,28 @@ def patch_libntr(root: Path) -> list[str]:
     if changed:
         changes.append("libntr simulator: allow SDLActivity SDL_main entrypoint")
     main_path.write_text(main, encoding="utf-8")
+
+    # Clang used by the Android NDK rejects arithmetic on void*. Preserve
+    # the byte-offset semantics by converting VRAM bases to u8* first.
+    draw_path = root / "libraries/sim/src/g3_draw.cpp"
+    draw = draw_path.read_text(encoding="utf-8")
+    draw_replacements = (
+        (
+            "(u8*)(getTextureVramBank() + s_texImageParam.textureOffset)",
+            "((u8*)getTextureVramBank() + s_texImageParam.textureOffset)",
+            "Android texture VRAM offset",
+        ),
+        (
+            "(u8*)(getTexPlttVramBank() + s_texPlttBase)",
+            "((u8*)getTexPlttVramBank() + s_texPlttBase)",
+            "Android texture palette VRAM offset",
+        ),
+    )
+    for old, new, label in draw_replacements:
+        draw, draw_changed = replace_once(draw, old, new, label)
+        if draw_changed:
+            changes.append("libntr simulator: fix " + label + " for Clang")
+    draw_path.write_text(draw, encoding="utf-8")
     return changes
 
 
@@ -627,6 +649,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/include/nitro/wm/common/wm.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
+        "subprojects/libntr/libraries/sim/src/g3_draw.cpp",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
     # Include every one so those edits actually reach the checkout used by Meson.

@@ -172,8 +172,16 @@ libsim = library('sim',
             (root / "libraries/sim/src").mkdir(parents=True)
             (root / "libraries/sim/src/sim_main.cpp").write_text(
                 "#define SDL_MAIN_HANDLED\nint main() { return 0; }\n", encoding="utf-8")
+            (root / "libraries/sim/src/g3_draw.cpp").write_text(
+                "u8 * vramTex = (u8*)(getTextureVramBank() + s_texImageParam.textureOffset);\n"
+                "u8 * vramPltt = (u8*)(getTexPlttVramBank() + s_texPlttBase);\n",
+                encoding="utf-8")
             patch_libntr(root)
             sim = (root / "libraries/sim/meson.build").read_text(encoding="utf-8")
+            draw = (root / "libraries/sim/src/g3_draw.cpp").read_text(encoding="utf-8")
+            self.assertIn("((u8*)getTextureVramBank() + s_texImageParam.textureOffset)", draw)
+            self.assertIn("((u8*)getTexPlttVramBank() + s_texPlttBase)", draw)
+            self.assertNotIn("getTextureVramBank() + s_texImageParam.textureOffset", draw.replace("((u8*)getTextureVramBank() + s_texImageParam.textureOffset)", ""))
             self.assertIn("android_sdl2_libdir", sim)
             self.assertIn("android_enet_libdir", sim)
             self.assertIn("sdl2_lib = declare_dependency(link_args: ['-L' + get_option('android_sdl2_libdir'), '-lSDL2'])", sim)
