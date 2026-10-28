@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py tools/tests/test_verify_native_package.py
+        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py tools/tests/test_verify_native_package.py
 
       - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
