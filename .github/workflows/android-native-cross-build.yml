@@ -181,6 +181,7 @@ jobs:
           # SDLActivity resolves SDL_main from libmain.so; fail before APK packaging
           # if the Android-specific entrypoint was not exported by the native linker.
           llvm-nm -D --defined-only "$lib" | grep -Eq '[[:space:]]SDL_main([[:space:]]|$)'
+          mkdir -p android-native-artifact
           cp "$lib" android-native-artifact/
           cp "$SDL2_ANDROID_LIBDIR/libSDL2.so" android-native-artifact/
           cp "$ENET_ANDROID_LIBDIR/libenet.a" android-native-artifact/
