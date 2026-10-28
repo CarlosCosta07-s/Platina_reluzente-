@@ -90,10 +90,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           build_root="$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux"
-          mapfile -t appimages < <(find "$build_root" -maxdepth 4 -type f -name 'pokeplatinum-x86_64.AppImage' -print)
+          mapfile -t appimages < <(find "$build_root" -maxdepth 5 -type f -name '*.AppImage' -print)
           if [[ "${#appimages[@]}" -ne 1 ]]; then
-            echo "Expected exactly one pokeplatinum-x86_64.AppImage under $build_root; found ${#appimages[@]}." >&2
-            find "$build_root" -maxdepth 4 -type f -name '*.AppImage' -print || true
+            echo "Expected exactly one AppImage under $build_root; found ${#appimages[@]}." >&2
+            find "$build_root" -maxdepth 5 -type f -name '*.AppImage' -print || true
             exit 1
           fi
           appimage="${appimages[0]}"
