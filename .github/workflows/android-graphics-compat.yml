@@ -1,0 +1,84 @@
+name: Android GLES graphics preparation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-graphics-compat.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-gles-preparation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-and-validate-shaders:
+    name: Patch pinned libntr and validate GLES 3.2 shaders
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Run patcher unit tests
+        run: python -m unittest android.tests.test_prepare_android_graphics -v
+      - name: Install GLSL validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends glslang-tools git
+      - name: Checkout pinned libntr sources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          src="$RUNNER_TEMP/libntr"
+          git init "$src"
+          git -C "$src" remote add origin https://github.com/cybervisi0n/libntr.git
+          git -C "$src" fetch --depth=1 origin 1555d911ac80c0190ac1c321f99f1323de8b3c09
+          git -C "$src" checkout --detach FETCH_HEAD
+          test "$(git -C "$src" rev-parse HEAD)" = "1555d911ac80c0190ac1c321f99f1323de8b3c09"
+          echo "LIBNTR_SOURCE=$src" >> "$GITHUB_ENV"
+      - name: Prepare renderer source and export GLES shaders
+        run: |
+          python android/scripts/prepare_android_graphics.py \
+            --source-root "$LIBNTR_SOURCE" \
+            --shader-output "$RUNNER_TEMP/android-gles-shaders" \
+            --json | tee "$RUNNER_TEMP/android-gles-report.json"
+      - name: Validate each GLES shader
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for shader in "$RUNNER_TEMP"/android-gles-shaders/*; do
+            case "$shader" in
+              *.vert) stage=vert ;;
+              *.frag) stage=frag ;;
+              *) echo "Unknown shader stage: $shader" >&2; exit 1 ;;
+            esac
+            echo "Validating $shader as $stage"
+            glslangValidator -S "$stage" "$shader"
+          done
+      - name: Write workflow summary
+        run: |
+          {
+            echo "## Android GLES 3.2 source preparation"
+            echo
+            echo "Prepared the pinned libntr renderer and validated the four GLES shader sources."
+            echo "This is not a compiled game APK; SDL2 Android packaging and native cross-compilation remain future milestones."
+            echo
+            cat "$RUNNER_TEMP/android-gles-report.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload GLES shader-validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: platina-reluzente-android-gles-preparation
+          path: |
+            ${{ runner.temp }}/android-gles-shaders/*
+            ${{ runner.temp }}/android-gles-report.json
+          if-no-files-found: error
+          retention-days: 14
