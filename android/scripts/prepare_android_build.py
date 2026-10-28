@@ -452,18 +452,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
             changes.extend(patch_sdk_project(staged / "subprojects" / name, name, arg_name, dwc))
         stage_headers(staged / "subprojects/libntr", sdl, enet)
 
-        rels = [
-            "meson.options", "meson.build",
-            "subprojects/libntr/meson.options", "subprojects/libntr/meson.build",
-            "subprojects/libntr/libraries/sim/meson.build",
-            "subprojects/libntr/libraries/sim/src/sim_main.cpp",
-        ]
-        rels.extend(
-            path.relative_to(staged).as_posix()
-            for path in sorted((staged / "lib" / "ppwlobby").rglob("meson.build"))
-        )
-        for name in sdk_projects:
-            rels += [f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"]
+        rels = android_patch_copy_paths(staged, sdk_projects)
         for rel in rels:
             shutil.copy2(staged / rel, root / rel)
         inc_src = staged / "subprojects/libntr/libraries/sim/android_include"
@@ -479,6 +468,34 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         "changes": changes,
         "status": "Android ARM64 Meson target patched; full shared-library compile is the next verification",
     }
+
+
+
+def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bool]]) -> list[str]:
+    """List every Android-patched source file that must be copied back from staging."""
+    rels = [
+        "meson.options",
+        "meson.build",
+        "subprojects/libntr/meson.options",
+        "subprojects/libntr/meson.build",
+        "subprojects/libntr/libraries/sim/src/sim_main.cpp",
+    ]
+    # patch_libntr rewrites PIC predicates across nested library Meson files.
+    # Include every one so those edits actually reach the checkout used by Meson.
+    rels.extend(
+        path.relative_to(staged).as_posix()
+        for path in sorted(
+            (staged / "subprojects" / "libntr" / "libraries").rglob("meson.build")
+        )
+    )
+    rels.extend(
+        path.relative_to(staged).as_posix()
+        for path in sorted((staged / "lib" / "ppwlobby").rglob("meson.build"))
+    )
+    for name in sdk_projects:
+        rels.extend([f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"])
+    # The recursive Meson list can overlap with explicit staging paths.
+    return list(dict.fromkeys(rels))
 
 
 def main(argv: list[str] | None = None) -> int:

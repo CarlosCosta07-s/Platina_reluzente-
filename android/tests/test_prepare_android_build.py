@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -31,6 +31,22 @@ endif
 
 
 class AndroidMesonPatchTests(unittest.TestCase):
+    def test_copyback_includes_nested_libntr_meson_files_patched_for_pic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            staged = Path(tmp)
+            card = staged / "subprojects" / "libntr" / "libraries" / "card" / "meson.build"
+            nested = staged / "subprojects" / "libntr" / "libraries" / "camera" / "src" / "meson.build"
+            card.parent.mkdir(parents=True)
+            nested.parent.mkdir(parents=True)
+            card.write_text("pic: build_target == 'nx' or build_target == 'android'\\n", encoding="utf-8")
+            nested.write_text("pic: build_target == 'nx' or build_target == 'android'\\n", encoding="utf-8")
+
+            paths = android_patch_copy_paths(staged, {})
+
+            self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
+            self.assertIn("subprojects/libntr/libraries/camera/src/meson.build", paths)
+            self.assertEqual(len(paths), len(set(paths)))
+
     def test_root_adds_android_shared_target_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
