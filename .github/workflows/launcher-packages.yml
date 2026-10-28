@@ -1,100 +1,166 @@
 name: Launcher packages for manual testing
 
 concurrency:
-  group: launcher-packages-v2-${{ github.ref }}
+  group: launcher-packages-v3-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: false
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Native desktop build and localization checks
+      - Android native ARM64 cross-build
     branches: [main]
-    paths:
-      - "launcher-app/**"
-      - "android/**"
-      - "scripts/**"
-      - "tools/**"
-      - "vendor/**"
-      - ".gitmodules"
-      - ".github/workflows/native-desktop.yml"
-      - ".github/workflows/android-native-cross-build.yml"
-      - ".github/workflows/android-graphics-compat.yml"
-      - ".github/workflows/launcher-packages.yml"
-  workflow_dispatch:
+    types: [completed]
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  test:
+  verify-platform-builds:
+    name: Require Windows, Linux and Android to pass on the same commit
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      desktop_run_id: ${{ steps.find.outputs.desktop_run_id }}
+      android_run_id: ${{ steps.find.outputs.android_run_id }}
+      head_sha: ${{ steps.find.outputs.head_sha }}
+    steps:
+      - name: Find successful platform builds for the same commit
+        id: find
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.workflow_run.head_sha;
+            const response = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: sha,
+              per_page: 100
+            });
+            const runs = response.data.workflow_runs;
+            const desktop = runs.find(r => r.name === 'Native desktop build and localization checks' &&
+              r.head_sha === sha && r.head_branch === 'main' && r.status === 'completed' && r.conclusion === 'success');
+            const android = runs.find(r => r.name === 'Android native ARM64 cross-build' &&
+              r.head_sha === sha && r.head_branch === 'main' && r.status === 'completed' && r.conclusion === 'success');
+            if (!desktop || !android) {
+              core.setFailed('Pacotes bloqueados: Windows/Linux e Android precisam passar no mesmo commit.');
+              return;
+            }
+            core.setOutput('desktop_run_id', String(desktop.id));
+            core.setOutput('android_run_id', String(android.id));
+            core.setOutput('head_sha', sha);
+
+  launcher-source-checks:
     name: Launcher source checks
+    needs: verify-platform-builds
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-platform-builds.outputs.head_sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
       - name: Install launcher dependencies
         working-directory: launcher-app
         run: npm install --no-audit --no-fund
-      - name: Check JavaScript syntax
+      - name: Run launcher tests
         working-directory: launcher-app
         run: npm test
 
   windows:
-    name: Build Windows launcher EXE
-    needs: test
+    name: Windows launcher with bundled native runtime
+    needs: [verify-platform-builds, launcher-source-checks]
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-platform-builds.outputs.head_sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
-      - name: Install dependencies
+      - name: Download native Windows runtime
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.verify-platform-builds.outputs.desktop_run_id }}
+          name: platina-reluzente-windows-x64
+          path: launcher-app/runtime
+      - name: Verify included executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'launcher-app/runtime/main.exe')) { throw 'main.exe missing; refusing to package a launcher that asks users to select an executable.' }
+      - name: Install launcher dependencies
         working-directory: launcher-app
         run: npm install --no-audit --no-fund
-      - name: Build portable EXE
+      - name: Build complete Windows package
         working-directory: launcher-app
         run: npm run build:windows
-      - name: Upload Windows launcher
+      - name: Upload complete Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: platina-reluzente-launcher-windows-x64
+          name: platina-reluzente-windows-x64-complete
           path: launcher-app/dist/*.exe
           if-no-files-found: error
           retention-days: 14
 
   linux:
-    name: Build Linux launcher AppImage and tarball
-    needs: test
+    name: Linux launcher with bundled native runtime
+    needs: [verify-platform-builds, launcher-source-checks]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-platform-builds.outputs.head_sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
-      - name: Install dependencies
+      - name: Download native Linux runtime archive
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.verify-platform-builds.outputs.desktop_run_id }}
+          name: platina-reluzente-linux-x86_64
+          path: launcher-app/runtime-archive
+      - name: Extract and verify included executable
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p launcher-app/runtime
+          tar -xzf launcher-app/runtime-archive/Platina-Reluzente-Linux-x86_64.tar.gz -C launcher-app/runtime
+          test -s launcher-app/runtime/main
+          chmod +x launcher-app/runtime/main
+          test -x launcher-app/runtime/main
+      - name: Install launcher dependencies
         working-directory: launcher-app
         run: npm install --no-audit --no-fund
-      - name: Build AppImage and tarball
+      - name: Build complete Linux package
         working-directory: launcher-app
         run: npm run build:linux
-      - name: Upload Linux launcher
+      - name: Upload complete Linux package
         uses: actions/upload-artifact@v4
         with:
-          name: platina-reluzente-launcher-linux-x86_64
+          name: platina-reluzente-linux-x86_64-complete
           path: launcher-app/dist/*
           if-no-files-found: error
           retention-days: 14
 
   android:
-    name: Build Android launcher APK
-    needs: test
+    name: Android ROM importer and native game APKs for the same commit
+    needs: [verify-platform-builds, launcher-source-checks]
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-platform-builds.outputs.head_sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -107,15 +173,9 @@ jobs:
         run: |
           set -euo pipefail
           sdk_root="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          if [[ ! -d "$sdk_root/cmdline-tools" ]]; then
-            echo "Android command-line tools were not found under $sdk_root" >&2
-            exit 1
-          fi
+          test -d "$sdk_root/cmdline-tools"
           sdkmanager_path="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          if [[ -z "$sdkmanager_path" ]]; then
-            echo "sdkmanager executable was not found." >&2
-            exit 1
-          fi
+          test -n "$sdkmanager_path"
           echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
           echo "$sdk_root/platform-tools" >> "$GITHUB_PATH"
@@ -127,28 +187,40 @@ jobs:
       - name: Install launcher dependencies
         working-directory: launcher-app
         run: npm install --no-audit --no-fund
-      - name: Generate Capacitor Android project
+      - name: Build web assets and generate Capacitor Android project
         working-directory: launcher-app
-        run: npx cap add android
-      - name: Sync local web launcher into Android project
+        run: |
+          npm run build:web
+          npx cap add android
+      - name: Sync Capacitor Filesystem plugin
         working-directory: launcher-app
         run: npx cap sync android
-      - name: Build debug APK
+      - name: Build ROM importer APK
         working-directory: launcher-app/android
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon assembleDebug
-      - name: Name Android test APK
+      - name: Stage ROM importer APK
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p launcher-app/dist
-          cp launcher-app/android/app/build/outputs/apk/debug/app-debug.apk launcher-app/dist/Platina-Reluzente-Launcher-Android-debug.apk
-          test -s launcher-app/dist/Platina-Reluzente-Launcher-Android-debug.apk
-      - name: Upload Android launcher APK
+          cp launcher-app/android/app/build/outputs/apk/debug/app-debug.apk launcher-app/dist/Platina-Reluzente-Android-ROM-Importer.apk
+          test -s launcher-app/dist/Platina-Reluzente-Android-ROM-Importer.apk
+      - name: Download native Android game APK from matching build
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.verify-platform-builds.outputs.android_run_id }}
+          name: platina-reluzente-android-arm64-experimental-apk
+          path: launcher-app/dist/native-game
+      - name: Upload Android package set
         uses: actions/upload-artifact@v4
         with:
-          name: platina-reluzente-launcher-android-apk
-          path: launcher-app/dist/Platina-Reluzente-Launcher-Android-debug.apk
+          name: platina-reluzente-android-arm64-complete
+          path: |
+            launcher-app/dist/Platina-Reluzente-Android-ROM-Importer.apk
+            launcher-app/dist/native-game/Platina-Reluzente-Android-arm64-experimental.apk
           if-no-files-found: error
           retention-days: 14

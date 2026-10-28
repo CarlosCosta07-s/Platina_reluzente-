@@ -55,16 +55,15 @@
           <div class="eyebrow"><span class="eyebrow-line"></span> JOGO DA BIBLIOTECA</div>
           <h1>Pokémon Platinum</h1>
           <p class="subtitle">Porte nativo comunitário</p>
-          <p class="description">Uma experiência de desktop compilada a partir do código reconstruído. Use esta interface para selecionar o executável local e testar os artefatos de compilação.</p>
+          <p class="description">O pacote desktop já inclui o executável nativo e os recursos do jogo. Importe sua ROM local; não é necessário localizar um executável separado.</p>
           <div class="tag-row">
             <span class="tag">C / C++ NATIVO</span>
             <span class="tag">BUILD EXPERIMENTAL</span>
           </div>
           <div class="hero-actions">
             <button id="launch-button" class="primary-button" type="button">
-              <span class="play-icon" aria-hidden="true">▶</span><span id="launch-label">Iniciar jogo</span>
+              <span class="play-icon" aria-hidden="true">▶</span><span id="launch-label">Importar ROM</span>
             </button>
-            <button id="executable-button" class="secondary-button" type="button">Selecionar executável</button>
           </div>
           <div id="launch-status" class="inline-status" role="status" aria-live="polite">Pronto para configurar o executável local.</div>
         </div>
@@ -84,23 +83,12 @@
             <div class="card-icon rom-icon">▤</div>
             <div class="card-main">
               <div class="card-kicker">ARQUIVO DO JOGO</div>
-              <h3>ROM local (.nds)</h3>
-              <p id="rom-summary">Nenhuma ROM selecionada.</p>
-              <p class="card-footnote">A seleção é local; a integração de extração e importação ainda está pendente.</p>
+              <h3>Importar ROM (.nds)</h3>
+              <p id="rom-summary">Nenhuma ROM importada.</p>
+              <p class="card-footnote">A ROM fica no armazenamento privado deste aplicativo. O arquivo não é enviado à internet nem incluído no pacote.</p>
             </div>
             <button id="rom-button" class="small-button" type="button">Escolher ROM</button>
             <input id="rom-picker" type="file" accept=".nds,application/octet-stream" hidden>
-          </article>
-
-          <article class="setup-card">
-            <div class="card-icon binary-icon">⌘</div>
-            <div class="card-main">
-              <div class="card-kicker">EXECUTÁVEL NATIVO</div>
-              <h3>Build de desktop</h3>
-              <p id="executable-summary">Nenhum executável selecionado.</p>
-              <p class="card-footnote">O launcher inicia o binário na própria pasta para manter os caminhos relativos de recursos.</p>
-            </div>
-            <button id="executable-button-secondary" class="small-button" type="button">Localizar</button>
           </article>
         </div>
       </section>

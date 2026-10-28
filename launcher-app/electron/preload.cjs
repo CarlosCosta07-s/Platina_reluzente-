@@ -1,10 +1,9 @@
 'use strict';
-
 const { contextBridge, ipcRenderer } = require('electron');
-
 contextBridge.exposeInMainWorld('platina', Object.freeze({
   getPlatform: () => ipcRenderer.invoke('platina:platform'),
-  selectRom: () => ipcRenderer.invoke('platina:select-rom'),
-  selectExecutable: () => ipcRenderer.invoke('platina:select-executable'),
-  launchGame: (executablePath) => ipcRenderer.invoke('platina:launch-game', executablePath)
+  getRuntimeStatus: () => ipcRenderer.invoke('platina:runtime-status'),
+  getImportedRom: () => ipcRenderer.invoke('platina:get-imported-rom'),
+  importRom: () => ipcRenderer.invoke('platina:import-rom'),
+  launchGame: () => ipcRenderer.invoke('platina:launch-game')
 }));

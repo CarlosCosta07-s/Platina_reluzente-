@@ -1,107 +1,120 @@
 'use strict';
-
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+const { resolveRuntimeDirectory, findBundledExecutable, validateNdsHeader } = require('./runtime.cjs');
+
+const MAX_ROM_BYTES = 512 * 1024 * 1024;
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 1240,
-    height: 860,
-    minWidth: 760,
-    minHeight: 620,
-    title: 'Platina Reluzente — Launcher',
-    backgroundColor: '#0c1019',
+    width: 1240, height: 860, minWidth: 760, minHeight: 620,
+    title: 'Platina Reluzente — Launcher', backgroundColor: '#0c1019',
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
   });
-
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.loadFile(path.join(__dirname, '..', 'web', 'index.html'));
+  window.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
+}
+function runtimeRoot() {
+  return resolveRuntimeDirectory(app.isPackaged, process.resourcesPath, path.resolve(__dirname, '..'));
+}
+function metadataPath() {
+  return path.join(app.getPath('userData'), 'rom-import.json');
+}
+async function readImportedRom() {
+  try {
+    const metadata = JSON.parse(await fs.promises.readFile(metadataPath(), 'utf8'));
+    const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
+    const stat = await fs.promises.stat(filePath);
+    if (!stat.isFile() || stat.size !== metadata.size) return null;
+    return { ...metadata, filePath };
+  } catch {
+    return null;
+  }
+}
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.once('error', reject);
+    stream.once('end', () => resolve(hash.digest('hex')));
+  });
 }
 
 ipcMain.handle('platina:platform', () => process.platform);
-
-ipcMain.handle('platina:select-rom', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Selecionar ROM local de Nintendo DS',
+ipcMain.handle('platina:runtime-status', async () => {
+  const exe = findBundledExecutable(runtimeRoot(), process.platform);
+  return { available: Boolean(exe), executableName: exe ? path.basename(exe) : '', platform: process.platform };
+});
+ipcMain.handle('platina:get-imported-rom', async () => {
+  const rom = await readImportedRom();
+  return rom ? { name: rom.name, size: rom.size, sha256: rom.sha256 } : null;
+});
+ipcMain.handle('platina:import-rom', async () => {
+  const selection = await dialog.showOpenDialog({
+    title: 'Importar ROM local de Nintendo DS',
     properties: ['openFile'],
-    filters: [{ name: 'ROM de Nintendo DS', extensions: ['nds'] }, { name: 'Todos os arquivos', extensions: ['*'] }]
+    filters: [{ name: 'ROM de Nintendo DS (.nds)', extensions: ['nds'] }]
   });
-  if (result.canceled || result.filePaths.length === 0) return { canceled: true };
-  const filePath = result.filePaths[0];
-  const stat = await fs.promises.stat(filePath);
-  if (!stat.isFile()) return { canceled: true };
-  return { canceled: false, path: filePath, name: path.basename(filePath), size: stat.size };
+  if (selection.canceled || selection.filePaths.length === 0) return { canceled: true };
+
+  const source = selection.filePaths[0];
+  const stat = await fs.promises.stat(source);
+  if (!stat.isFile() || path.extname(source).toLowerCase() !== '.nds') {
+    return { canceled: false, ok: false, message: 'Selecione um arquivo .nds.' };
+  }
+  if (stat.size < 0x200 || stat.size > MAX_ROM_BYTES) {
+    return { canceled: false, ok: false, message: 'Tamanho inválido para uma ROM Nintendo DS. Limite: 512 MiB.' };
+  }
+
+  const sourceFile = await fs.promises.open(source, 'r');
+  const header = Buffer.alloc(0x200);
+  try { await sourceFile.read(header, 0, header.length, 0); }
+  finally { await sourceFile.close(); }
+  if (!validateNdsHeader(header, stat.size)) {
+    return { canceled: false, ok: false, message: 'O cabeçalho não parece ser de uma ROM Nintendo DS válida.' };
+  }
+
+  const romDir = path.join(app.getPath('userData'), 'roms');
+  await fs.promises.mkdir(romDir, { recursive: true });
+  const destination = path.join(romDir, 'current.nds');
+  await fs.promises.copyFile(source, destination);
+  const metadata = {
+    name: path.basename(source), size: stat.size,
+    sha256: await sha256File(destination), storedName: 'current.nds',
+    importedAt: new Date().toISOString()
+  };
+  await fs.promises.writeFile(metadataPath(), JSON.stringify(metadata, null, 2), 'utf8');
+  return { canceled: false, ok: true, name: metadata.name, size: metadata.size, sha256: metadata.sha256 };
 });
 
-ipcMain.handle('platina:select-executable', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Selecionar executável do porte nativo',
-    properties: ['openFile'],
-    filters: process.platform === 'win32'
-      ? [{ name: 'Executável do Windows', extensions: ['exe'] }]
-      : [{ name: 'Aplicativo executável', extensions: ['*'] }]
-  });
-  if (result.canceled || result.filePaths.length === 0) return { canceled: true };
-  const filePath = result.filePaths[0];
-  const stat = await fs.promises.stat(filePath);
-  if (!stat.isFile()) return { canceled: true };
-  return { canceled: false, path: filePath, name: path.basename(filePath) };
-});
-
-ipcMain.handle('platina:launch-game', async (_event, executablePath) => {
-  if (typeof executablePath !== 'string' || executablePath.trim() === '') {
-    return { ok: false, message: 'Selecione primeiro o executável do jogo.' };
+ipcMain.handle('platina:launch-game', async () => {
+  const rom = await readImportedRom();
+  if (!rom) return { ok: false, message: 'Importe primeiro a ROM .nds.' };
+  const root = runtimeRoot();
+  const exe = findBundledExecutable(root, process.platform);
+  if (!exe) {
+    return { ok: false, message: 'Este pacote não contém o executável nativo. Baixe o pacote desktop completo mais recente.' };
   }
-  const resolvedPath = path.resolve(executablePath);
-  let stat;
-  try {
-    stat = await fs.promises.stat(resolvedPath);
-  } catch {
-    return { ok: false, message: 'O executável salvo não foi encontrado. Selecione-o novamente.' };
-  }
-  if (!stat.isFile()) return { ok: false, message: 'O caminho escolhido não é um arquivo.' };
-  if (process.platform === 'win32' && path.extname(resolvedPath).toLowerCase() !== '.exe') {
-    return { ok: false, message: 'No Windows, selecione o arquivo .exe do pacote nativo.' };
-  }
-  if (process.platform !== 'win32') {
-    try {
-      await fs.promises.access(resolvedPath, fs.constants.X_OK);
-    } catch {
-      return { ok: false, message: 'O arquivo não tem permissão de execução. No Linux, use chmod +x no executável.' };
-    }
-  }
-
   return new Promise((resolve) => {
-    const child = spawn(resolvedPath, [], {
-      cwd: path.dirname(resolvedPath),
-      detached: true,
-      stdio: 'ignore',
-      shell: false,
-      windowsHide: false
+    const child = spawn(exe, [], {
+      cwd: root, detached: true, stdio: 'ignore', shell: false, windowsHide: false,
+      env: { ...process.env, PLATINA_IMPORTED_ROM: rom.filePath }
     });
-    child.once('error', (error) => {
-      resolve({ ok: false, message: 'Não foi possível iniciar o executável: ' + error.message });
-    });
+    child.once('error', (error) => resolve({ ok: false, message: 'Falha ao iniciar o executável nativo: ' + error.message }));
     child.once('spawn', () => {
       child.unref();
-      resolve({ ok: true, message: 'O executável foi iniciado em sua própria pasta.' });
+      resolve({ ok: true, message: 'O executável nativo incluído no pacote foi iniciado.' });
     });
   });
 });
 
 app.whenReady().then(() => {
   createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

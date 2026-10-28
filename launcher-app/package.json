@@ -5,17 +5,20 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check web/app.js",
-    "test": "npm run check",
-    "build:windows": "electron-builder --win portable --x64",
-    "build:linux": "electron-builder --linux AppImage tar.gz --x64"
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check web/app.js",
+    "test": "npm run check && node --test tests/*.test.cjs && npm run build:web",
+    "build:windows": "npm run build:web && electron-builder --win portable --x64",
+    "build:linux": "npm run build:web && electron-builder --linux AppImage tar.gz --x64",
+    "build:web": "node scripts/build-web.cjs"
   },
   "devDependencies": {
     "@capacitor/android": "^6.2.1",
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1",
     "electron": "^32.2.7",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "@capacitor/filesystem": "^6.0.3",
+    "esbuild": "^0.24.2"
   },
   "build": {
     "appId": "org.carloscostaxavier.platinareluzentelauncher",
@@ -25,7 +28,7 @@
       "output": "dist"
     },
     "files": [
-      "web/**/*",
+      "web-dist/**/*",
       "electron/**/*",
       "package.json"
     ],
@@ -62,6 +65,16 @@
       "target": [
         "zip"
       ]
-    }
-  }
+    },
+    "extraResources": [
+      {
+        "from": "runtime",
+        "to": "runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  },
+  "type": "module"
 }
