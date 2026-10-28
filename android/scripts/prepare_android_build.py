@@ -46,6 +46,20 @@ def add_target_option(path: Path) -> bool:
     return changed
 
 
+def patch_android_host_toolchain(path: Path) -> list[str]:
+    """Do not require NitroDS toolchain binaries when cross-building the Android target."""
+    text = path.read_text(encoding="utf-8")
+    changes = []
+    for tool in ("gcc", "objcopy"):
+        old = f"find_program('arm-none-eabi-{tool}', native: true)"
+        new = f"find_program('arm-none-eabi-{tool}', native: true, required: build_target == 'arm')"
+        text, changed = replace_once(text, old, new, f"Android host toolchain gate ({tool})")
+        if changed:
+            changes.append(f"parent tools: make arm-none-eabi-{tool} required only for the ARM ROM target")
+    path.write_text(text, encoding="utf-8")
+    return changes
+
+
 def patch_root(root: Path) -> list[str]:
     changes = []
     if add_target_option(root / "meson.options"):
@@ -336,7 +350,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         "libntrwifi": ("nitrowifi_args", False),
         "libntrdwc": ("nitrodwc_args", True),
     }
-    required = [root / "meson.options", root / "meson.build",
+    required = [root / "meson.options", root / "meson.build", root / "tools/meson.build",
                 libntr / "meson.options", libntr / "meson.build"]
     required.extend(root / "subprojects" / name / "meson.options" for name in sdk_projects)
     missing = [str(p) for p in required if not p.is_file()]
@@ -349,8 +363,11 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         staged.mkdir()
         shutil.copy2(root / "meson.options", staged / "meson.options")
         shutil.copy2(root / "meson.build", staged / "meson.build")
+        staged_tools_meson = staged / "tools.meson.build"
+        shutil.copy2(root / "tools/meson.build", staged_tools_meson)
         shutil.copytree(root / "subprojects", staged / "subprojects")
         changes = patch_root(staged)
+        changes.extend(patch_android_host_toolchain(staged_tools_meson))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         for name, (arg_name, dwc) in sdk_projects.items():
             changes.extend(patch_sdk_project(staged / "subprojects" / name, name, arg_name, dwc))
@@ -366,6 +383,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
             rels += [f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"]
         for rel in rels:
             shutil.copy2(staged / rel, root / rel)
+        shutil.copy2(staged_tools_meson, root / "tools/meson.build")
         inc_src = staged / "subprojects/libntr/libraries/sim/android_include"
         inc_dst = root / "subprojects/libntr/libraries/sim/android_include"
         if inc_dst.exists():
