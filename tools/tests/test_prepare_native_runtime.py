@@ -62,7 +62,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
                 root,
                 '#include <SDL2/SDL.h>\n\nint main(int argc, char *argv[]) {\n'
                 + LEGACY_PATCHED_HEADER_LOAD
-                + '\\n}\\n',
+                + '\n}\n',
             )
             self.assertTrue(prepare_native_runtime(root))
             content = source.read_text(encoding="utf-8")
