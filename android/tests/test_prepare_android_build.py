@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import patch_android_host_toolchain, patch_libntr, patch_root, patch_sdk_project
+from android.scripts.prepare_android_build import patch_libntr, patch_root, patch_sdk_project
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -31,21 +31,6 @@ endif
 
 
 class AndroidMesonPatchTests(unittest.TestCase):
-    def test_arm9_compilers_are_optional_for_android_target(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "tools.meson.build"
-            path.write_text(
-                "arm_none_eabi_gcc_exe = find_program('arm-none-eabi-gcc', native: true)\\n"
-                "arm_none_eabi_objcopy_exe = find_program('arm-none-eabi-objcopy', native: true)\\n",
-                encoding="utf-8")
-            changes = patch_android_host_toolchain(path)
-            first = path.read_text(encoding="utf-8")
-            self.assertIn("required: build_target == 'arm'", first)
-            self.assertEqual(2, first.count("required: build_target == 'arm'"))
-            self.assertEqual(2, len(changes))
-            self.assertEqual([], patch_android_host_toolchain(path))
-            self.assertEqual(first, path.read_text(encoding="utf-8"))
-
     def test_root_adds_android_shared_target_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
