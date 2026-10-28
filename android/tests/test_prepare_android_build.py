@@ -46,6 +46,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
             self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
             self.assertIn("subprojects/libntr/include/nitro/mb/mb_fake_child.h", paths)
+            self.assertIn("subprojects/libntr/include/nitro/wm/common/wm.h", paths)
             self.assertIn("subprojects/libntr/libraries/card/include/card_rom.h", paths)
             self.assertIn("subprojects/libntr/libraries/camera/src/meson.build", paths)
             sdk_fnd = staged / "subprojects" / "libntrsystem" / "libraries" / "fnd" / "meson.build"
@@ -121,6 +122,13 @@ endif
                 "#define MB_FAKE_WORK_SIZE       (0x5f20)\n",
                 encoding="utf-8",
             )
+            wm_dir = root / "include" / "nitro" / "wm" / "common"
+            wm_dir.mkdir(parents=True)
+            (wm_dir / "wm.h").write_text(
+                "\tu8 reserved1[WM_ARM9WM_BUF_SIZE -\n"
+                "\t             (20 + 4 + 4 * WM_NUM_OF_CALLBACK + 4 + (4 + 4) * WM_NUM_OF_PORT + 6)];",
+                encoding="utf-8",
+            )
             (root / "libraries/sim").mkdir(parents=True)
             (root / "libraries/sim/meson.build").write_text(
                 """libsim_includes = include_directories('include')
@@ -187,6 +195,10 @@ libsim = library('sim',
             self.assertIn("#ifdef SDK_BUILD_ANDROID", mb_header)
             self.assertIn("#define MB_FAKE_WORK_SIZE       (0x7000)", mb_header)
             self.assertIn("#define MB_FAKE_WORK_SIZE       (0x5f20)", mb_header)
+            wm_header = (root / "include/nitro/wm/common/wm.h").read_text(encoding="utf-8")
+            self.assertIn("#ifdef SDK_BUILD_ANDROID", wm_header)
+            self.assertIn("sizeof(WMCallbackFunc) * WM_NUM_OF_CALLBACK", wm_header)
+            self.assertIn("(20 + 4 + 4 * WM_NUM_OF_CALLBACK + 4 + (4 + 4) * WM_NUM_OF_PORT + 6)", wm_header)
             rom_header = (root / "libraries/card/include/card_rom.h").read_text(encoding="utf-8")
             self.assertIn("#ifdef SDK_BUILD_ANDROID", rom_header)
             self.assertIn("cache_buf[CARD_ROM_PAGE_SIZE] ATTRIBUTE_ALIGN(32)", rom_header)

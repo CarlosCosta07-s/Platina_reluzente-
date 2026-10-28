@@ -378,6 +378,34 @@ def patch_libntr(root: Path) -> list[str]:
         changes.append("libntr: enlarge fake multiplayer workspace only for Android")
     fake_child_header_path.write_text(fake_child_header, encoding="utf-8")
 
+    # WMArm9Buf's padding formula assumes 32-bit pointers. Recalculate the
+    # Android-only padding from native pointer/callback sizes so the host
+    # structure still fits the fixed WM work-buffer reservation.
+    wm_header_path = root / "include" / "nitro" / "wm" / "common" / "wm.h"
+    wm_header = wm_header_path.read_text(encoding="utf-8")
+    old_wm_reserved = (
+        "\tu8 reserved1[WM_ARM9WM_BUF_SIZE -\n"
+        "\t             (20 + 4 + 4 * WM_NUM_OF_CALLBACK + 4 + (4 + 4) * WM_NUM_OF_PORT + 6)];"
+    )
+    new_wm_reserved = (
+        "#ifdef SDK_BUILD_ANDROID\n"
+        "\tu8 reserved1[WM_ARM9WM_BUF_SIZE -\n"
+        "\t    (5 * sizeof(void *) + 2 * sizeof(u16) +\n"
+        "\t     ((sizeof(WMCallbackFunc) - ((5 * sizeof(void *) + 2 * sizeof(u16)) % sizeof(WMCallbackFunc))) % sizeof(WMCallbackFunc)) +\n"
+        "\t     sizeof(WMCallbackFunc) * WM_NUM_OF_CALLBACK + sizeof(WMCallbackFunc) +\n"
+        "\t     (sizeof(WMCallbackFunc) + sizeof(void *)) * WM_NUM_OF_PORT + sizeof(u32) + sizeof(u16))];\n"
+        "#else\n"
+        "\tu8 reserved1[WM_ARM9WM_BUF_SIZE -\n"
+        "\t             (20 + 4 + 4 * WM_NUM_OF_CALLBACK + 4 + (4 + 4) * WM_NUM_OF_PORT + 6)];\n"
+        "#endif"
+    )
+    wm_header, wm_changed = replace_once(
+        wm_header, old_wm_reserved, new_wm_reserved, "Android WMArm9Buf pointer-aware layout"
+    )
+    if wm_changed:
+        changes.append("libntr: calculate WMArm9Buf reservation for Android 64-bit pointers")
+    wm_header_path.write_text(wm_header, encoding="utf-8")
+
     path.write_text(text, encoding="utf-8")
 
     sim_path = root / "libraries/sim/meson.build"
@@ -596,6 +624,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/meson.build",
         "subprojects/libntr/include/nitro/types.h",
         "subprojects/libntr/include/nitro/mb/mb_fake_child.h",
+        "subprojects/libntr/include/nitro/wm/common/wm.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
     ]
