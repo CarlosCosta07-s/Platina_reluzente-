@@ -108,9 +108,9 @@ class AndroidMesonPatchTests(unittest.TestCase):
             card.parent.mkdir(parents=True)
             nested.parent.mkdir(parents=True)
             ppwlobby.parent.mkdir(parents=True)
-            card.write_text("pic: build_target == 'nx' or build_target == 'android'\\n", encoding="utf-8")
-            nested.write_text("pic: build_target == 'nx' or build_target == 'android'\\n", encoding="utf-8")
-            ppwlobby.write_text("fixture\\n", encoding="utf-8")
+            card.write_text("pic: build_target == 'nx' or build_target == 'android'\n", encoding="utf-8")
+            nested.write_text("pic: build_target == 'nx' or build_target == 'android'\n", encoding="utf-8")
+            ppwlobby.write_text("fixture\n", encoding="utf-8")
 
             paths = android_patch_copy_paths(staged, {})
 
@@ -182,17 +182,17 @@ endif
                 encoding="utf-8",
             )
             ilobby.write_text(
-                "lib = static_library('ilobby',\\n"
-                "    c_args: ppwlobby_c_args,\\n"
-                "    cpp_args: cpp_args + ppwlobby_c_args,\\n"
-                ")\\n",
+                "lib = static_library('ilobby',\n"
+                "    c_args: ppwlobby_c_args,\n"
+                "    cpp_args: cpp_args + ppwlobby_c_args,\n"
+                ")\n",
                 encoding="utf-8",
             )
             lobby.write_text(
-                "lib = static_library('lobby',\\n"
-                "    c_args: ppwlobby_c_args,\\n"
-                "    cpp_args: [cpp_args, ppwlobby_c_args],\\n"
-                ")\\n",
+                "lib = static_library('lobby',\n"
+                "    c_args: ppwlobby_c_args,\n"
+                "    cpp_args: [cpp_args, ppwlobby_c_args],\n"
+                ")\n",
                 encoding="utf-8",
             )
 
@@ -303,7 +303,7 @@ libsim = library('sim',
                 encoding="utf-8")
             (root / "libraries/card").mkdir(parents=True)
             (root / "libraries/card/meson.build").write_text(
-                "libcard = library('card', pic: build_target == 'nx', sources: [])\\n",
+                "libcard = library('card', pic: build_target == 'nx', sources: [])\n",
                 encoding="utf-8",
             )
             card_include = root / "libraries/card/include"
