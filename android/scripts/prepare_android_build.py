@@ -287,6 +287,32 @@ def patch_libntr(root: Path) -> list[str]:
         sim = sim.replace(marker, marker + "elif(build_target == 'android')\nenet_lib = meson.get_compiler('c').find_library('enet', dirs: get_option('android_enet_libdir'))\n", 1)
         changes.append("libntr simulator: use NDK ENet")
 
+    # Select the Android host-machine compiler for libraries produced by the NDK.
+    target_library_replacements = (
+        (
+            "meson.get_compiler('c').find_library('SDL2', dirs: get_option('android_sdl2_libdir'))",
+            "meson.get_compiler('c', native: false).find_library('SDL2', dirs: get_option('android_sdl2_libdir'))",
+            "SDL2 target library lookup",
+        ),
+        (
+            "meson.get_compiler('c').find_library('enet', dirs: get_option('android_enet_libdir'))",
+            "meson.get_compiler('c', native: false).find_library('enet', dirs: get_option('android_enet_libdir'))",
+            "ENet target library lookup",
+        ),
+        (
+            "meson.get_compiler('c').find_library(system_library)",
+            "meson.get_compiler('c', native: false).find_library(system_library)",
+            "Android system library lookup",
+        ),
+    )
+    for old, new, label in target_library_replacements:
+        if old in sim:
+            sim, changed = replace_once(sim, old, new, label)
+            if changed:
+                changes.append("libntr simulator: use target compiler for " + label)
+        elif new not in sim:
+            raise PatchError(label + ": expected target-library lookup marker missing")
+
     if "libsim_android_includes" not in sim:
         marker = "libsim_dependencies = [sdl2_dep, enet_dep]"
         replacement = (
