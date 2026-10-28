@@ -42,6 +42,31 @@ A camada de compatibilidade implementa comportamento de APIs do DS; isso não é
 
 O upstream já possui alvos `win64` e `linux` em Meson. Este repositório os aciona por scripts e CI. Primeiro validaremos uma compilação limpa de cada alvo; depois será necessário smoke test manual com uma cópia local válida.
 
+## Android — auditoria inicial do renderer
+
+A revisão do código da dependência libntr fixada em `1555d911ac80c0190ac1c321f99f1323de8b3c09` encontrou incompatibilidades concretas no renderer desktop:
+
+- `libraries/sim/src/sim_main.cpp` solicita explicitamente um contexto SDL/OpenGL 4.2 core.
+- Os shaders de G2/G3 usam a diretiva GLSL `#version 420 core`.
+- `libraries/sim/src/g3_draw.cpp` utiliza `GL_CLAMP_TO_BORDER` quando a textura não deve repetir; essa opção precisa de uma estratégia compatível com GLES ou de uma extensão validada.
+- A base utiliza `glProgramUniform*` e `glDebugMessageCallback`; esses recursos exigem revisão da versão/extensões GLES selecionadas e de suas alternativas.
+- O backend OpenGL do Dear ImGui também precisa ser configurado para o contexto GLES correto.
+
+O relatório automatizado é produzido por `scripts/audit_android_graphics.py` após a compilação Linux e aparece no resumo da execução da CI. Ele é uma auditoria de código-fonte, não uma prova de compatibilidade Android.
+
+### Primeira hipótese de implementação
+
+**Começar por SDL2 + OpenGL ES 3.2 é a hipótese de menor distância em relação à base existente**, porque o simulator de libntr já usa SDL2. OpenGL ES 3.2 é disponibilizado pelo Android a partir do API level 24, mas a implementação gráfica continua opcional em dispositivos e precisa ser verificada em runtime. Documentação oficial: [SDL2 para Android](https://wiki.libsdl.org/SDL2/README-android) e [OpenGL ES no Android](https://developer.android.com/develop/ui/views/graphics/opengl/about-opengl).
+
+O protótipo deve:
+1. criar o contexto GLES por SDL2 Android, removendo a solicitação hardcoded de OpenGL 4.2 apenas no alvo Android;
+2. converter e validar os shaders para GLSL ES (incluindo declarações de precisão e outputs);
+3. implementar uma alternativa correta para border clamp, sem depender de extensão opcional sem detecção;
+4. revisar chamadas de estado direto/debug e o renderer do Dear ImGui;
+5. validar texturas, FBOs, blending, depth, renderização dos dois ecrãs e entrada por toque num dispositivo com os recursos mínimos declarados.
+
+Não abrir um alvo Android no build principal até o protótipo compilar e desenhar a cena de teste corretamente. Vulkan continua uma alternativa caso a auditoria de GLES revele que a adaptação será maior do que reimplementar o backend.
+
 ## Android — trabalho necessário
 
 O caminho de desktop utiliza OpenGL 4.2; não devemos presumir que essa API esteja disponível em dispositivos Android. Antes de adicionar um alvo Android real, é necessário:

@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py
+        run: python -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py
       - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
 
@@ -69,6 +69,8 @@ jobs:
       - name: Compile native Linux target
         working-directory: vendor/pokeplatinum-native
         run: ./drun.sh make linux
+      - name: Audit Android graphics compatibility requirements
+        run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
 
   windows:
     name: Windows x64 compile

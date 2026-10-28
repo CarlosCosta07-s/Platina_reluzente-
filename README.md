@@ -9,7 +9,7 @@ O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
 - **Linux x86-64:** a compilação nativa passou no GitHub Actions em 28 de outubro de 2026, na execução [40625184953](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40625184953). Isso valida a compilação do alvo, não a inicialização nem a jogabilidade.
 - **Windows x64:** a compilação ainda estava em execução na última verificação; não é considerada aprovada até o job terminar com sucesso.
-- **Android:** ainda não implementado nem validado. O backend gráfico desktop usa shaders GLSL versão 420 core e APIs de desktop OpenGL; Android exige uma implementação real de renderização compatível, além de integração com ciclo de vida, entrada por toque, áudio e armazenamento.
+- **Android:** ainda não implementado nem validado. A auditoria de código encontrou pedido explícito de OpenGL 4.2 core, shaders GLSL versão 420 core, uso de GL_CLAMP_TO_BORDER e chamadas de estado direto. A primeira hipótese é um backend OpenGL ES 3.2 usando o caminho SDL2 já presente; isso ainda exige substituir as incompatibilidades e verificar os recursos no dispositivo.
 - **Versão original:** o ponto de referência inicial é Pokémon Platinum USA Rev. 1, identificado no upstream por SHA-1 0862ec35b24de5c7e2dcb88c9eea0873110d755c.
 - **Português brasileiro:** o importador local dos bancos de texto está implementado e foi testado com as duas cópias fornecidas; ainda falta validar a execução do jogo com os textos aplicados.
 
@@ -82,4 +82,5 @@ O desenvolvimento deste projeto será feito diretamente na branch main; não ser
 - [Preservação, direitos e distribuição](docs/LEGAL.md)
 - [Decompilação base (pret)](https://github.com/pret/pokeplatinum)
 - [Porte nativo PC de referência](https://github.com/cybervisi0n/pokeplatinum)
-- [SDL3 — referência para integração móvel, sujeita à compatibilidade com a base atual](https://wiki.libsdl.org/SDL3/FrontPage)
+- [Guia oficial SDL2 para Android](https://wiki.libsdl.org/SDL2/README-android)
+- [OpenGL ES no Android](https://developer.android.com/develop/ui/views/graphics/opengl/about-opengl)

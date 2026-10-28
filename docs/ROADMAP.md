@@ -35,8 +35,9 @@ Critérios de aceite:
 
 ## Marco 3 — Android nativo
 
-- [ ] auditar APIs desktop e shaders usados pela camada gráfica nativa;
-- [ ] decidir com base em protótipo técnico entre um backend OpenGL ES e um backend Vulkan;
+- [x] realizar uma auditoria estática inicial do contexto, shaders e APIs OpenGL desktop;
+- [x] selecionar SDL2 + OpenGL ES 3.2 como primeira hipótese a prototipar (decisão sujeita a testes, não suporte concluído);
+- [ ] compilar um protótipo GLES 3.2 e comprovar shaders/FBO/texture paths num dispositivo Android;
 - [ ] implementar backend de renderização Android sem stubs para operações obrigatórias;
 - [ ] integrar Android NDK, ciclo de vida, toque, controles, áudio e armazenamento;
 - [ ] gerar APK arm64-v8a por CI, sem ROMs ou conteúdo do jogo;
