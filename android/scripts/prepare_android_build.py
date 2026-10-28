@@ -574,15 +574,17 @@ def patch_libntr(root: Path) -> list[str]:
 
     g2_path = root / "libraries/sim/src/sim_g2.cpp"
     g2_text = g2_path.read_text(encoding="utf-8")
-    g2_text, g2_matches = re.subn(
-        r"(?<!\\(u8 \\*\\))getBgExtPlttVramBank\\(isSub\\) \\+",
-        r"(u8 *)getBgExtPlttVramBank(isSub) +",
-        g2_text,
-    )
-    if g2_matches not in (0, 4):
-        raise PatchError("Android extended-palette pointer patch matched an unexpected number of expressions")
-    if g2_matches:
+    old_palette_expr = "(u16 *)(getBgExtPlttVramBank(isSub) +"
+    new_palette_expr = "(u16 *)((u8 *)getBgExtPlttVramBank(isSub) +"
+    old_palette_count = g2_text.count(old_palette_expr)
+    new_palette_count = g2_text.count(new_palette_expr)
+    if old_palette_count == 4:
+        g2_text = g2_text.replace(old_palette_expr, new_palette_expr)
         changes.append("libntr simulator: use byte pointers for Android extended-palette VRAM offsets")
+    elif old_palette_count == 0 and new_palette_count == 4:
+        pass
+    else:
+        raise PatchError("Android extended-palette pointer patch expected four expressions")
     g2_path.write_text(g2_text, encoding="utf-8")
 
     draw_path = root / "libraries/sim/src/g3_draw.cpp"
