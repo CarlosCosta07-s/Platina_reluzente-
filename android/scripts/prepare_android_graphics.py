@@ -166,8 +166,8 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
         meson_path.read_text(encoding="utf-8"),
         "libsim_args = [ ]",
         "libsim_args = [ ]\n\nif(build_target == 'android')\n"
-        "    # Choose Dear ImGui's GLES3 renderer for the Android simulator.\\n"
-        "    libsim_args += ['-DIMGUI_IMPL_OPENGL_ES3']\\n"
+        "    # Choose Dear ImGui's GLES3 renderer for the Android simulator.\n"
+        "    libsim_args += ['-DIMGUI_IMPL_OPENGL_ES3']\n"
         "endif",
         "Dear ImGui GLES renderer selector",
     )
