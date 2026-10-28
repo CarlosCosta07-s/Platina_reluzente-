@@ -37,6 +37,8 @@ jobs:
           python-version: "3.12"
       - name: Test Android Meson source preparation
         run: python -m unittest android.tests.test_prepare_android_build -v
+      - name: Test native SDL entrypoint and ROM handoff
+        run: python -m unittest tools.tests.test_prepare_native_runtime -v
       - name: Install host build tools
         run: |
           set -euo pipefail
