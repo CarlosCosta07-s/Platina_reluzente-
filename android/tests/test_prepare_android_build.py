@@ -460,7 +460,10 @@ libsim = library('sim',
                 target = staged / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text("fixture", encoding="utf-8")
-            paths = android_patch_copy_paths(staged, {"libntrsystem": ("nitrosystem_args", False)})
+            paths = android_patch_copy_paths(staged, {
+                "libntrsystem": ("nitrosystem_args", False),
+                "libntrwifi": ("nitrowifi_args", False),
+            })
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/kernel.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/sbc.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/glbstate.h", paths)

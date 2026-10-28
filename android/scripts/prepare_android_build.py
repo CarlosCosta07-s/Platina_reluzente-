@@ -823,9 +823,10 @@ def patch_android_wifi_socket_headers(root: Path) -> list[str]:
         "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) "
         "|| defined(SDK_BUILD_ANDROID)"
     )
-    if original.count(android_condition) == 1 and original.count(linux_condition) == 0:
+    condition_lines = [line.strip() for line in original.splitlines()]
+    if condition_lines.count(android_condition) == 1 and condition_lines.count(linux_condition) == 0:
         return []
-    if original.count(linux_condition) != 1:
+    if condition_lines.count(linux_condition) != 1:
         raise PatchError(
             f"{path}: expected exactly one Linux/NX POSIX socket include condition"
         )
