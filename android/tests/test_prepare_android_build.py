@@ -189,7 +189,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("lib/ppwlobby/libraries/ilobby/src/dwci_lobby.cpp", paths)
             self.assertIn("lib/ppwlobby/libraries/ppwlobby/src/ppw_lobby.cpp", paths)
             self.assertIn("subprojects/libvct/meson.build", paths)
-            self.assertIn("subprojects/libntr/libraries/sim/src/sim_config.c", paths)
+            self.assertIn("subprojects/libntr/libraries/sim/src/config/sim_config.c", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
             self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
