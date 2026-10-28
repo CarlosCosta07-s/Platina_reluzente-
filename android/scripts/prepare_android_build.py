@@ -306,6 +306,63 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
     return changes
 
 
+
+def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
+    """Match inline declaration linkage with the static definitions used for SDK_PORT."""
+    changes: list[str] = []
+    for header_name, inline_header in (
+        ("kernel.h", "kernel_inline.h"),
+        ("sbc.h", "sbc_inline.h"),
+    ):
+        path = root / "include" / "nnsys" / "g3d" / header_name
+        if not path.is_file():
+            raise PatchError(f"{path}: required NitroSDK G3D header is missing")
+        original = path.read_text(encoding="utf-8")
+        macro_block = (
+            "#if defined(SDK_PORT)\n"
+            "#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE\n"
+            "#else\n"
+            "#define NNS_G3D_INLINE_DECL NNS_G3D_INLINE\n"
+            "#endif"
+        )
+        inline_marker = f"#include <nnsys/g3d/{inline_header}>"
+        if original.count(inline_marker) != 1:
+            raise PatchError(f"{path}: expected exactly one {inline_marker} marker")
+        if original.count("#include <nnsys/g3d/config.h>") != 1:
+            raise PatchError(f"{path}: expected exactly one G3D config include")
+        prefix, suffix = original.split(inline_marker, 1)
+        updated_prefix = prefix
+        if macro_block not in updated_prefix:
+            config_marker = "#include <nnsys/g3d/config.h>"
+            if updated_prefix.count(config_marker) != 1:
+                raise PatchError(f"{path}: cannot insert Android inline-linkage macro safely")
+            updated_prefix = updated_prefix.replace(
+                config_marker, config_marker + "\n\n" + macro_block, 1
+            )
+            decl_pattern = re.compile(r"(?m)^([ \\t]*)NNS_G3D_INLINE(?=[ \\t])")
+            updated_prefix, count = decl_pattern.subn(
+                r"\\1NNS_G3D_INLINE_DECL", updated_prefix
+            )
+            if count == 0:
+                raise PatchError(f"{path}: no NNS_G3D_INLINE declarations were found before {inline_header}")
+            updated_prefix += "\n#undef NNS_G3D_INLINE_DECL\n"
+        else:
+            if "NNS_G3D_INLINE_DECL static NNS_G3D_INLINE" not in updated_prefix:
+                raise PatchError(f"{path}: unexpected existing inline-linkage macro")
+            if re.search(r"(?m)^([ \\t]*)NNS_G3D_INLINE(?=[ \\t])", updated_prefix):
+                raise PatchError(f"{path}: some inline declarations were not converted")
+            if updated_prefix.count("#undef NNS_G3D_INLINE_DECL") != 1:
+                raise PatchError(f"{path}: inline-linkage macro cleanup marker is missing or duplicated")
+            continue_marker = "#undef NNS_G3D_INLINE_DECL"
+            if updated_prefix.count(continue_marker) != 1:
+                raise PatchError(f"{path}: duplicated inline-linkage macro cleanup marker")
+        updated = updated_prefix + inline_marker + suffix
+        if updated != original:
+            path.write_text(updated, encoding="utf-8")
+            changes.append("libntrsystem: align SDK_PORT G3D inline linkage in " + header_name)
+    return changes
+
+
 def patch_libntr(root: Path) -> list[str]:
     changes = []
     opt = root / "meson.options"
@@ -795,7 +852,10 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         for name, (arg_name, dwc) in sdk_projects.items():
-            changes.extend(patch_sdk_project(staged / "subprojects" / name, name, arg_name, dwc))
+            sdk_root = staged / "subprojects" / name
+            changes.extend(patch_sdk_project(sdk_root, name, arg_name, dwc))
+            if name == "libntrsystem":
+                changes.extend(patch_sdk_g3d_inline_linkage(sdk_root))
         stage_headers(staged / "subprojects/libntr", sdl, enet)
 
         rels = android_patch_copy_paths(staged, sdk_projects)
@@ -849,6 +909,11 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
     for name in sdk_projects:
         sdk_root = staged / "subprojects" / name
         rels.extend([f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"])
+        if name == "libntrsystem":
+            rels.extend([
+                "subprojects/libntrsystem/include/nnsys/g3d/kernel.h",
+                "subprojects/libntrsystem/include/nnsys/g3d/sbc.h",
+            ])
         # patch_sdk_project modifies PIC settings in these nested libraries.
         rels.extend(
             path.relative_to(staged).as_posix()

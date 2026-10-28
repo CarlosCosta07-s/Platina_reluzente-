@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -362,6 +362,54 @@ libsim = library('sim',
             second = patch_sdk_project(root, "libntrsystem", "nitrosystem_args")
             self.assertFalse(any("expose shared SDL2 headers" in item for item in second))
             self.assertEqual(1, meson_result.count("android_include"))
+
+
+    def test_android_g3d_inline_declarations_match_static_sdk_port_definitions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            g3d = root / "include" / "nnsys" / "g3d"
+            g3d.mkdir(parents=True)
+            fixtures = {
+                "kernel.h": (
+                    "#include <nnsys/g3d/config.h>\n"
+                    "NNS_G3D_INLINE void NNS_TestKernel(void);\n"
+                    "#include <nnsys/g3d/kernel_inline.h>\n"
+                ),
+                "sbc.h": (
+                    "#include <nnsys/g3d/config.h>\n"
+                    "NNS_G3D_INLINE BOOL NNS_TestSbc(void);\n"
+                    "#include <nnsys/g3d/sbc_inline.h>\n"
+                ),
+            }
+            for name, content in fixtures.items():
+                (g3d / name).write_text(content, encoding="utf-8")
+
+            first = patch_sdk_g3d_inline_linkage(root)
+
+            self.assertEqual(2, len(first))
+            for name, inline_header in (("kernel.h", "kernel_inline.h"), ("sbc.h", "sbc_inline.h")):
+                content = (g3d / name).read_text(encoding="utf-8")
+                self.assertIn("#if defined(SDK_PORT)\\n#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE", content)
+                self.assertIn("NNS_G3D_INLINE_DECL", content)
+                self.assertIn("#undef NNS_G3D_INLINE_DECL", content)
+                self.assertLess(content.index("#undef NNS_G3D_INLINE_DECL"), content.index(f"#include <nnsys/g3d/{inline_header}>"))
+                self.assertNotRegex(content, r"(?m)^NNS_G3D_INLINE ")
+
+            self.assertEqual([], patch_sdk_g3d_inline_linkage(root))
+
+    def test_android_g3d_inline_headers_are_copied_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            staged = Path(tmp)
+            for rel in (
+                "subprojects/libntrsystem/include/nnsys/g3d/kernel.h",
+                "subprojects/libntrsystem/include/nnsys/g3d/sbc.h",
+            ):
+                target = staged / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("fixture", encoding="utf-8")
+            paths = android_patch_copy_paths(staged, {"libntrsystem": ("nitrosystem_args", False)})
+            self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/kernel.h", paths)
+            self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/sbc.h", paths)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:
