@@ -837,29 +837,85 @@ def patch_android_wifi_socket_headers(root: Path) -> list[str]:
 
 
 def patch_android_dwc_auth_headers(root: Path) -> list[str]:
-    """Expose errno and wide-character declarations for the Android DWC target."""
+    """Use errno on Android and count the DS UTF-16 username without host wchar_t."""
     path = root / "libraries" / "auth" / "src" / "dwc_auth.c"
     if not path.is_file():
         raise PatchError(f"Android DWC authentication source is missing: {path}")
 
     original = path.read_text(encoding="utf-8")
-    linux_condition = "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)"
-    android_condition = (
-        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) "
-        "|| defined(SDK_BUILD_ANDROID)"
+    old_include_block = (
+        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+        "#include <errno.h>\n"
+        "#include <wchar.h>\n"
+        "#endif"
     )
-    lines = [line.strip() for line in original.splitlines()]
-    if lines.count(android_condition) == 1 and lines.count(linux_condition) == 0:
-        return []
-    if lines.count(linux_condition) != 1:
-        raise PatchError(
-            f"{path}: expected exactly one Linux/NX errno/wchar include condition"
-        )
+    new_include_block = (
+        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)\n"
+        "#include <errno.h>\n"
+        "#if !defined(SDK_BUILD_ANDROID)\n"
+        "#include <wchar.h>\n"
+        "#endif\n"
+        "#endif"
+    )
+    helper_block = (
+        "#ifdef SDK_BUILD_ANDROID\n"
+        "static unsigned long DWCi_Auth_UTF16Length(const unsigned short *text)\n"
+        "{\n"
+        "    unsigned long length = 0;\n"
+        "    if (text != NULL) {\n"
+        "        while (text[length] != 0) {\n"
+        "            ++length;\n"
+        "        }\n"
+        "    }\n"
+        "    return length;\n"
+        "}\n"
+        "#endif"
+    )
+    marker = "#endif\n\n#ifndef SDK_BUILD_ARM"
+    if original.count(helper_block) == 1 and original.count(new_include_block) == 1:
+        if original.count("DWCi_Auth_UTF16Length(param->ingamesn)") == 2:
+            return []
+        raise PatchError(f"{path}: Android UTF-16 helper exists but call-site conversion is incomplete.")
 
-    updated = original.replace(linux_condition, android_condition, 1)
+    if original.count(old_include_block) != 1 or new_include_block in original:
+        raise PatchError(f"{path}: expected one recognized DWC errno/wchar include block.")
+
+    updated = original.replace(old_include_block, new_include_block, 1)
+    if updated.count(marker) != 1:
+        raise PatchError(f"{path}: cannot place Android UTF-16 helper safely.")
+    updated = updated.replace(
+        marker,
+        "#endif\n\n" + helper_block + "\n\n#ifndef SDK_BUILD_ARM",
+        1,
+    )
+
+    replacements = (
+        (
+            "      sVar1 = wcslen((wchar_t *)param->ingamesn);",
+            "      #ifdef SDK_BUILD_ANDROID\n"
+            "      sVar1 = DWCi_Auth_UTF16Length(param->ingamesn);\n"
+            "      #else\n"
+            "      sVar1 = wcslen((wchar_t *)param->ingamesn);\n"
+            "      #endif",
+        ),
+        (
+            "        sVar1 = wcslen((wchar_t*)param->ingamesn);",
+            "        #ifdef SDK_BUILD_ANDROID\n"
+            "        sVar1 = DWCi_Auth_UTF16Length(param->ingamesn);\n"
+            "        #else\n"
+            "        sVar1 = wcslen((wchar_t*)param->ingamesn);\n"
+            "        #endif",
+        ),
+    )
+    for before, after in replacements:
+        if updated.count(before) != 1:
+            raise PatchError(f"{path}: expected exactly one ingamesn length call to adapt.")
+        updated = updated.replace(before, after, 1)
+
+    if updated.count(helper_block) != 1 or updated.count("DWCi_Auth_UTF16Length(param->ingamesn)") != 2:
+        raise PatchError(f"{path}: Android DWC UTF-16 patch validation failed.")
     path.write_text(updated, encoding="utf-8")
-    return ["libntrdwc: include errno/wchar declarations for Android"]
-
+    return ["libntrdwc: use Android errno and 16-bit ingamesn length compatibility"]
 def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     sdl_inc, enet_inc = sdl / "include", enet / "include" / "enet"
     if not sdl_inc.is_dir() or not enet_inc.is_dir():

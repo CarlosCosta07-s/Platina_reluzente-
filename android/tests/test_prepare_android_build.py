@@ -377,13 +377,19 @@ libsim = library('sim',
                 "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
                 "#include <errno.h>\n"
                 "#include <wchar.h>\n"
-                "#endif\n",
+                "#endif\n\n"
+                "#ifndef SDK_BUILD_ARM\n"
+                "void fixture(void) {\n"
+                "      sVar1 = wcslen((wchar_t *)param->ingamesn);\n"
+                "        sVar1 = wcslen((wchar_t*)param->ingamesn);\n"
+                "}\n",
                 encoding="utf-8",
             )
 
+            changes = patch_android_dwc_auth_headers(root)
             self.assertEqual(
-                ["libntrdwc: include errno/wchar declarations for Android"],
-                patch_android_dwc_auth_headers(root),
+                ["libntrdwc: use Android errno and 16-bit ingamesn length compatibility"],
+                changes,
             )
             updated = source.read_text(encoding="utf-8")
             self.assertIn(
@@ -391,8 +397,13 @@ libsim = library('sim',
                 updated,
             )
             self.assertIn("#include <errno.h>", updated)
-            self.assertIn("#include <wchar.h>", updated)
+            self.assertIn("#if !defined(SDK_BUILD_ANDROID)\n#include <wchar.h>\n#endif", updated)
+            self.assertIn("static unsigned long DWCi_Auth_UTF16Length(const unsigned short *text)", updated)
+            self.assertEqual(2, updated.count("DWCi_Auth_UTF16Length(param->ingamesn)"))
+            self.assertIn("sVar1 = wcslen((wchar_t *)param->ingamesn);", updated)
+            self.assertIn("sVar1 = wcslen((wchar_t*)param->ingamesn);", updated)
             self.assertEqual([], patch_android_dwc_auth_headers(root))
+
 
     def test_android_wifi_network_source_includes_posix_socket_headers(self):
         with tempfile.TemporaryDirectory() as tmp:
