@@ -179,6 +179,25 @@ jobs:
           file "$lib"
           llvm-readelf -h "$lib" | tee "$RUNNER_TEMP/libmain-elf-header.txt"
           grep -q 'AArch64' "$RUNNER_TEMP/libmain-elf-header.txt"
+          # Every packaged ELF must be compatible with Android's 16 KB page-size
+          # devices; catch a dependency accidentally linked with 4 KB LOAD segments.
+          check_16k_load_segments() {
+            local so="$1" alignments alignment
+            alignments="$(llvm-readelf -lW "$so" | awk '$1 == "LOAD" { print $NF }')"
+            if [[ -z "$alignments" ]]; then
+              echo "No PT_LOAD segments found in $so" >&2
+              return 1
+            fi
+            while IFS= read -r alignment; do
+              if (( alignment < 16384 )); then
+                echo "Incompatible PT_LOAD alignment $alignment in $so (need at least 0x4000)" >&2
+                return 1
+              fi
+            done <<< "$alignments"
+          }
+          check_16k_load_segments "$lib"
+          check_16k_load_segments "$SDL2_ANDROID_LIBDIR/libSDL2.so"
+          check_16k_load_segments "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
           # SDLActivity resolves SDL_main from libmain.so; fail before APK packaging
           # if the Android-specific entrypoint was not exported by the native linker.
           llvm-nm -D --defined-only "$lib" | grep -Eq '[[:space:]]SDL_main([[:space:]]|$)'
