@@ -251,6 +251,7 @@ jobs:
           zipinfo -1 "$apk" | grep -Fx 'lib/arm64-v8a/libc++_shared.so'
           zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/header.bin'
           zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/firmware.bin'
+          zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/build-version.txt'
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
           mkdir -p launcher-app/dist
           cp "$apk" launcher-app/dist/Platina-Reluzente-Android-arm64-complete.apk
