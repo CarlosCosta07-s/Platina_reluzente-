@@ -79,9 +79,9 @@ class AndroidMesonPatchTests(unittest.TestCase):
             root = Path(tmp)
             meson = root / "meson.build"
             meson.write_text(
-                "project('libvct', 'c')\\n"
-                "build_target = get_option('build_target')\\n"
-                "nitrosdk_dep = dependency('NitroSDK')\\n",
+                "project('libvct', 'c')\n"
+                "build_target = get_option('build_target')\n"
+                "nitrosdk_dep = dependency('NitroSDK')\n",
                 encoding="utf-8",
             )
 
