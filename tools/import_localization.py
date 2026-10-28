@@ -16,6 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
+try:
+    from localization_manifest import PTBR_RESOURCE_SHA256
+except ImportError:
+    from tools.localization_manifest import PTBR_RESOURCE_SHA256
+
 HEADER_SIZE = 0x200
 MAX_ROM_SIZE = 512 * 1024 * 1024
 MAX_DIRECTORIES = 2048
@@ -168,6 +173,19 @@ def _index_rom(rom_path: Path) -> tuple[dict[str, RomFile], list[RomFile], int]:
     return files, fat_entries, rom_size
 
 
+def _sha256_region(stream: BinaryIO, offset: int, size: int) -> str:
+    digest = hashlib.sha256()
+    stream.seek(offset)
+    remaining = size
+    while remaining:
+        chunk = stream.read(min(CHUNK_SIZE, remaining))
+        if not chunk:
+            raise RomFormatError("ROM truncada ao calcular o SHA-256 de um recurso.")
+        digest.update(chunk)
+        remaining -= len(chunk)
+    return digest.hexdigest()
+
+
 def _validated_narc_size(
     stream: BinaryIO,
     entry: RomFile,
@@ -240,6 +258,19 @@ def extract_localization(
             if entry is None:
                 raise RomFormatError(f"Arquivo necessário não encontrado na ROM: {relative_path}.")
             effective_size = _validated_narc_size(stream, entry, fat_entries, rom_size, relative_path)
+            relative_name = relative_path.as_posix()
+            expected_sha256 = PTBR_RESOURCE_SHA256.get(relative_name)
+            if expected_sha256 is None:
+                raise RomFormatError(
+                    f"Não existe SHA-256 aprovado para o recurso localizado {relative_name}."
+                )
+            actual_sha256 = _sha256_region(stream, entry.start, effective_size)
+            if actual_sha256 != expected_sha256:
+                raise RomFormatError(
+                    f"O SHA-256 de {relative_name} não corresponde à variante PT-BR aprovada "
+                    f"(esperado {expected_sha256}, recebido {actual_sha256}). "
+                    "Nenhum arquivo foi escrito; confira se a ROM de origem é a tradução suportada."
+                )
             selected.append((relative_path, entry, effective_size))
 
     output_paths = [

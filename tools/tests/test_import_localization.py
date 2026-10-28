@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from localization_manifest import PTBR_RESOURCE_SHA256  # noqa: E402
 from import_localization import (  # noqa: E402
     TARGET_FILES,
     RomFormatError,
@@ -22,6 +25,24 @@ def _narc(label: bytes) -> bytes:
     total_size = 16 + len(btaf) + len(btnf) + len(gmif)
     header = b"NARC\xfe\xff\x00\x01" + struct.pack("<IHH", total_size, 16, 3)
     return header + btaf + btnf + gmif
+
+
+def _extract_synthetic(
+    rom: Path,
+    destination: Path,
+    file_ids: dict[str, int],
+    file_data: dict[int, bytes],
+    **kwargs: object,
+) -> list[dict[str, str | int | bool]]:
+    synthetic_hashes = {
+        target.as_posix(): hashlib.sha256(
+            file_data[file_ids[target.as_posix()]]
+        ).hexdigest()
+        for target in TARGET_FILES
+        if target.as_posix() in file_ids
+    }
+    with patch.dict(PTBR_RESOURCE_SHA256, synthetic_hashes, clear=True):
+        return extract_localization(rom, destination, **kwargs)
 
 
 def _align4(value: int) -> int:
@@ -162,7 +183,7 @@ class LocalizationImportTests(unittest.TestCase):
             rom = root / "test.nds"
             destination = root / "out"
             rom.write_bytes(rom_data)
-            result = extract_localization(rom, destination)
+            result = _extract_synthetic(rom, destination, _file_ids, file_data)
             self.assertEqual(
                 [entry["path"] for entry in result],
                 [item.as_posix() for item in TARGET_FILES],
@@ -184,7 +205,7 @@ class LocalizationImportTests(unittest.TestCase):
             rom = root / "patched.nds"
             destination = root / "out"
             rom.write_bytes(rom_data)
-            result = extract_localization(rom, destination)
+            result = _extract_synthetic(rom, destination, _file_ids, _data)
             index = [item.as_posix() for item in TARGET_FILES].index("msgdata/pl_msg.narc")
             recovered = result[index]
             self.assertEqual(recovered["path"], "msgdata/pl_msg.narc")
@@ -209,6 +230,17 @@ class LocalizationImportTests(unittest.TestCase):
             destination = root / "out"
             rom.write_bytes(altered)
             with self.assertRaisesRegex(RomFormatError, "sobrepõe outro arquivo FAT"):
+                _extract_synthetic(rom, destination, file_ids, file_data)
+            self.assertFalse(destination.exists())
+
+    def test_wrong_localization_hash_fails_before_writing(self) -> None:
+        rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "wrong-localization.nds"
+            destination = root / "out"
+            rom.write_bytes(rom_data)
+            with self.assertRaisesRegex(RomFormatError, "SHA-256.*não corresponde"):
                 extract_localization(rom, destination)
             self.assertFalse(destination.exists())
 
@@ -232,7 +264,7 @@ class LocalizationImportTests(unittest.TestCase):
             destination = root / "out"
             rom.write_bytes(rom_data)
             with self.assertRaises(RomFormatError):
-                extract_localization(rom, destination)
+                _extract_synthetic(rom, destination, _file_ids, _data)
             self.assertFalse(destination.exists())
 
     def test_invalid_fat_range_is_rejected(self) -> None:
@@ -258,7 +290,7 @@ class LocalizationImportTests(unittest.TestCase):
             target.write_bytes(b"preserve me")
             rom.write_bytes(rom_data)
             with self.assertRaises(FileExistsError):
-                extract_localization(rom, destination)
+                _extract_synthetic(rom, destination, _file_ids, _data)
             self.assertEqual(target.read_bytes(), b"preserve me")
 
 
