@@ -301,7 +301,7 @@ libsim = library('sim',
             self.assertIn("chdir(runtimePath.c_str())", sim_main)
             self.assertIn("PLATINA_IMPORTED_ROM", sim_main)
             self.assertIn("roms/current.nds", sim_main)
-            self.assertIn('fopen((importedRomPath && *importedRomPath !=', sim_main)
+            self.assertIn('fopen((importedRomPath != NULL && importedRomPath[0] != 0)', sim_main)
             types_header = (root / "include/nitro/types.h").read_text(encoding="utf-8")
             self.assertIn("SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)", types_header)
             self.assertIn("typedef unsigned int u32;", types_header)
