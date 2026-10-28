@@ -215,7 +215,15 @@ libsim = library('sim',
             )
             (root / "libraries/sim/src").mkdir(parents=True)
             (root / "libraries/sim/src/sim_main.cpp").write_text(
-                "#define SDL_MAIN_HANDLED\nint main() { return 0; }\n", encoding="utf-8")
+                "#define SDL_MAIN_HANDLED\n"
+                "#include <SDL2/SDL_events.h>\n"
+                "#include <string>\n#include <stdio.h>\n#include <stdlib.h>\n"
+                "int main(int argc, char **argv) {\n"
+                "  // TODO: This broke the linux AppImage build\n"
+                "  //chdir(SDL_GetBasePath());\n"
+                "  FILE *romFile;\n"
+                "  romFile = fopen(\"header.bin\", \"r\");\n"
+                "  return 0;\n}\n", encoding="utf-8")
             (root / "libraries/sim/src/sim_g3_CommandProcessor.cpp").write_text(
                 "paramPtr = (void *)cmdBlockPtr + 4;\nparamPtr += paramSize;\n", encoding="utf-8")
             (root / "libraries/sim/src/sim_g2.cpp").write_text(
@@ -235,7 +243,7 @@ libsim = library('sim',
             g2_text = (root / "libraries/sim/src/sim_g2.cpp").read_text(encoding="utf-8")
             self.assertEqual(g2_text.count("(u8 *)getBgExtPlttVramBank(isSub) +"), 4)
             second_changes = patch_libntr(root)
-            self.assertEqual([], [change for change in second_changes if "pointer offset" in change or "extended-palette" in change])
+            self.assertEqual([], [change for change in second_changes if "pointer offset" in change or "extended-palette" in change or "runtime directory" in change or "imported ROM" in change or "internal-storage API" in change])
             sim = (root / "libraries/sim/meson.build").read_text(encoding="utf-8")
             draw = (root / "libraries/sim/src/g3_draw.cpp").read_text(encoding="utf-8")
             self.assertIn("((u8*)getTextureVramBank() + s_texImageParam.textureOffset)", draw)
@@ -254,6 +262,12 @@ libsim = library('sim',
             self.assertIn("pic: build_target == 'android',", os_library)
             libntr_meson = (root / "meson.build").read_text(encoding="utf-8")
             self.assertIn("SDK_BUILD_ANDROID", libntr_meson)
+            sim_main = (root / "libraries/sim/src/sim_main.cpp").read_text(encoding="utf-8")
+            self.assertIn("SDL_AndroidGetInternalStoragePath", sim_main)
+            self.assertIn("chdir(runtimePath.c_str())", sim_main)
+            self.assertIn("PLATINA_IMPORTED_ROM", sim_main)
+            self.assertIn("roms/current.nds", sim_main)
+            self.assertIn('fopen((importedRomPath && *importedRomPath !=', sim_main)
             types_header = (root / "include/nitro/types.h").read_text(encoding="utf-8")
             self.assertIn("SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)", types_header)
             self.assertIn("typedef unsigned int u32;", types_header)

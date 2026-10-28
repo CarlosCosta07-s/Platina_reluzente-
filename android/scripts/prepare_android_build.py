@@ -606,6 +606,64 @@ def patch_libntr(root: Path) -> list[str]:
         changes.append("libntr simulator: allow SDLActivity SDL_main entrypoint")
     main_path.write_text(main, encoding="utf-8")
 
+    # On Android the native renderer is started by SDLActivity. Load the
+    # runtime from app-private storage, and pass the user's imported ROM
+    # path to the same native header reader used by desktop.
+    sim_source = main_path.read_text(encoding="utf-8")
+    include_old = "#include <SDL2/SDL_events.h>"
+    include_new = (
+        "#include <SDL2/SDL_events.h>\n"
+        "#ifdef SDK_BUILD_ANDROID\n"
+        "#include <SDL2/SDL_system.h>\n"
+        "#include <unistd.h>\n"
+        "#endif"
+    )
+    sim_source, include_changed = replace_once(
+        sim_source, include_old, include_new, "Android SDL internal-storage declarations"
+    )
+    if include_changed:
+        changes.append("libntr simulator: include Android internal-storage API")
+
+    cwd_old = "  // TODO: This broke the linux AppImage build\n  //chdir(SDL_GetBasePath());"
+    cwd_new = """#ifdef SDK_BUILD_ANDROID
+  const char *runtimeStoragePath = SDL_AndroidGetInternalStoragePath();
+  if (runtimeStoragePath == NULL || *runtimeStoragePath == '\\\\0') {
+    fprintf(stderr, "Android internal storage path is unavailable\\\\n");
+    return 1;
+  }
+  std::string runtimePath = std::string(runtimeStoragePath) + "/pokeplatinum";
+  if (chdir(runtimePath.c_str()) != 0) {
+    perror("Changing to the game runtime directory");
+    return 1;
+  }
+#else
+  // TODO: This broke the linux AppImage build
+  //chdir(SDL_GetBasePath());
+#endif"""
+    sim_source, cwd_changed = replace_once(
+        sim_source, cwd_old, cwd_new, "Android runtime working directory"
+    )
+    if cwd_changed:
+        changes.append("libntr simulator: use the extracted runtime directory on Android")
+
+    rom_old = 'romFile = fopen("header.bin", "r");'
+    rom_new = """const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
+#ifdef SDK_BUILD_ANDROID
+  const char *romStoragePath = SDL_AndroidGetInternalStoragePath();
+  std::string androidRomPath;
+  if ((!importedRomPath || *importedRomPath == '\\\\0') && romStoragePath != NULL) {
+    androidRomPath = std::string(romStoragePath) + "/roms/current.nds";
+    importedRomPath = androidRomPath.c_str();
+  }
+#endif
+  romFile = fopen((importedRomPath && *importedRomPath != '\\\\0') ? importedRomPath : "header.bin", "rb");"""
+    sim_source, rom_changed = replace_once(
+        sim_source, rom_old, rom_new, "Imported ROM header"
+    )
+    if rom_changed:
+        changes.append("libntr simulator: read the imported ROM header on PC and Android")
+    main_path.write_text(sim_source, encoding="utf-8")
+
     # Clang used by the Android NDK rejects arithmetic on void*. Preserve
     # the byte-offset semantics by converting VRAM bases to u8* first.
     # The ARM64 NDK Clang compiler rejects arithmetic on void*. Preserve
