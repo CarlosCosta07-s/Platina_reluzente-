@@ -368,40 +368,52 @@ libsim = library('sim',
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             g3d = root / "include" / "nnsys" / "g3d"
-            g3d.mkdir(parents=True)
             fixtures = {
                 "kernel.h": (
                     "#include <nnsys/g3d/config.h>\n"
-                    "#include <nnsys/g3d/binres/res_struct.h>\n"
                     "NNS_G3D_INLINE void NNS_TestKernel(void);\n"
                     "#include <nnsys/g3d/kernel_inline.h>\n"
                 ),
                 "sbc.h": (
                     "#include <nnsys/g3d/config.h>\n"
                     "#include <nnsys/g3d/kernel.h>\n"
-                    "#include <nnsys/g3d/anm.h>\n"
                     "NNS_G3D_INLINE BOOL NNS_TestSbc(void);\n"
                     "#include <nnsys/g3d/sbc_inline.h>\n"
                 ),
+                "glbstate.h": (
+                    "#include <nnsys/g3d/config.h>\n"
+                    "NNS_G3D_INLINE void NNS_TestGlbstate(void);\n"
+                    "#include <nnsys/g3d/glbstate_inline.h>\n"
+                ),
+                "binres/res_struct_accessor.h": (
+                    "#include <nnsys/g3d/config.h>\n"
+                    "NNS_G3D_RES_INLINE int NNS_TestResAccessor(void);\n"
+                    "#include <nnsys/g3d/binres/res_struct_accessor_inline.h>\n"
+                ),
             }
             for name, content in fixtures.items():
-                (g3d / name).write_text(content, encoding="utf-8")
+                path = g3d / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
 
             first = patch_sdk_g3d_inline_linkage(root)
 
-            self.assertEqual(2, len(first))
-            for name, inline_header in (("kernel.h", "kernel_inline.h"), ("sbc.h", "sbc_inline.h")):
+            self.assertEqual(4, len(first))
+            prototypes = {
+                "kernel.h": "NNS_G3D_INLINE void NNS_TestKernel(void);",
+                "sbc.h": "NNS_G3D_INLINE BOOL NNS_TestSbc(void);",
+                "glbstate.h": "NNS_G3D_INLINE void NNS_TestGlbstate(void);",
+                "binres/res_struct_accessor.h": "NNS_G3D_RES_INLINE int NNS_TestResAccessor(void);",
+            }
+            for name, prototype in prototypes.items():
                 content = (g3d / name).read_text(encoding="utf-8")
-                self.assertIn("#if defined(SDK_PORT)\n#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE", content)
-                self.assertIn("NNS_G3D_INLINE_DECL", content)
-                self.assertIn("#undef NNS_G3D_INLINE_DECL", content)
-                before_inline = content.split(f"#include <nnsys/g3d/{inline_header}>", 1)[0]
-                macro_start = before_inline.index("#if defined(SDK_PORT)")
-                self.assertGreater(macro_start, before_inline.rfind("#include"))
-                self.assertLess(content.index("#undef NNS_G3D_INLINE_DECL"), content.index(f"#include <nnsys/g3d/{inline_header}>"))
-                self.assertNotRegex(content, r"(?m)^NNS_G3D_INLINE ")
+                self.assertNotIn("NNS_G3D_INLINE_DECL", content)
+                lines = content.splitlines()
+                index = lines.index(prototype)
+                self.assertEqual(["#ifdef SDK_PORT", "static", "#endif"], lines[index - 3:index])
 
             self.assertEqual([], patch_sdk_g3d_inline_linkage(root))
+
 
     def test_android_g3d_inline_headers_are_copied_back(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -409,6 +421,8 @@ libsim = library('sim',
             for rel in (
                 "subprojects/libntrsystem/include/nnsys/g3d/kernel.h",
                 "subprojects/libntrsystem/include/nnsys/g3d/sbc.h",
+                "subprojects/libntrsystem/include/nnsys/g3d/glbstate.h",
+                "subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h",
             ):
                 target = staged / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -416,6 +430,8 @@ libsim = library('sim',
             paths = android_patch_copy_paths(staged, {"libntrsystem": ("nitrosystem_args", False)})
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/kernel.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/sbc.h", paths)
+            self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/glbstate.h", paths)
+            self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h", paths)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:

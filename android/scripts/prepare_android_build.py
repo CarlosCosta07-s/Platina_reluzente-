@@ -308,85 +308,63 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
 
 
 def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
-    """Keep SDK_PORT inline declarations defined after nested G3D headers load."""
+    """Give SDK_PORT inline declarations the same internal linkage as their definitions."""
+    g3d_root = root / "include" / "nnsys" / "g3d"
+    if not g3d_root.is_dir():
+        raise PatchError(f"Required G3D header directory is missing: {g3d_root}")
+
     changes: list[str] = []
-    declaration_pattern = re.compile(r"(?m)^([ \t]*)NNS_G3D_INLINE(?=[ \t])")
-    patched_declaration_pattern = re.compile(r"(?m)^([ \t]*)NNS_G3D_INLINE_DECL(?=[ \t])")
-    undef_pattern = re.compile(r"(?m)^[ \t]*#undef NNS_G3D_INLINE_DECL[ \t]*\n?")
-    macro_block = (
+    guard = ("#ifdef SDK_PORT", "static", "#endif")
+    inline_include_pattern = re.compile(r"(?m)^[ \t]*#include[ \t]*<[^>\n]*_inline\.h>[ \t]*$")
+    declaration_pattern = re.compile(
+        r"^([ \t]*)(NNS_G3D_INLINE(?:_DECL)?|NNS_G3D_RES_INLINE)(?=[ \t]).*;[ \t]*$"
+    )
+    legacy_macro_block = (
         "#if defined(SDK_PORT)\n"
         "#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE\n"
         "#else\n"
         "#define NNS_G3D_INLINE_DECL NNS_G3D_INLINE\n"
         "#endif"
     )
-    for header_name, inline_header in (
-        ("kernel.h", "kernel_inline.h"),
-        ("sbc.h", "sbc_inline.h"),
-    ):
-        path = root / "include" / "nnsys" / "g3d" / header_name
-        if not path.is_file():
-            raise PatchError(f"{path}: required NitroSDK G3D header is missing")
+    cleanup_pattern = re.compile(r"(?m)^[ \t]*#undef NNS_G3D_INLINE_DECL[ \t]*\n?")
+
+    for path in sorted(g3d_root.rglob("*.h")):
         original = path.read_text(encoding="utf-8")
-        inline_marker = f"#include <nnsys/g3d/{inline_header}>"
-        if original.count(inline_marker) != 1:
-            raise PatchError(f"{path}: expected exactly one {inline_marker} marker")
-        if original.count("#include <nnsys/g3d/config.h>") != 1:
-            raise PatchError(f"{path}: expected exactly one G3D config include")
+        if not inline_include_pattern.search(original):
+            continue
 
-        prefix, suffix = original.split(inline_marker, 1)
-        if prefix.count(macro_block) > 1:
-            raise PatchError(f"{path}: duplicate inline-linkage macro blocks")
-        if len(undef_pattern.findall(prefix)) > 1:
-            raise PatchError(f"{path}: duplicate inline-linkage macro cleanup markers")
+        # Normalize headers touched by the first patch revision before applying
+        # the complete rule to every declaration/definition pair in this SDK.
+        normalized = original
+        if legacy_macro_block in normalized:
+            normalized = normalized.replace(legacy_macro_block, "", 1)
+        normalized = cleanup_pattern.sub("", normalized)
+        normalized = normalized.replace("NNS_G3D_INLINE_DECL", "NNS_G3D_INLINE")
 
-        # A correctly normalized header must be a true no-op on repeat runs.
-        # This also avoids rewriting files unnecessarily during local iteration.
-        existing_declarations = list(patched_declaration_pattern.finditer(prefix))
-        existing_undefs = list(undef_pattern.finditer(prefix))
-        if (
-            prefix.count(macro_block) == 1
-            and len(existing_undefs) == 1
-            and not declaration_pattern.search(prefix)
-            and existing_declarations
-        ):
-            macro_position = prefix.index(macro_block)
-            include_positions = [
-                match.start()
-                for match in re.finditer(r"(?m)^[ \t]*#include\b", prefix)
-            ]
-            last_include_position = max(include_positions, default=-1)
-            if (
-                macro_position > last_include_position
-                and macro_position < existing_declarations[0].start()
-                and existing_undefs[0].start() > existing_declarations[-1].start()
-            ):
-                continue
+        output: list[str] = []
+        inserted = 0
+        for line in normalized.splitlines(keepends=True):
+            body = line.rstrip("\r\n")
+            match = declaration_pattern.match(body)
+            if match:
+                indent = match.group(1)
+                prior = [entry.rstrip("\r\n") for entry in output[-3:]]
+                expected_guard = [indent + item for item in guard]
+                if prior != expected_guard:
+                    output.extend(indent + item + "\n" for item in guard)
+                    inserted += 1
+            output.append(line)
 
-        # Normalize both a clean upstream header and a header left by the older
-        # patch. In sbc.h, kernel.h is included before its declarations; defining
-        # this shared macro immediately after config.h lets kernel.h undefine it
-        # on return. Move the macro after all nested includes to avoid that.
-        prefix = prefix.replace(macro_block, "", 1)
-        prefix = undef_pattern.sub("", prefix, count=1)
-        prefix, converted = declaration_pattern.subn(
-            r"\1NNS_G3D_INLINE_DECL", prefix
-        )
-        declarations = list(patched_declaration_pattern.finditer(prefix))
-        if not declarations:
-            raise PatchError(f"{path}: no G3D inline declarations were found before {inline_header}")
-        first = declarations[0].start()
-        prefix = prefix[:first] + macro_block + "\n\n" + prefix[first:]
-        prefix += "\n#undef NNS_G3D_INLINE_DECL\n"
-
-        if declaration_pattern.search(prefix):
-            raise PatchError(f"{path}: some inline declarations were not converted")
-        if prefix.count(macro_block) != 1 or len(undef_pattern.findall(prefix)) != 1:
-            raise PatchError(f"{path}: inline-linkage macro normalization did not produce one definition and cleanup")
-        updated = prefix + inline_marker + suffix
+        updated = "".join(output)
+        # Only edit declarations before the corresponding inline implementation
+        # include. Headers without such prototypes are naturally left untouched.
         if updated != original:
             path.write_text(updated, encoding="utf-8")
-            changes.append("libntrsystem: place SDK_PORT G3D inline linkage after nested includes in " + header_name)
+            changes.append(
+                "libntrsystem: align SDK_PORT inline declaration linkage in "
+                + path.relative_to(g3d_root).as_posix()
+                + f" ({inserted} declarations)"
+            )
     return changes
 def patch_libntr(root: Path) -> list[str]:
     changes = []
@@ -935,10 +913,14 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         sdk_root = staged / "subprojects" / name
         rels.extend([f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"])
         if name == "libntrsystem":
-            rels.extend([
-                "subprojects/libntrsystem/include/nnsys/g3d/kernel.h",
-                "subprojects/libntrsystem/include/nnsys/g3d/sbc.h",
-            ])
+            # The SDK_PORT inline linkage fix touches every G3D declaration header
+            # paired with an *_inline.h implementation, including binres accessors.
+            rels.extend(
+                path.relative_to(staged).as_posix()
+                for path in sorted(
+                    (staged / "subprojects/libntrsystem/include/nnsys/g3d").rglob("*.h")
+                )
+            )
         # patch_sdk_project modifies PIC settings in these nested libraries.
         rels.extend(
             path.relative_to(staged).as_posix()
