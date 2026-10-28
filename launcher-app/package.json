@@ -5,7 +5,7 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check app.js",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check web/app.js",
     "test": "npm run check",
     "build:windows": "electron-builder --win portable --x64",
     "build:linux": "electron-builder --linux AppImage tar.gz --x64"
@@ -25,9 +25,7 @@
       "output": "dist"
     },
     "files": [
-      "index.html",
-      "styles.css",
-      "app.js",
+      "web/**/*",
       "electron/**/*",
       "package.json"
     ],
@@ -35,7 +33,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "Platina-Reluzente-Launcher-${version}-windows-${arch}.${ext}"
@@ -44,18 +44,24 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "tar.gz",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Game",
       "artifactName": "Platina-Reluzente-Launcher-${version}-linux-${arch}.${ext}"
     },
     "mac": {
-      "target": ["zip"]
+      "target": [
+        "zip"
+      ]
     }
   }
 }

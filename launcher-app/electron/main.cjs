@@ -22,7 +22,7 @@ function createWindow() {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.loadFile(path.join(__dirname, '..', 'index.html'));
+  window.loadFile(path.join(__dirname, '..', 'web', 'index.html'));
 }
 
 ipcMain.handle('platina:platform', () => process.platform);
