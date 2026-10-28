@@ -30,6 +30,7 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "include/simulator/g3_draw.h").write_text(GLAD + "\n", encoding="utf-8")
+        (root / "libraries/sim/src/g3_handler.cpp").write_text(GLAD + "\n#include <nitro/gx/g3.h>\n", encoding="utf-8")
         (root / "include/simulator/g3_handler.h").write_text(GLAD + "\n", encoding="utf-8")
         (root / "libraries/sim/src/g3_draw.cpp").write_text(
             '#include <stdio.h>\n#define G3_DRAW_MAX_ITEMS 1000\n'
@@ -56,6 +57,10 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertIn("#ifndef SDK_BUILD_ANDROID", main)
             handler = (root / "include/simulator/g3_handler.h").read_text(encoding="utf-8")
             self.assertIn("GLES3/gl32.h", handler)
+            handler_cpp = (root / "libraries/sim/src/g3_handler.cpp").read_text(encoding="utf-8")
+            self.assertIn("GLES3/gl32.h", handler_cpp)
+            self.assertLess(handler_cpp.index("#if defined(SDK_BUILD_ANDROID)"), handler_cpp.index("#include <GLES3/gl32.h>"))
+            self.assertLess(handler_cpp.index("#include <GLES3/gl32.h>"), handler_cpp.index("#elif defined(SDK_BUILD_NX)"))
             self.assertLess(handler.index("#if defined(SDK_BUILD_ANDROID)"), handler.index("#include <GLES3/gl32.h>"))
             self.assertLess(handler.index("#include <GLES3/gl32.h>"), handler.index("#elif defined(SDK_BUILD_NX)"))
             self.assertIn("SIM_GetBorderClampMode()", draw)

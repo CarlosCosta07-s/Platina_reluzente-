@@ -109,6 +109,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     root = Path(source_root).expanduser().resolve()
     required = [
         root / "libraries/sim/src/sim_main.cpp",
+        root / "libraries/sim/src/g3_handler.cpp",
         root / "libraries/sim/src/g3_draw.cpp",
         root / "include/simulator/g3_draw.h",
         root / "include/simulator/g3_handler.h",
@@ -134,6 +135,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
 
     for relative in (
         "libraries/sim/src/sim_main.cpp",
+        "libraries/sim/src/g3_handler.cpp",
         "include/simulator/g3_draw.h",
         "include/simulator/g3_handler.h",
     ):
