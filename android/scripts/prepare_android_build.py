@@ -342,6 +342,22 @@ def patch_libntr(root: Path) -> list[str]:
             changes.append("libntr: preserve 32-bit " + label)
     types_path.write_text(types_text, encoding="utf-8")
 
+    rom_header_path = root / "libraries" / "card" / "include" / "card_rom.h"
+    rom_header = rom_header_path.read_text(encoding="utf-8")
+    rom_header, rom_changed = replace_once(
+        rom_header,
+        "\tu8 cache_buf[CARD_ROM_PAGE_SIZE];",
+        "#ifdef SDK_BUILD_ANDROID\n"
+        "\tu8 cache_buf[CARD_ROM_PAGE_SIZE] ATTRIBUTE_ALIGN(32);\n"
+        "#else\n"
+        "\tu8 cache_buf[CARD_ROM_PAGE_SIZE];\n"
+        "#endif",
+        "Android ROM cache buffer alignment",
+    )
+    if rom_changed:
+        changes.append("libntr: preserve 32-byte CARDRomStat buffer alignment on Android")
+    rom_header_path.write_text(rom_header, encoding="utf-8")
+
     path.write_text(text, encoding="utf-8")
 
     sim_path = root / "libraries/sim/meson.build"
@@ -559,6 +575,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/meson.options",
         "subprojects/libntr/meson.build",
         "subprojects/libntr/include/nitro/types.h",
+        "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
