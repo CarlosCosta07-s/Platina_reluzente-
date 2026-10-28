@@ -283,7 +283,7 @@ libsim = library('sim',
                 encoding="utf-8",
             )
             (root / "meson.build").write_text(
-                "build_target = get_option('build_target')\\n"
+                "build_target = get_option('build_target')\n"
                 "if (build_target == 'linux')\n"
                 "nitrosystem_args += [\n '-DSDK_BUILD_LINUX'\n]\nendif\n",
                 encoding="utf-8",
@@ -320,7 +320,7 @@ libsim = library('sim',
                 "option('build_target', type: 'combo', choices: ['arm', 'win64', 'linux', 'nx'], value: 'arm')\n",
                 encoding="utf-8")
             (root / "meson.build").write_text(
-                "build_target = get_option('build_target')\\n"
+                "build_target = get_option('build_target')\n"
                 "if (build_target == 'arm')\nadd_project_arguments(c_args,\n"
                 " language: 'c',\n native: false\n)\nelse\nadd_project_arguments(c_args,\n"
                 " language: 'c',\n native: true\n)\nendif\n"
