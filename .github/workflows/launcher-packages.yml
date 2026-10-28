@@ -253,6 +253,45 @@ jobs:
           zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/firmware.bin'
           zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/build-version.txt'
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+          # Compare every packaged runtime file against the exact validated
+          # data tree from the native build; checking just header.bin and
+          # firmware.bin would miss a truncated asset bundle.
+          python - "$apk" launcher-app/dist/native-game/runtime-data <<'PY'
+          import hashlib
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          apk = Path(sys.argv[1])
+          runtime_root = Path(sys.argv[2])
+          prefix = "assets/pokeplatinum/"
+          expected = {
+              path.relative_to(runtime_root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in runtime_root.rglob("*")
+              if path.is_file()
+          }
+          with zipfile.ZipFile(apk) as archive:
+              actual = {
+                  name[len(prefix):]
+                  for name in archive.namelist()
+                  if name.startswith(prefix) and not name.endswith("/")
+              }
+              if actual != set(expected):
+                  missing = sorted(set(expected) - actual)
+                  unexpected = sorted(actual - set(expected))
+                  raise SystemExit(
+                      f"Android runtime asset list mismatch: missing={missing[:15]}, "
+                      f"unexpected={unexpected[:15]}"
+                  )
+              mismatched = []
+              for relative, digest in expected.items():
+                  packaged_digest = hashlib.sha256(archive.read(prefix + relative)).hexdigest()
+                  if packaged_digest != digest:
+                      mismatched.append(relative)
+              if mismatched:
+                  raise SystemExit(f"Android runtime asset hash mismatch: {mismatched[:15]}")
+          print(f"Verified {len(expected)} Android runtime assets by path and SHA-256.")
+          PY
           mkdir -p launcher-app/dist
           cp "$apk" launcher-app/dist/Platina-Reluzente-Android-arm64-complete.apk
       - name: Upload the single integrated Android APK
