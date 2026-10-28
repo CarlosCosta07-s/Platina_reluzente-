@@ -140,7 +140,7 @@ jobs:
           [built-in options]
           b_staticpic = true
           c_args = ['-fPIC']
-          cpp_args = ['-fPIC']
+          cpp_args = ['-fPIC', '-Wno-register']
           c_link_args = ['-Wl,-z,max-page-size=16384']
           cpp_link_args = ['-Wl,-z,max-page-size=16384']
           EOF
