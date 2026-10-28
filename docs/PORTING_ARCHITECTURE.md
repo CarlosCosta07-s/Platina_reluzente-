@@ -24,7 +24,7 @@ Isso é preferível a reconstruir as mecânicas do zero em uma engine genérica.
 
 ## Dependências reproduzíveis
 
-A versão fixada do porte desktop contém arquivos Meson `.wrap` que apontam para a branch móvel `main` das bibliotecas libntr. O script `scripts/pin-native-dependencies.py` substitui essas referências por commits verificados e compatíveis com a revisão do porte usada neste projeto. O script só altera quatro arquivos conhecidos, valida as URLs antes de escrever e falha de forma explícita se encontrar revisões desconhecidas. Ele é executado automaticamente pelos scripts de build do projeto.
+A versão fixada do porte desktop contém arquivos Meson `.wrap` que apontam para a branch móvel `main` das bibliotecas libntr. O script `scripts/pin_native_dependencies.py` substitui essas referências por commits verificados e compatíveis com a revisão do porte usada neste projeto. O script só altera quatro arquivos conhecidos, valida todas as URLs e revisões antes de escrever, falha de forma explícita em valores desconhecidos e oferece uma operação de restauração. Os scripts de build e os jobs de CI restauram as referências ao final, inclusive após falhas, para não deixar o checkout externo com alterações locais.
 
 A compilação no GitHub Actions prepara o código upstream como um checkout Git independente, porque um gerador de cabeçalho do upstream consulta os hashes Git da árvore principal e da libntr. Essa preparação evita depender de caminhos internos da metadata de um submódulo aninhado.
 

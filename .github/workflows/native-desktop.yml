@@ -28,6 +28,10 @@ jobs:
           python-version: "3.12"
       - name: Compile Python files
         run: python -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py
+      - name: Restore Meson dependency references
+        if: always()
+        run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" --restore "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
+
       - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
 
@@ -115,6 +119,11 @@ jobs:
         working-directory: vendor/pokeplatinum-native
         run: .\Launch_MSys2.ps1 "make win64"
         shell: powershell
+      - name: Restore Meson dependency references
+        if: always()
+        shell: pwsh
+        run: python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin_native_dependencies.py") --restore (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
+
 
 # CI compiles source and tests local maintenance tools only. It intentionally
 # does not upload executables, ROMs, extracted NARC files, or game assets.

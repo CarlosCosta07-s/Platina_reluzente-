@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from pin_native_dependencies import (  # noqa: E402
     PINNED_DEPENDENCIES,
     PinningError,
     pin_native_dependencies,
+    restore_native_dependencies,
 )
 
 
@@ -24,6 +26,14 @@ def _make_native_root(root: Path, *, revision: str = "main") -> Path:
     return root
 
 
+def _revision(path: Path) -> str:
+    content = path.read_text(encoding="utf-8")
+    match = re.search(r"(?m)^revision = (\S+)$", content)
+    if match is None:
+        raise AssertionError(f"No revision found in {path}")
+    return match.group(1)
+
+
 class PinNativeDependenciesTests(unittest.TestCase):
     def test_pins_all_moving_wrap_revisions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -31,26 +41,71 @@ class PinNativeDependenciesTests(unittest.TestCase):
             changed = pin_native_dependencies(root)
             self.assertEqual(set(changed), set(PINNED_DEPENDENCIES))
             for filename, (_url, sha) in PINNED_DEPENDENCIES.items():
-                content = (root / "subprojects" / filename).read_text(encoding="utf-8")
-                self.assertIn(f"revision = {sha}\n", content)
-                self.assertNotIn("revision = main", content)
+                self.assertEqual(_revision(root / "subprojects" / filename), sha)
 
-    def test_is_idempotent(self) -> None:
+    def test_pin_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = _make_native_root(Path(tmp))
             pin_native_dependencies(root)
             self.assertEqual(pin_native_dependencies(root), [])
 
-    def test_rejects_unknown_revision_instead_of_rewriting(self) -> None:
+    def test_restore_returns_all_wraps_to_moving_refs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = _make_native_root(Path(tmp))
-            path = root / "subprojects" / "libntr.wrap"
+            pin_native_dependencies(root)
+            restored = restore_native_dependencies(root)
+            self.assertEqual(set(restored), set(PINNED_DEPENDENCIES))
+            for filename in PINNED_DEPENDENCIES:
+                self.assertEqual(_revision(root / "subprojects" / filename), "main")
+
+    def test_restore_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _make_native_root(Path(tmp))
+            self.assertEqual(restore_native_dependencies(root), [])
+
+    def test_rejects_unknown_revision_without_partial_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _make_native_root(Path(tmp))
+            path = root / "subprojects" / "libntrdwc.wrap"
             path.write_text(
                 path.read_text(encoding="utf-8").replace("revision = main", "revision = feature/custom"),
                 encoding="utf-8",
             )
+            before = {
+                name: (root / "subprojects" / name).read_text(encoding="utf-8")
+                for name in PINNED_DEPENDENCIES
+            }
             with self.assertRaisesRegex(PinningError, "Revisão desconhecida"):
                 pin_native_dependencies(root)
+            after = {
+                name: (root / "subprojects" / name).read_text(encoding="utf-8")
+                for name in PINNED_DEPENDENCIES
+            }
+            self.assertEqual(after, before)
+
+    def test_restore_refuses_unknown_revision_without_partial_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _make_native_root(Path(tmp))
+            pin_native_dependencies(root)
+            path = root / "subprojects" / "libntrdwc.wrap"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "revision = " + PINNED_DEPENDENCIES["libntrdwc.wrap"][1],
+                    "revision = feature/custom",
+                ),
+                encoding="utf-8",
+            )
+            before = {
+                name: (root / "subprojects" / name).read_text(encoding="utf-8")
+                for name in PINNED_DEPENDENCIES
+            }
+            with self.assertRaisesRegex(PinningError, "revisão inesperada"):
+                restore_native_dependencies(root)
+            after = {
+                name: (root / "subprojects" / name).read_text(encoding="utf-8")
+                for name in PINNED_DEPENDENCIES
+            }
+            self.assertEqual(after, before)
 
     def test_rejects_unexpected_dependency_url(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -66,12 +121,21 @@ class PinNativeDependenciesTests(unittest.TestCase):
             with self.assertRaisesRegex(PinningError, "URL inesperada"):
                 pin_native_dependencies(root)
 
-    def test_fails_if_expected_wrap_is_missing(self) -> None:
+    def test_fails_if_expected_wrap_is_missing_without_partial_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = _make_native_root(Path(tmp))
             (root / "subprojects" / "libntrdwc.wrap").unlink()
+            before = {
+                name: (root / "subprojects" / name).read_text(encoding="utf-8")
+                for name in PINNED_DEPENDENCIES if (root / "subprojects" / name).exists()
+            }
             with self.assertRaisesRegex(PinningError, "ausente"):
                 pin_native_dependencies(root)
+            after = {
+                name: (root / "subprojects" / name).read_text(encoding="utf-8")
+                for name in PINNED_DEPENDENCIES if (root / "subprojects" / name).exists()
+            }
+            self.assertEqual(after, before)
 
 
 if __name__ == "__main__":
