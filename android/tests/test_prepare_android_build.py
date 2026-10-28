@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -104,14 +104,18 @@ class AndroidMesonPatchTests(unittest.TestCase):
             staged = Path(tmp)
             card = staged / "subprojects" / "libntr" / "libraries" / "card" / "meson.build"
             nested = staged / "subprojects" / "libntr" / "libraries" / "camera" / "src" / "meson.build"
+            ppwlobby = staged / "lib" / "ppwlobby" / "meson.build"
             card.parent.mkdir(parents=True)
             nested.parent.mkdir(parents=True)
+            ppwlobby.parent.mkdir(parents=True)
             card.write_text("pic: build_target == 'nx' or build_target == 'android'\\n", encoding="utf-8")
             nested.write_text("pic: build_target == 'nx' or build_target == 'android'\\n", encoding="utf-8")
+            ppwlobby.write_text("fixture\\n", encoding="utf-8")
 
             paths = android_patch_copy_paths(staged, {})
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
+            self.assertIn("lib/ppwlobby/meson.build", paths)
             self.assertIn("subprojects/libvct/meson.build", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
@@ -150,6 +154,48 @@ class AndroidMesonPatchTests(unittest.TestCase):
             )
             self.assertTrue(changes)
             self.assertEqual([], second)
+
+    def test_android_ppwlobby_uses_c99_flags_for_c_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            meson = root / "lib" / "ppwlobby" / "meson.build"
+            meson.parent.mkdir(parents=True)
+            meson.write_text(
+                """ppwlobby_c_args = []
+
+if(build_target == 'arm')
+    ppwlobby_c_args = [
+        '-wrap:sdk', '2.0/sp2p3',
+        '-nothumb'
+    ]
+else
+    ppwlobby_c_args = [
+        '-fpermissive',
+        '-std=c++03'
+    ]
+endif
+""",
+                encoding="utf-8",
+            )
+
+            changes = patch_android_ppwlobby_c_args(root)
+            result = meson.read_text(encoding="utf-8")
+
+            self.assertEqual(
+                ["parent PPW lobby: use C99 flags for Android C sources"],
+                changes,
+            )
+            self.assertIn(
+                "elif(build_target == 'android')\n"
+                "    # These are C sources; C++ flags make Clang reject the Android build.\n"
+                "    ppwlobby_c_args = [\n"
+                "        '-std=c99'\n"
+                "    ]\n",
+                result,
+            )
+            self.assertIn("'-std=c++03'", result)  # Keep the existing desktop configuration unchanged.
+            self.assertEqual([], patch_android_ppwlobby_c_args(root))
+
 
     def test_ppwlobby_static_libraries_enable_android_pic_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
