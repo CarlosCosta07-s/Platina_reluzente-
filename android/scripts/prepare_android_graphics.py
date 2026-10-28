@@ -92,14 +92,16 @@ class AndroidGraphicsPatchError(RuntimeError):
 
 
 def replace_exact(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
-    if old in text:
-        if text.count(old) != 1:
-            raise AndroidGraphicsPatchError(f"{label}: expected one original marker; no files written.")
-        return text.replace(old, new, 1), True
+    # Check the replacement first because some reviewed replacement blocks retain
+    # the desktop-only text inside an Android/desktop conditional.
     if new in text:
         if text.count(new) != 1:
             raise AndroidGraphicsPatchError(f"{label}: expected one patched marker.")
         return text, False
+    if old in text:
+        if text.count(old) != 1:
+            raise AndroidGraphicsPatchError(f"{label}: expected one original marker; no files written.")
+        return text.replace(old, new, 1), True
     raise AndroidGraphicsPatchError(f"{label}: upstream marker not found; no files written.")
 
 
@@ -141,7 +143,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     if changed:
         changes.append("sim_main.cpp: request OpenGL ES 3.2 on Android only")
     loader = "  gladLoadGLLoader(SDL_GL_GetProcAddress);"
-    main, changed = replace_exact(main, loader, "#ifndef SDK_BUILD_ANDROID\\n" + loader + "\\n#endif", "desktop GL loader")
+    main, changed = replace_exact(main, loader, "#ifndef SDK_BUILD_ANDROID\n" + loader + "\n#endif", "desktop GL loader")
     if changed:
         changes.append("sim_main.cpp: skip desktop GL loader on Android")
     staged[main_path] = main
@@ -163,7 +165,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     meson, changed = replace_exact(
         meson_path.read_text(encoding="utf-8"),
         "libsim_args = [ ]",
-        "libsim_args = [ ]\\n\\nif(build_target == 'android')\\n"
+        "libsim_args = [ ]\n\nif(build_target == 'android')\n"
         "    # Choose Dear ImGui's GLES3 renderer for the Android simulator.\\n"
         "    libsim_args += ['-DIMGUI_IMPL_OPENGL_ES3']\\n"
         "endif",
@@ -203,7 +205,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
             if lines and lines[-1].strip() == ')""':
                 lines = lines[:-1]
             dest = output / (name.replace(".glsl", "." + SHADERS[name]))
-            dest.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+            dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     return {
         "libntr_commit_expected": LIBNTR_COMMIT,

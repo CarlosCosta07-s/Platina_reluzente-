@@ -7,18 +7,18 @@ from pathlib import Path
 from android.scripts.prepare_android_graphics import AndroidGraphicsPatchError, prepare_android_graphics
 
 GLAD = (
-    "#ifdef SDK_BUILD_NX\\n"
-    "#include <glad/glad.h>\\n"
-    "#else\\n"
-    "#include <simulator/glad/glad.h>\\n"
+    "#ifdef SDK_BUILD_NX\n"
+    "#include <glad/glad.h>\n"
+    "#else\n"
+    "#include <simulator/glad/glad.h>\n"
     "#endif"
 )
 CONTEXT = (
-    "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);\\n"
-    "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);\\n"
+    "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);\n"
+    "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);\n"
     "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);"
 )
-SHADER = 'R""(\\n#version 420 core\\nvoid main() { gl_Position = vec4(0.0); }\\n)""\\n'
+SHADER = 'R""(\n#version 420 core\nvoid main() { gl_Position = vec4(0.0); }\n)""\n'
 
 
 class PrepareAndroidGraphicsTests(unittest.TestCase):
@@ -26,17 +26,17 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
         (root / "libraries/sim/src/shaders").mkdir(parents=True)
         (root / "include/simulator").mkdir(parents=True)
         (root / "libraries/sim/src/sim_main.cpp").write_text(
-            GLAD + "\\n" + CONTEXT + "\\n  gladLoadGLLoader(SDL_GL_GetProcAddress);\\n",
+            GLAD + "\n" + CONTEXT + "\n  gladLoadGLLoader(SDL_GL_GetProcAddress);\n",
             encoding="utf-8",
         )
-        (root / "include/simulator/g3_draw.h").write_text(GLAD + "\\n", encoding="utf-8")
+        (root / "include/simulator/g3_draw.h").write_text(GLAD + "\n", encoding="utf-8")
         (root / "libraries/sim/src/g3_draw.cpp").write_text(
-            '#include <stdio.h>\\n#define G3_DRAW_MAX_ITEMS 1000\\n'
-            'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);\\n'
-            'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);\\n',
+            '#include <stdio.h>\n#define G3_DRAW_MAX_ITEMS 1000\n'
+            'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);\n'
+            'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);\n',
             encoding="utf-8",
         )
-        (root / "libraries/sim/meson.build").write_text("libsim_args = [ ]\\n", encoding="utf-8")
+        (root / "libraries/sim/meson.build").write_text("libsim_args = [ ]\n", encoding="utf-8")
         for name in ("g2_vertex.glsl", "g2_fragment.glsl", "g3_vertex.glsl", "g3_fragment.glsl"):
             (root / "libraries/sim/src/shaders" / name).write_text(SHADER, encoding="utf-8")
 
