@@ -1,7 +1,11 @@
-# Android port — native cross-build milestone
+# Android port — experimental native ARM64 path
 
-The Android graphics preparation workflow validates the four GLES 3.2 shaders. A separate workflow attempts the next real milestone: compile the reconstructed game and pinned libntr renderer into an ARM64 Android shared library using the Android NDK, SDL2, and ENet.
+O projeto tem três verificações separadas para Android:
 
-This workflow does not create a final playable APK and does not bundle ROMs or extracted game data. The output libmain.so is a native build artifact for integration with SDLActivity. Still outstanding after this milestone: SDLActivity/Gradle packaging, ROM selection and data preparation, lifecycle and touch verification, audio, save data, and on-device smoke testing.
+1. **Preparação gráfica GLES 3.2** — adapta as fontes do renderizador e valida os quatro shaders com `glslangValidator`. Essa etapa não compila o jogo.
+2. **Android native ARM64 cross-build** — usa o Android NDK para compilar `libmain.so` e SDL2, verifica o símbolo `SDL_main`, a compatibilidade de alinhamento de páginas de 16 KB e os recursos nativos do runtime. O pacote de dados é comparado com `platinum.us/filesys.csv` e validado para detectar arquivos ausentes ou divergentes.
+3. **Launcher packages** — combina a biblioteca ARM64, SDLActivity, recursos do jogo e o importador de ROM em um único APK de teste. O APK não inclui a ROM pessoal do usuário.
 
-The Android path is isolated behind SDK_BUILD_ANDROID and does not replace desktop OpenGL 4.2. If the cross-build exposes missing macros, unsupported assembly, or link dependencies, the workflow will record the exact failure for the next patch.
+Uma compilação e a verificação do APK comprovam apenas a integridade do artefato. Ainda é necessário testar em um aparelho Android real: abertura da SDLActivity, leitura da ROM importada, tela de título, renderização GLES, toque/controles, áudio, ciclo de vida e gravações. Portanto, o porte Android permanece **experimental** até que esses testes sejam reproduzíveis.
+
+O código específico de Android fica isolado por `SDK_BUILD_ANDROID` e não substitui o backend OpenGL 4.2 usado no desktop. Os builds devem continuar fixando as revisões upstream e falhar com mensagens claras quando uma dependência ou marcador esperado estiver ausente.
