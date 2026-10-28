@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import only Pokémon Platinum text NARC files from a local CPUE ROM dump.
+"""Import an allowlisted set of localized Pokémon Platinum NARC files from a local CPUE ROM dump.
 
 This tool never modifies the ROM and writes only to an explicit destination.
 It does not distribute or upload ROM data.
