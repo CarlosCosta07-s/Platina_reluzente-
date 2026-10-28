@@ -1,0 +1,61 @@
+{
+  "name": "platina-reluzente-launcher",
+  "version": "0.1.0",
+  "description": "Launcher multiplataforma de teste do porte nativo Platina Reluzente",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check app.js",
+    "test": "npm run check",
+    "build:windows": "electron-builder --win portable --x64",
+    "build:linux": "electron-builder --linux AppImage tar.gz --x64"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "electron": "^32.2.7",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "org.carloscostaxavier.platinareluzentelauncher",
+    "productName": "Platina Reluzente Launcher",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "styles.css",
+      "app.js",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Platina-Reluzente-Launcher-${version}-windows-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "tar.gz",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Game",
+      "artifactName": "Platina-Reluzente-Launcher-${version}-linux-${arch}.${ext}"
+    },
+    "mac": {
+      "target": ["zip"]
+    }
+  }
+}

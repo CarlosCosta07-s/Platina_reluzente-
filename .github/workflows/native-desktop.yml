@@ -109,6 +109,25 @@ jobs:
         env:
           APPIMAGE_PATH: ${{ steps.linux_appimage.outputs.path }}
         run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$APPIMAGE_PATH" 15
+      - name: Package Linux runtime archive (preserve executable permissions)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          build_root="$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux"
+          package_dir="$build_root/pokeplatinum"
+          archive="$build_root/Platina-Reluzente-Linux-x86_64.tar.gz"
+          test -d "$package_dir"
+          tar -C "$package_dir" -czf "$archive" .
+          test -s "$archive"
+          echo "Linux runtime archive created: $archive"
+      - name: Upload Linux native runtime for manual testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: platina-reluzente-linux-x86_64
+          path: vendor/pokeplatinum-native/build_linux/Platina-Reluzente-Linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Audit Android graphics compatibility requirements
         run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Restore Meson dependency references
@@ -163,11 +182,28 @@ jobs:
       - name: Verify complete Windows runtime package
         shell: pwsh
         run: python (Join-Path $env:GITHUB_WORKSPACE "scripts/verify_native_package.py") --build-dir (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/build_win64") --package-dir (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/build_win64/pokeplatinum") --filesys-csv (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/platinum.us/filesys.csv")
+      - name: Confirm Windows executable is included
+        shell: pwsh
+        run: |
+          $packageDir = Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/build_win64/pokeplatinum"
+          $executables = @(Get-ChildItem -LiteralPath $packageDir -Recurse -File -Filter "*.exe")
+          if ($executables.Count -eq 0) {
+            throw "No .exe was found in the verified Windows runtime package."
+          }
+          $executables | ForEach-Object { Write-Host ("Windows executable: " + $_.FullName) }
+      - name: Upload Windows native runtime for manual testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: platina-reluzente-windows-x64
+          path: vendor/pokeplatinum-native/build_win64/pokeplatinum/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Restore Meson dependency references
         if: always()
         shell: pwsh
         run: python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin_native_dependencies.py") --restore (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
 
 
-# CI compiles source and tests local maintenance tools only. It intentionally
-# does not upload executables, ROMs, extracted NARC files, or game assets.
+# CI uploads short-lived native runtime artifacts for manual testing. It never uploads ROMs
+# or extracted user-owned ROM images; the Android package is built separately as a launcher.

@@ -17,6 +17,15 @@ O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em 
 
 Não anunciamos o porte como concluído, jogável do início ao fim ou compatível com Android antes de termos compilação e testes reproduzíveis.
 
+## Builds para teste manual
+
+Os pacotes são publicados como artefatos temporários do GitHub Actions, sem ROMs ou arquivos de jogo fornecidos pelo usuário:
+
+- [Launcher multiplataforma: Windows .exe, Linux AppImage e Android APK](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/launcher-packages.yml)
+- [Porte nativo: runtime Windows x64 e runtime Linux x86-64](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/native-desktop.yml)
+
+Abra a execução mais recente com conclusão **success** e baixe a seção **Artifacts**. O launcher desktop pode iniciar o executável nativo selecionado na pasta dele. O APK Android permite testar a interface do launcher e o seletor local de ROM, mas **não executa o jogo**: o porte do motor gráfico para Android/OpenGL ES permanece pendente. Selecionar uma ROM também não significa que os seus dados já foram extraídos ou carregados pelo motor.
+
 ## Decisão técnica
 
 **Não usaremos Godot, Unity, emulador de Nintendo DS nem interpretador de instruções ARM.** Uma engine genérica obrigaria a reconstruir o jogo em vez de aproveitar a lógica real existente.
