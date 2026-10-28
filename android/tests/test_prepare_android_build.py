@@ -44,6 +44,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             paths = android_patch_copy_paths(staged, {})
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
+            self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
             self.assertIn("subprojects/libntr/libraries/camera/src/meson.build", paths)
             sdk_fnd = staged / "subprojects" / "libntrsystem" / "libraries" / "fnd" / "meson.build"
             sdk_fnd.parent.mkdir(parents=True)
@@ -103,6 +104,15 @@ if (build_target == 'nx')
 endif
 """,
                 encoding="utf-8")
+            types_dir = root / "include" / "nitro"
+            types_dir.mkdir(parents=True)
+            (types_dir / "types.h").write_text(
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+                "typedef unsigned int u32;\n#else\ntypedef unsigned long u32;\n#endif\n"
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+                "typedef signed int s32;\n#else\ntypedef signed long s32;\n#endif\n",
+                encoding="utf-8",
+            )
             (root / "libraries/sim").mkdir(parents=True)
             (root / "libraries/sim/meson.build").write_text(
                 """libsim_includes = include_directories('include')
@@ -152,6 +162,10 @@ libsim = library('sim',
             self.assertIn("pic: build_target == 'android',", os_library)
             libntr_meson = (root / "meson.build").read_text(encoding="utf-8")
             self.assertIn("SDK_BUILD_ANDROID", libntr_meson)
+            types_header = (root / "include/nitro/types.h").read_text(encoding="utf-8")
+            self.assertIn("SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)", types_header)
+            self.assertIn("typedef unsigned int u32;", types_header)
+            self.assertIn("typedef signed int s32;", types_header)
             include_arg = "add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'libraries/sim/android_include')"
             self.assertIn(include_arg, libntr_meson)
             self.assertLess(libntr_meson.index(include_arg), libntr_meson.index("if (build_target == 'nx')"))

@@ -318,6 +318,30 @@ def patch_libntr(root: Path) -> list[str]:
         if changed:
             changes.append("libntr: expose staged SDL2/ENet headers before target declarations")
 
+    # NitroSDK's public typedefs must remain fixed-width on LP64 hosts.
+    # Upstream classifies u32/s32 by Linux/NX, which makes unsigned long
+    # 64-bit on Android AArch64. Add Android to the 32-bit typedef branches,
+    # matching the original DS SDK ABI without changing desktop behavior.
+    types_path = root / "include" / "nitro" / "types.h"
+    types_text = types_path.read_text(encoding="utf-8")
+    fixed_width_pairs = (
+        (
+            "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\ntypedef unsigned int u32;",
+            "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)\ntypedef unsigned int u32;",
+            "Android u32 width",
+        ),
+        (
+            "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\ntypedef signed int s32;",
+            "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)\ntypedef signed int s32;",
+            "Android s32 width",
+        ),
+    )
+    for old_type, new_type, label in fixed_width_pairs:
+        types_text, type_changed = replace_once(types_text, old_type, new_type, label)
+        if type_changed:
+            changes.append("libntr: preserve 32-bit " + label)
+    types_path.write_text(types_text, encoding="utf-8")
+
     path.write_text(text, encoding="utf-8")
 
     sim_path = root / "libraries/sim/meson.build"
@@ -534,6 +558,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "meson.build",
         "subprojects/libntr/meson.options",
         "subprojects/libntr/meson.build",
+        "subprojects/libntr/include/nitro/types.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
