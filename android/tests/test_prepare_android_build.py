@@ -117,6 +117,10 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("main = shared_library('main'", result)
             self.assertIn("aarch64-linux-android24-clang", result)
             self.assertIn("native: false", result)
+            self.assertIn(
+                "add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'subprojects/libntr/libraries/sim/android_include'), language: ['c', 'cpp'])",
+                result,
+            )
             self.assertTrue(changes)
             self.assertEqual([], second)
 

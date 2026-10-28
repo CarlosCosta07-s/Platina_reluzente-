@@ -108,7 +108,22 @@ def patch_root(root: Path) -> list[str]:
     if changed:
         changes.append("parent Meson: skip unsupported NASM detection on Android")
 
-    asm_start = "else\ntrainer_ai_ss = custom_target("
+    # libvct and other sibling subprojects include nitro.h, whose Android
+    # branch includes SDL2/SDL_thread.h. Arguments added inside libntr do not
+    # reach sibling subprojects, so publish this staged include path at the
+    # parent project level as well.
+    sdl_include_block = (
+        "if (build_target == 'android')\\n"
+        "    add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'subprojects/libntr/libraries/sim/android_include'), language: ['c', 'cpp'])\\n"
+        "endif"
+    )
+    if sdl_include_block not in text:
+        if text.count(target_block) != 1:
+            raise PatchError("parent Meson: cannot locate Android target block to expose SDL2 headers")
+        text = text.replace(target_block, target_block + sdl_include_block + "\\n\\n", 1)
+        changes.append("parent Meson: expose staged SDL2 headers to sibling targets")
+
+    asm_start = "else\\ntrainer_ai_ss = custom_target("
     asm_new = """elif (build_target == 'android')
 trainer_ai_ss = custom_target(
     'trainer_ai_script.ss',
