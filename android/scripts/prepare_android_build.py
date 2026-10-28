@@ -354,6 +354,99 @@ def patch_android_ppwlobby_map_allocators(root: Path) -> list[str]:
         for path in sorted(staged)
     ]
 
+def patch_android_ppwlobby_stdlib_compat(root: Path) -> list[str]:
+    """Adapt PPW lobby's legacy allocators and opaque callback IDs to libc++/ARM64."""
+    base_path = root / "lib" / "ppwlobby" / "include" / "ilobby" / "dwci_lobbybase.h"
+    source_patches = {
+        root / "lib" / "ppwlobby" / "libraries" / "ilobby" / "src" / "dwci_lobby.cpp": (
+            ("(u32)param6", "PPW_CallbackParamId(param6)", 6),
+            ("(u32)param4", "PPW_CallbackParamId(param4)", 4),
+            ("(u32)param7", "PPW_CallbackParamId(param7)", 2),
+        ),
+        root / "lib" / "ppwlobby" / "libraries" / "ppwlobby" / "src" / "ppw_lobby.cpp": (
+            ("(PPW_LOBBY_CHANNEL_KIND)(u32)param3",
+             "(PPW_LOBBY_CHANNEL_KIND)PPW_CallbackParamId(param3)", 3),
+        ),
+    }
+    required = [base_path, *source_patches.keys()]
+    missing = [str(path) for path in required if not path.is_file()]
+    if missing:
+        raise PatchError("PPW lobby ARM64 compatibility sources missing: " + ", ".join(missing))
+
+    original_base = base_path.read_text(encoding="utf-8")
+    updated_base = original_base
+    if "#include <stdint.h>" not in updated_base:
+        limits_marker = "#include <limits>\n"
+        if updated_base.count(limits_marker) != 1:
+            raise PatchError("PPW allocator header: expected exactly one <limits> include")
+        updated_base = updated_base.replace(
+            limits_marker, limits_marker + "#include <stdint.h>\n", 1
+        )
+
+    compat_block = (
+        "template <class T, class U>\n"
+        "inline bool operator==(const PPW_Allocator<T> &, const PPW_Allocator<U> &) throw()\n"
+        "{\n"
+        "    // All PPW allocators use the same DWC allocation domain.\n"
+        "    return true;\n"
+        "}\n\n"
+        "template <class T, class U>\n"
+        "inline bool operator!=(const PPW_Allocator<T> &, const PPW_Allocator<U> &) throw()\n"
+        "{\n"
+        "    return false;\n"
+        "}\n\n"
+        "// Legacy callback APIs carry 32-bit callback IDs in opaque void* values.\n"
+        "// Decode the integer-shaped token through uintptr_t so ARM64 Clang accepts it.\n"
+        "inline u32 PPW_CallbackParamId(void *param) throw()\n"
+        "{\n"
+        "    return static_cast<u32>(reinterpret_cast<uintptr_t>(param));\n"
+        "}\n\n"
+        "#endif // ILOBBY_LOBBYBASE_H"
+    )
+    if compat_block in updated_base:
+        if updated_base.count(compat_block) != 1:
+            raise PatchError("PPW allocator header: duplicated Android compatibility helpers")
+        if updated_base.count("#include <stdint.h>") != 1:
+            raise PatchError("PPW allocator header: duplicated <stdint.h> include")
+    else:
+        end_marker = "#endif // ILOBBY_LOBBYBASE_H"
+        if updated_base.count(end_marker) != 1:
+            raise PatchError("PPW allocator header: final include guard marker missing or duplicated")
+        updated_base = updated_base.replace(end_marker, compat_block, 1)
+
+    staged: dict[Path, str] = {}
+    if updated_base != original_base:
+        staged[base_path] = updated_base
+
+    for path, replacements in source_patches.items():
+        original = path.read_text(encoding="utf-8")
+        updated = original
+        for old, new, expected_count in replacements:
+            new_count = updated.count(new)
+            old_count = updated.count(old)
+            if new_count == expected_count and old_count == 0:
+                continue
+            if old_count != expected_count or new_count != 0:
+                raise PatchError(
+                    f"PPW callback token patch is ambiguous in {path}: {old!r}; "
+                    f"expected {expected_count} originals or {expected_count} replacements"
+                )
+            updated = updated.replace(old, new)
+        if updated != original:
+            staged[path] = updated
+
+    # Validate all markers before updating any file in the isolated checkout.
+    for path, updated in staged.items():
+        path.write_text(updated, encoding="utf-8")
+
+    messages = []
+    if base_path in staged:
+        messages.append("PPW lobby: add libc++ allocator equality and ARM64 callback-token helpers")
+    if any(path in staged for path in source_patches):
+        messages.append("PPW lobby: decode opaque 32-bit callback IDs through uintptr_t")
+    return messages
+
+
 def patch_ppwlobby_pic(root: Path) -> list[str]:
     """Enable PIC for PPW lobby static libraries when they enter Android libmain.so."""
     lobby_root = root / "lib" / "ppwlobby"
@@ -1224,6 +1317,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_android_ppwlobby_c_args(staged))
         changes.extend(patch_android_ppwlobby_map_allocators(staged))
+        changes.extend(patch_android_ppwlobby_stdlib_compat(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         changes.extend(patch_libvct(staged / "subprojects/libvct"))
         for name, (arg_name, dwc) in sdk_projects.items():
@@ -1276,6 +1370,9 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/libraries/sim/src/g3_draw.cpp",
         "lib/ppwlobby/include/ilobby/class_ov66_02243B64_sub1.h",
         "lib/ppwlobby/include/ilobby/dwci_lobbydata.h",
+        "lib/ppwlobby/include/ilobby/dwci_lobbybase.h",
+        "lib/ppwlobby/libraries/ilobby/src/dwci_lobby.cpp",
+        "lib/ppwlobby/libraries/ppwlobby/src/ppw_lobby.cpp",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
     # Include every one so those edits actually reach the checkout used by Meson.
