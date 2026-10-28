@@ -222,13 +222,21 @@ def patch_libvct(root: Path) -> list[str]:
 
 
 def patch_android_ppwlobby_c_args(root: Path) -> list[str]:
-    """Use a C language standard for PPW lobby .c sources on Android."""
-    path = root / "lib" / "ppwlobby" / "meson.build"
-    if not path.is_file():
-        raise PatchError(f"PPW lobby Meson source is missing: {path}")
+    """Separate C99 flags for PPW lobby C sources from C++ flags."""
+    root_path = root / "lib" / "ppwlobby" / "meson.build"
+    ilobby_path = root / "lib" / "ppwlobby" / "libraries" / "ilobby" / "meson.build"
+    lobby_path = root / "lib" / "ppwlobby" / "libraries" / "ppwlobby" / "meson.build"
+    paths = (root_path, ilobby_path, lobby_path)
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise PatchError("PPW lobby Meson sources missing: " + ", ".join(missing))
 
-    original = path.read_text(encoding="utf-8")
-    old_block = (
+    old_root_block = (
+        "if(build_target == 'arm')\n"
+        "    ppwlobby_c_args = [\n"
+        "        '-wrap:sdk', '2.0/sp2p3',\n"
+        "        '-nothumb'\n"
+        "    ]\n"
         "else\n"
         "    ppwlobby_c_args = [\n"
         "        '-fpermissive',\n"
@@ -236,29 +244,60 @@ def patch_android_ppwlobby_c_args(root: Path) -> list[str]:
         "    ]\n"
         "endif"
     )
-    android_block = (
+    android_root_block = (
+        "if(build_target == 'arm')\n"
+        "    ppwlobby_c_args = [\n"
+        "        '-wrap:sdk', '2.0/sp2p3',\n"
+        "        '-nothumb'\n"
+        "    ]\n"
+        "    ppwlobby_cpp_args = ppwlobby_c_args\n"
         "elif(build_target == 'android')\n"
         "    # These are C sources; C++ flags make Clang reject the Android build.\n"
-        "    ppwlobby_c_args = [\n"
-        "        '-std=c99'\n"
-        "    ]\n"
+        "    ppwlobby_c_args = ['-std=c99']\n"
+        "    ppwlobby_cpp_args = ['-fpermissive', '-std=c++03']\n"
         "else\n"
         "    ppwlobby_c_args = [\n"
         "        '-fpermissive',\n"
         "        '-std=c++03'\n"
         "    ]\n"
+        "    ppwlobby_cpp_args = ppwlobby_c_args\n"
         "endif"
     )
 
-    if android_block in original:
-        if original.count(android_block) != 1:
+    staged: dict[Path, str] = {}
+    original = root_path.read_text(encoding="utf-8")
+    if android_root_block in original:
+        if original.count(android_root_block) != 1:
             raise PatchError("PPW lobby C flags: duplicated Android branch")
-        return []
-    if original.count(old_block) != 1:
-        raise PatchError("PPW lobby C flags: expected exactly one non-ARM fallback block")
+    else:
+        if original.count(old_root_block) != 1:
+            raise PatchError("PPW lobby C flags: expected exactly one non-ARM fallback block")
+        original = original.replace(old_root_block, android_root_block, 1)
+        staged[root_path] = original
 
-    path.write_text(original.replace(old_block, android_block, 1), encoding="utf-8")
-    return ["parent PPW lobby: use C99 flags for Android C sources"]
+    cpp_arg_patches = (
+        (ilobby_path, "cpp_args: cpp_args + ppwlobby_c_args,", "cpp_args: cpp_args + ppwlobby_cpp_args,"),
+        (lobby_path, "cpp_args: [cpp_args, ppwlobby_c_args],", "cpp_args: [cpp_args, ppwlobby_cpp_args],"),
+    )
+    for path, old, new in cpp_arg_patches:
+        original = path.read_text(encoding="utf-8")
+        if new in original:
+            if original.count(new) != 1:
+                raise PatchError(f"PPW lobby C++ flags: duplicated patched marker in {path}")
+            continue
+        if original.count(old) != 1:
+            raise PatchError(f"PPW lobby C++ flags: expected exactly one C++ argument marker in {path}")
+        staged[path] = original.replace(old, new, 1)
+
+    for path, updated in staged.items():
+        path.write_text(updated, encoding="utf-8")
+
+    changes = []
+    if root_path in staged:
+        changes.append("parent PPW lobby: use C99 flags for Android C sources")
+    if ilobby_path in staged or lobby_path in staged:
+        changes.append("parent PPW lobby: keep C++03 flags on C++ sources only")
+    return changes
 
 
 def patch_ppwlobby_pic(root: Path) -> list[str]:
