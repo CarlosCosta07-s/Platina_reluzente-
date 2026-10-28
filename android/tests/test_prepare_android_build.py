@@ -143,10 +143,10 @@ libsim = library('sim',
             card_include = root / "libraries/card/include"
             card_include.mkdir(parents=True)
             (card_include / "card_rom.h").write_text(
-                "typedef struct CARDRomStat {\\n"
-                "\\tu32 dummy[5];\\n"
-                "\\tu8 cache_buf[CARD_ROM_PAGE_SIZE];\\n"
-                "} CARDRomStat;\\n",
+                "typedef struct CARDRomStat {\n"
+                "\tu32 dummy[5];\n"
+                "\tu8 cache_buf[CARD_ROM_PAGE_SIZE];\n"
+                "} CARDRomStat;\n",
                 encoding="utf-8",
             )
             (root / "libraries/os").mkdir(parents=True)
