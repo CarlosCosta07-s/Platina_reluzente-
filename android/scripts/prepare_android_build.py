@@ -141,6 +141,34 @@ trainer_ai_ss = custom_target("""
     return changes
 
 
+
+def patch_ppwlobby_pic(root: Path) -> list[str]:
+    """Enable PIC for PPW lobby static libraries when they enter Android libmain.so."""
+    lobby_root = root / "lib" / "ppwlobby"
+    if not lobby_root.is_dir():
+        raise PatchError("parent PPW lobby source directory is missing")
+    old = "pic: (build_target == 'nx'),"
+    new = "pic: (build_target == 'nx' or build_target == 'android'),"
+    changes: list[str] = []
+    for path in sorted(lobby_root.rglob("meson.build")):
+        text = path.read_text(encoding="utf-8")
+        if new in text:
+            continue
+        count = text.count(old)
+        if count == 0:
+            continue
+        updated = text.replace(old, new)
+        path.write_text(updated, encoding="utf-8")
+        changes.append(
+            "parent PPW lobby: enable Android PIC in " + path.relative_to(root).as_posix()
+        )
+    if not changes and not any(
+        new in path.read_text(encoding="utf-8")
+        for path in lobby_root.rglob("meson.build")
+    ):
+        raise PatchError("parent PPW lobby: no PIC-enabled library marker was found")
+    return changes
+
 def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) -> list[str]:
     changes = []
     if add_target_option(root / "meson.options"):
@@ -398,6 +426,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         shutil.copy2(root / "meson.build", staged / "meson.build")
         shutil.copytree(root / "subprojects", staged / "subprojects")
         changes = patch_root(staged)
+        changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         for name, (arg_name, dwc) in sdk_projects.items():
             changes.extend(patch_sdk_project(staged / "subprojects" / name, name, arg_name, dwc))
@@ -409,6 +438,10 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
             "subprojects/libntr/libraries/sim/meson.build",
             "subprojects/libntr/libraries/sim/src/sim_main.cpp",
         ]
+        rels.extend(
+            path.relative_to(staged).as_posix()
+            for path in sorted((staged / "lib" / "ppwlobby").rglob("meson.build"))
+        )
         for name in sdk_projects:
             rels += [f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"]
         for rel in rels:

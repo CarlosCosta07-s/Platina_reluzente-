@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import patch_libntr, patch_root, patch_sdk_project
+from android.scripts.prepare_android_build import patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -46,6 +46,23 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("native: false", result)
             self.assertTrue(changes)
             self.assertEqual([], second)
+
+    def test_ppwlobby_static_libraries_enable_android_pic_idempotently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            enc = root / "lib" / "ppwlobby" / "libraries" / "enc"
+            enc.mkdir(parents=True)
+            (enc / "meson.build").write_text(
+                "libdwcenc = static_library('dwcenc',\n"
+                "    pic: (build_target == 'nx'),\n"
+                ")\n",
+                encoding="utf-8",
+            )
+            first = patch_ppwlobby_pic(root)
+            result = (enc / "meson.build").read_text(encoding="utf-8")
+            self.assertIn("pic: (build_target == 'nx' or build_target == 'android')", result)
+            self.assertEqual(1, len(first))
+            self.assertEqual([], patch_ppwlobby_pic(root))
 
     def test_libntr_patches_platform_dependencies(self):
         with tempfile.TemporaryDirectory() as tmp:
