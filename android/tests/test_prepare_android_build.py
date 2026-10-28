@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -116,6 +116,8 @@ class AndroidMesonPatchTests(unittest.TestCase):
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
             self.assertIn("lib/ppwlobby/meson.build", paths)
+            self.assertIn("lib/ppwlobby/include/ilobby/class_ov66_02243B64_sub1.h", paths)
+            self.assertIn("lib/ppwlobby/include/ilobby/dwci_lobbydata.h", paths)
             self.assertIn("subprojects/libvct/meson.build", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
@@ -214,6 +216,40 @@ endif
             self.assertIn("cpp_args: cpp_args + ppwlobby_cpp_args,", ilobby_result)
             self.assertIn("cpp_args: [cpp_args, ppwlobby_cpp_args],", lobby_result)
             self.assertEqual([], patch_android_ppwlobby_c_args(root))
+
+
+    def test_android_ppwlobby_map_allocators_match_libcxx_value_types(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            include = root / "lib" / "ppwlobby" / "include" / "ilobby"
+            include.mkdir(parents=True)
+            first = include / "class_ov66_02243B64_sub1.h"
+            second = include / "dwci_lobbydata.h"
+            first.write_text(
+                "PPW_Allocator<std::pair<u32, UnkClass_ov66_02243B64_Sub1_Sub1> >\n",
+                encoding="utf-8",
+            )
+            second.write_text(
+                "PPW_Allocator<std::pair<s32, PPWString> >\n"
+                "PPW_Allocator<std::pair<PPWString, UnkClass_ov66_02243B64_SubStruct0> >\n",
+                encoding="utf-8",
+            )
+
+            changes = patch_android_ppwlobby_map_allocators(root)
+
+            self.assertEqual(2, len(changes))
+            first_text = first.read_text(encoding="utf-8")
+            second_text = second.read_text(encoding="utf-8")
+            self.assertIn(
+                "PPW_Allocator<std::pair<const u32, UnkClass_ov66_02243B64_Sub1_Sub1> >",
+                first_text,
+            )
+            self.assertIn("PPW_Allocator<std::pair<const s32, PPWString> >", second_text)
+            self.assertIn(
+                "PPW_Allocator<std::pair<const PPWString, UnkClass_ov66_02243B64_SubStruct0> >",
+                second_text,
+            )
+            self.assertEqual([], patch_android_ppwlobby_map_allocators(root))
 
 
     def test_ppwlobby_static_libraries_enable_android_pic_idempotently(self):
