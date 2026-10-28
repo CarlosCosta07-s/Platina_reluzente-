@@ -60,11 +60,11 @@ def patch_root(root: Path) -> list[str]:
         "project('pokeplatinum', ['c', 'cpp'],", "Android optional NASM language")
     if changed:
         changes.append("parent Meson: make NASM desktop-only")
-    target_line = "build_target = get_option('build_target')\\n\\n"
+    target_line = "build_target = get_option('build_target')\n\n"
     target_block = (
-        target_line + "if (build_target != 'android')\\n"
-        "    add_languages('nasm', required: true)\\n"
-        "endif\\n\\n"
+        target_line + "if (build_target != 'android')\n"
+        "    add_languages('nasm', required: true)\n"
+        "endif\n\n"
     )
     text, changed = replace_once(text, target_line, target_block, "Android conditional NASM detection")
     if changed:
