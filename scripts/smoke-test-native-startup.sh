@@ -80,7 +80,7 @@ status=0
 
       if [[ "$found" -ne 1 ]]; then
         cat "$logfile" >&2 || true
-        echo "Janela visível 'libntr Application' não foi encontrada." >&2
+        echo "Janela visível libntr Application não foi encontrada." >&2
         exit 1
       fi
 
