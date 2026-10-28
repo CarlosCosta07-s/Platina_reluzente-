@@ -1,7 +1,7 @@
 name: Android native ARM64 cross-build
 
 concurrency:
-  group: android-native-build-v2-${{ github.ref }}
+  group: android-native-build-v2-${{ github.sha }}
   cancel-in-progress: false
 
 on:
