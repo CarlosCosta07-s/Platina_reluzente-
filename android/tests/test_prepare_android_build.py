@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -32,6 +32,43 @@ endif
 
 
 class AndroidMesonPatchTests(unittest.TestCase):
+    def test_stage_headers_copies_required_sdl_layouts_and_enet_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "libntr"
+            sdl = Path(tmp) / "SDL"
+            enet = Path(tmp) / "enet"
+            sdl_include = sdl / "include"
+            enet_include = enet / "include" / "enet"
+            sdl_include.mkdir(parents=True)
+            enet_include.mkdir(parents=True)
+            for name in ("SDL.h", "SDL_main.h", "SDL_system.h", "SDL_thread.h"):
+                (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
+            (enet_include / "enet.h").write_text("/* fixture */\n", encoding="utf-8")
+
+            stage_headers(root, sdl, enet)
+
+            staged = root / "libraries" / "sim" / "android_include"
+            self.assertTrue((staged / "SDL_thread.h").is_file())
+            self.assertTrue((staged / "SDL2" / "SDL_thread.h").is_file())
+            self.assertTrue((staged / "SDL_system.h").is_file())
+            self.assertTrue((staged / "enet" / "enet.h").is_file())
+
+    def test_stage_headers_rejects_missing_required_sdl_header_early(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "libntr"
+            sdl = Path(tmp) / "SDL"
+            enet = Path(tmp) / "enet"
+            sdl_include = sdl / "include"
+            enet_include = enet / "include" / "enet"
+            sdl_include.mkdir(parents=True)
+            enet_include.mkdir(parents=True)
+            for name in ("SDL.h", "SDL_main.h", "SDL_system.h"):
+                (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
+            (enet_include / "enet.h").write_text("/* fixture */\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(PatchError, "SDL_thread.h"):
+                stage_headers(root, sdl, enet)
+
     def test_stages_android_copy_script_before_patching(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "upstream"
