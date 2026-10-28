@@ -38,6 +38,18 @@ GLES_BLOCK = (
     "#define GLAPIENTRY GL_APIENTRY\n"
     "#endif"
 )
+TEXTURE_GLAD_BLOCK = (
+    "#if defined(SDK_BUILD_ANDROID)\n"
+    "#include <GLES3/gl32.h>\n"
+    "#elif defined(SDK_BUILD_NX)\n"
+    "#include <glad/glad.h>\n"
+    "#else\n"
+    "#include <simulator/glad/glad.h>\n"
+    "#endif\n"
+    "#if defined(SDK_BUILD_ANDROID) && !defined(GLAPIENTRY)\n"
+    "#define GLAPIENTRY GL_APIENTRY\n"
+    "#endif"
+)
 DESKTOP_CONTEXT = (
     "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);\n"
     "  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);\n"
@@ -109,6 +121,8 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     root = Path(source_root).expanduser().resolve()
     required = [
         root / "libraries/sim/src/sim_main.cpp",
+        root / "libraries/sim/src/sim_g2.cpp",
+        root / "libraries/sim/src/sim_g3_Texture.cpp",
         root / "libraries/sim/src/g3_handler.cpp",
         root / "libraries/sim/src/g3_draw.cpp",
         root / "include/simulator/g3_draw.h",
@@ -135,6 +149,7 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
 
     for relative in (
         "libraries/sim/src/sim_main.cpp",
+        "libraries/sim/src/sim_g2.cpp",
         "libraries/sim/src/g3_handler.cpp",
         "include/simulator/g3_draw.h",
         "include/simulator/g3_handler.h",
@@ -144,6 +159,17 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
         staged[path] = updated
         if changed:
             changes.append(relative + ": select GLES 3.2 headers on Android and avoid GLAD conflicts")
+
+    texture_path = root / "libraries/sim/src/sim_g3_Texture.cpp"
+    texture, texture_changed = replace_exact(
+        texture_path.read_text(encoding="utf-8"),
+        '#include "simulator/glad/glad.h"',
+        TEXTURE_GLAD_BLOCK,
+        "G3 texture GL loader",
+    )
+    staged[texture_path] = texture
+    if texture_changed:
+        changes.append("sim_g3_Texture.cpp: select GLES 3.2 headers on Android and avoid GLAD")
 
     main_path = root / "libraries/sim/src/sim_main.cpp"
     main, changed = replace_exact(staged[main_path], DESKTOP_CONTEXT, PORTABLE_CONTEXT, "SDL GL context")
