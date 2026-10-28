@@ -284,7 +284,7 @@ libsim = library('sim',
                     desktop_main_path.read_text(encoding="utf-8").count("std::string androidRomPath;"),
                 )
 
-            patch_libntr(root)
+            changes = patch_libntr(root)
             command_processor = (root / "libraries/sim/src/sim_g3_CommandProcessor.cpp").read_text(encoding="utf-8")
             self.assertIn("paramPtr = (u8 *)cmdBlockPtr + 4;", command_processor)
             self.assertIn("paramPtr = (u8 *)paramPtr + paramSize;", command_processor)
