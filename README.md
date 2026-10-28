@@ -52,6 +52,8 @@ Windows (PowerShell; instale o ambiente MSYS2 do submódulo uma vez antes da pri
     cd ..\..
     .\scripts\build-native.ps1
 
+Após a compilação, `scripts/verify_native_package.py` compara os 340 caminhos de `platinum.us/filesys.csv` com o pacote runtime e a CI também exige os arquivos de animação de batalha. Isso evita que uma compilação incompleta seja marcada como pacote completo. O verificador não executa o jogo.
+
 Os builds de desktop **compilam o código**; eles não executam testes de jogo automaticamente. Para jogar, use somente uma cópia obtida legalmente e mantenha ROMs e recursos extraídos fora deste repositório. Consulte os documentos legais antes de distribuir qualquer compilação.
 
 ## Importar recursos localizados PT-BR localmente

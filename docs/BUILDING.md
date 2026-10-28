@@ -53,6 +53,21 @@ A auditoria Android depende de a configuração do build já ter baixado o subpr
 
 ## Teste com uma cópia local
 
+### Verificação do pacote gerado
+
+Depois de compilar, o verificador compara todos os caminhos do manifesto upstream `platinum.us/filesys.csv` com os arquivos de origem produzidos pelo build e os arquivos copiados para a pasta runtime. Ele detecta arquivos ausentes, cópias com tamanho/hash divergente e os arquivos de animação obrigatórios:
+
+    python3 scripts/verify_native_package.py \
+      --build-dir vendor/pokeplatinum-native/build_linux \
+      --package-dir vendor/pokeplatinum-native/build_linux/pokeplatinum \
+      --filesys-csv vendor/pokeplatinum-native/platinum.us/filesys.csv
+
+Em seguida, para conferir os arquivos extraídos da ROM local:
+
+    python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum
+
+Essas verificações validam a integridade dos arquivos do pacote, mas não substituem o teste de inicialização e gameplay.
+
 Uma compilação bem-sucedida não prova que o jogo inicia. O extrator nativo grava os arquivos no diretório de trabalho atual. Execute `main`/`main.exe` a partir de `build_linux/pokeplatinum` ou `build_win64/pokeplatinum`, selecione a sua cópia original USA Rev. 1 e confirme inicialização, tela inicial, áudio, entrada e criação dos arquivos de dados.
 
 Depois que o porte extrair os dados, feche o jogo e valide o diretório local:

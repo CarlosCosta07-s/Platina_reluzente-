@@ -13,6 +13,7 @@ O foco inicial é compilar e executar a base nativa, sem otimização prematura.
 - [x] Adicionar testes sintéticos do importador, do fixador de dependências e da auditoria gráfica.
 - [x] Confirmar compilação Linux x86-64 e Windows x64 na CI em 28/10/2026 ([execução 40627263360](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40627263360)).
 - [x] Adicionar verificador local dos dados extraídos do runtime e dos sete NARC allowlisted.
+- [x] Adicionar verificador do pacote runtime contra os 340 caminhos de `platinum.us/filesys.csv`, incluindo comparação SHA-256 e recursos de animação obrigatórios.
 
 > O sucesso da compilação Linux prova que o alvo nativo é compilável pelo pipeline; não prova que o jogo inicia nem que seja jogável.
 
