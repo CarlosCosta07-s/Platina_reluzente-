@@ -40,6 +40,7 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     }
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'header.bin')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'firmware.bin')));
+    assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'build-version.txt')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'java', 'org', 'libsdl', 'app', 'SDLActivity.java')));
     assert.match(mainActivity, /registerPlugin\(PlatinaGamePlugin\.class\)/);
     assert.match(plugin, /startActivity\(intent\)/);
