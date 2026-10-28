@@ -308,8 +308,18 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
 
 
 def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
-    """Match inline declaration linkage with the static definitions used for SDK_PORT."""
+    """Keep SDK_PORT inline declarations defined after nested G3D headers load."""
     changes: list[str] = []
+    declaration_pattern = re.compile(r"(?m)^([ \t]*)NNS_G3D_INLINE(?=[ \t])")
+    patched_declaration_pattern = re.compile(r"(?m)^([ \t]*)NNS_G3D_INLINE_DECL(?=[ \t])")
+    undef_pattern = re.compile(r"(?m)^[ \t]*#undef NNS_G3D_INLINE_DECL[ \t]*\n?")
+    macro_block = (
+        "#if defined(SDK_PORT)\n"
+        "#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE\n"
+        "#else\n"
+        "#define NNS_G3D_INLINE_DECL NNS_G3D_INLINE\n"
+        "#endif"
+    )
     for header_name, inline_header in (
         ("kernel.h", "kernel_inline.h"),
         ("sbc.h", "sbc_inline.h"),
@@ -318,51 +328,43 @@ def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
         if not path.is_file():
             raise PatchError(f"{path}: required NitroSDK G3D header is missing")
         original = path.read_text(encoding="utf-8")
-        macro_block = (
-            "#if defined(SDK_PORT)\n"
-            "#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE\n"
-            "#else\n"
-            "#define NNS_G3D_INLINE_DECL NNS_G3D_INLINE\n"
-            "#endif"
-        )
         inline_marker = f"#include <nnsys/g3d/{inline_header}>"
         if original.count(inline_marker) != 1:
             raise PatchError(f"{path}: expected exactly one {inline_marker} marker")
         if original.count("#include <nnsys/g3d/config.h>") != 1:
             raise PatchError(f"{path}: expected exactly one G3D config include")
+
         prefix, suffix = original.split(inline_marker, 1)
-        updated_prefix = prefix
-        if macro_block not in updated_prefix:
-            config_marker = "#include <nnsys/g3d/config.h>"
-            if updated_prefix.count(config_marker) != 1:
-                raise PatchError(f"{path}: cannot insert Android inline-linkage macro safely")
-            updated_prefix = updated_prefix.replace(
-                config_marker, config_marker + "\n\n" + macro_block, 1
-            )
-            decl_pattern = re.compile(r"(?m)^([ \t]*)NNS_G3D_INLINE(?=[ \t])")
-            updated_prefix, count = decl_pattern.subn(
-                r"\1NNS_G3D_INLINE_DECL", updated_prefix
-            )
-            if count == 0:
-                raise PatchError(f"{path}: no NNS_G3D_INLINE declarations were found before {inline_header}")
-            updated_prefix += "\n#undef NNS_G3D_INLINE_DECL\n"
-        else:
-            if "NNS_G3D_INLINE_DECL static NNS_G3D_INLINE" not in updated_prefix:
-                raise PatchError(f"{path}: unexpected existing inline-linkage macro")
-            if re.search(r"(?m)^([ \t]*)NNS_G3D_INLINE(?=[ \t])", updated_prefix):
-                raise PatchError(f"{path}: some inline declarations were not converted")
-            if updated_prefix.count("#undef NNS_G3D_INLINE_DECL") != 1:
-                raise PatchError(f"{path}: inline-linkage macro cleanup marker is missing or duplicated")
-            continue_marker = "#undef NNS_G3D_INLINE_DECL"
-            if updated_prefix.count(continue_marker) != 1:
-                raise PatchError(f"{path}: duplicated inline-linkage macro cleanup marker")
-        updated = updated_prefix + inline_marker + suffix
+        if prefix.count(macro_block) > 1:
+            raise PatchError(f"{path}: duplicate inline-linkage macro blocks")
+        if len(undef_pattern.findall(prefix)) > 1:
+            raise PatchError(f"{path}: duplicate inline-linkage macro cleanup markers")
+
+        # Normalize both a clean upstream header and a header left by the older
+        # patch. In sbc.h, kernel.h is included before its declarations; defining
+        # this shared macro immediately after config.h lets kernel.h undefine it
+        # on return. Move the macro after all nested includes to avoid that.
+        prefix = prefix.replace(macro_block, "", 1)
+        prefix = undef_pattern.sub("", prefix, count=1)
+        prefix, converted = declaration_pattern.subn(
+            r"\1NNS_G3D_INLINE_DECL", prefix
+        )
+        declarations = list(patched_declaration_pattern.finditer(prefix))
+        if not declarations:
+            raise PatchError(f"{path}: no G3D inline declarations were found before {inline_header}")
+        first = declarations[0].start()
+        prefix = prefix[:first] + macro_block + "\n\n" + prefix[first:]
+        prefix += "\n#undef NNS_G3D_INLINE_DECL\n"
+
+        if declaration_pattern.search(prefix):
+            raise PatchError(f"{path}: some inline declarations were not converted")
+        if prefix.count(macro_block) != 1 or len(undef_pattern.findall(prefix)) != 1:
+            raise PatchError(f"{path}: inline-linkage macro normalization did not produce one definition and cleanup")
+        updated = prefix + inline_marker + suffix
         if updated != original:
             path.write_text(updated, encoding="utf-8")
-            changes.append("libntrsystem: align SDK_PORT G3D inline linkage in " + header_name)
+            changes.append("libntrsystem: place SDK_PORT G3D inline linkage after nested includes in " + header_name)
     return changes
-
-
 def patch_libntr(root: Path) -> list[str]:
     changes = []
     opt = root / "meson.options"

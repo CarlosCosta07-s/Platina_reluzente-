@@ -372,11 +372,14 @@ libsim = library('sim',
             fixtures = {
                 "kernel.h": (
                     "#include <nnsys/g3d/config.h>\n"
+                    "#include <nnsys/g3d/binres/res_struct.h>\n"
                     "NNS_G3D_INLINE void NNS_TestKernel(void);\n"
                     "#include <nnsys/g3d/kernel_inline.h>\n"
                 ),
                 "sbc.h": (
                     "#include <nnsys/g3d/config.h>\n"
+                    "#include <nnsys/g3d/kernel.h>\n"
+                    "#include <nnsys/g3d/anm.h>\n"
                     "NNS_G3D_INLINE BOOL NNS_TestSbc(void);\n"
                     "#include <nnsys/g3d/sbc_inline.h>\n"
                 ),
@@ -392,6 +395,9 @@ libsim = library('sim',
                 self.assertIn("#if defined(SDK_PORT)\n#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE", content)
                 self.assertIn("NNS_G3D_INLINE_DECL", content)
                 self.assertIn("#undef NNS_G3D_INLINE_DECL", content)
+                before_inline = content.split(f"#include <nnsys/g3d/{inline_header}>", 1)[0]
+                macro_start = before_inline.index("#if defined(SDK_PORT)")
+                self.assertGreater(macro_start, before_inline.rfind("#include"))
                 self.assertLess(content.index("#undef NNS_G3D_INLINE_DECL"), content.index(f"#include <nnsys/g3d/{inline_header}>"))
                 self.assertNotRegex(content, r"(?m)^NNS_G3D_INLINE ")
 
