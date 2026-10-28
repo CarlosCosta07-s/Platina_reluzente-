@@ -1,0 +1,3 @@
+[submodule "vendor/pokeplatinum-native"]
+	path = vendor/pokeplatinum-native
+	url = https://github.com/cybervisi0n/pokeplatinum.git

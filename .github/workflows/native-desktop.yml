@@ -1,0 +1,58 @@
+name: Native desktop build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux x86-64 compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      LM_LICENSE_FILE: ${{ github.workspace }}/vendor/pokeplatinum-native/tools/cw/license.dat
+      BUILD: /var/tmp/pokeplatinum
+    defaults:
+      run:
+        working-directory: vendor/pokeplatinum-native
+    steps:
+      - name: Checkout main and pinned source
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install runner utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fuse git python3 wget zip
+      - name: Install build toolchain
+        run: ./drun.sh make skrew
+      - name: Compile native Linux target
+        run: ./drun.sh make linux
+
+  windows:
+    name: Windows x64 compile
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: vendor/pokeplatinum-native
+    steps:
+      - name: Checkout main and pinned source
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install MSYS2 build environment
+        run: .\Install_MSys2.ps1
+        shell: powershell
+      - name: Compile native Windows target
+        run: .\Launch_Msys2.ps1 "make win64"
+        shell: powershell
+
+# CI compiles the upstream native code only. It intentionally does not upload
+# executables, ROMs, extracted NARC files, or compiled game assets.
