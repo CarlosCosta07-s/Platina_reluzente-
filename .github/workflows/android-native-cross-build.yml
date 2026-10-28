@@ -206,6 +206,10 @@ jobs:
           test -d "$runtime"
           test -s "$runtime/header.bin"
           test -s "$runtime/firmware.bin"
+          python "$GITHUB_WORKSPACE/scripts/verify_native_package.py" \
+            --build-dir "$build" \
+            --package-dir "$runtime" \
+            --filesys-csv "$NATIVE_SOURCE/platinum.us/filesys.csv"
           mkdir -p android-native-artifact/runtime-data
           cp -a "$runtime/." android-native-artifact/runtime-data/
           rm -f android-native-artifact/runtime-data/main
