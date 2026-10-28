@@ -205,7 +205,7 @@ def patch_libvct(root: Path) -> list[str]:
     marker = "build_target = get_option('build_target')\n"
     include_block = (
         "if (build_target == 'android')\n"
-        "    add_project_arguments('-I' + (meson.current_source_dir() / '../libntr/libraries/sim/android_include'), language: ['c', 'cpp'])\n"
+        "    add_project_arguments('-I' + (meson.current_source_dir() / '../libntr/libraries/sim/android_include'), language: 'c')\n"
         "endif"
     )
 
