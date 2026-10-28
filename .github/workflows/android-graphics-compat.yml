@@ -76,7 +76,7 @@ jobs:
             echo "## Android GLES 3.2 source preparation"
             echo
             echo "Prepared the pinned libntr renderer and validated the four GLES shader sources."
-            echo "This is not a compiled game APK; SDL2 Android packaging and native cross-compilation remain future milestones."
+            echo "This workflow validates GLES shader preparation only. Native ARM64 compilation and single-APK packaging are checked by separate workflows."
             echo
             cat "$RUNNER_TEMP/android-gles-report.json"
           } >> "$GITHUB_STEP_SUMMARY"
