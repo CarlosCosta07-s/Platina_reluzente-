@@ -218,7 +218,7 @@ jobs:
           EOF
 
           strings_xml="$app_dir/src/main/res/values/strings.xml"
-          sed -i 's/<string name="app_name">Game<\\/string>/<string name="app_name">Platina Reluzente (experimental)<\\/string>/' "$strings_xml"
+          sed -i 's|<string name="app_name">Game</string>|<string name="app_name">Platina Reluzente (experimental)</string>|' "$strings_xml"
           grep -q 'Platina Reluzente (experimental)' "$strings_xml"
 
           manifest="$app_dir/src/main/AndroidManifest.xml"
