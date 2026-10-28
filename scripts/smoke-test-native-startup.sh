@@ -30,6 +30,7 @@ done
 
 workdir="$(mktemp -d)"
 logfile="$(mktemp)"
+app_log="$workdir/app.log"
 cleanup() {
   rm -rf -- "$workdir"
   rm -f -- "$logfile"
@@ -90,9 +91,13 @@ status=0
         echo "Executável encerrou antes do fim da janela de teste." >&2
         exit 1
       fi
+      if [[ -s "$logfile" ]]; then
+        echo "Saída do executável:"
+        cat "$logfile"
+      fi
       echo "PASS: janela criada e processo permaneceu ativo."
       echo "Isso confirma apenas a inicialização pré-ROM; não comprova carregamento ou gameplay."
-    ' smoke-test "$logfile" "$duration"
+    ' smoke-test "$app_log" "$duration"
 ) >"$logfile" 2>&1 || status=$?
 
 if [[ -s "$logfile" ]]; then
