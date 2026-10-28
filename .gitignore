@@ -20,3 +20,30 @@ vendor/pokeplatinum-native/build_*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+# Runtime extraction writes into the process working directory. If a developer
+# accidentally launches the native executable with the repository root as CWD,
+# keep the ROM-derived output out of version control as well.
+# (The normal location is build_linux/ or build_win64/, ignored above.)
+/header.bin
+/arm9.bin
+/arm7.bin
+/arm9ovt.bin
+/arm7ovt.bin
+/banner.bin
+/fnt.bin
+/fat.bin
+/rsasig.bin
+/overlay7/
+/overlay9/
+/battle/
+/data/
+/demo/
+/dwc/
+/fielddata/
+/graphic/
+/msgdata/
+/poketool/
+/pokemon/
+/record/
+/sound_data/
+/trainer/
