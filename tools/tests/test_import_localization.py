@@ -4,10 +4,14 @@ import struct
 import sys
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from import_localization import RomFormatError, extract_localization  # noqa: E402
+from import_localization import (  # noqa: E402
+    TARGET_FILES,
+    RomFormatError,
+    extract_localization,
+)
 
 
 def _narc(label: bytes) -> bytes:
@@ -20,48 +24,118 @@ def _narc(label: bytes) -> bytes:
     return header + btaf + btnf + gmif
 
 
-def _file_entry(name: str) -> bytes:
-    encoded = name.encode("ascii")
-    return bytes([len(encoded)]) + encoded
-
-
-def _dir_entry(name: str, directory_id: int) -> bytes:
-    encoded = name.encode("ascii")
-    return bytes([0x80 | len(encoded)]) + encoded + struct.pack("<H", directory_id)
+def _align4(value: int) -> int:
+    return (value + 3) & ~3
 
 
 def _synthetic_rom(
-    *, missing_scenario: bool = False, short_pl_msg_fat: bool = False
-) -> tuple[bytes, int]:
-    root_names = _dir_entry("msgdata", 0xF001) + _file_entry("root.bin") + b"\0"
-    msg_names = (
-        _file_entry("msg.narc")
-        + _file_entry("pl_msg.narc")
-        + (b"" if missing_scenario else _dir_entry("scenario", 0xF002))
-        + b"\0"
-    )
-    scenario_names = b"\0" if missing_scenario else _file_entry("scr_msg.narc") + b"\0"
-    table_size = 3 * 8
-    root_offset = table_size
-    msg_offset = root_offset + len(root_names)
-    scenario_offset = msg_offset + len(msg_names)
-    fnt = bytearray(table_size) + root_names + msg_names + scenario_names
-    struct.pack_into("<IHH", fnt, 0, root_offset, 0, 3)
-    struct.pack_into("<IHH", fnt, 8, msg_offset, 1, 0xF000)
-    struct.pack_into("<IHH", fnt, 16, scenario_offset, 3, 0xF001)
+    *,
+    missing_path: str | None = None,
+    short_pl_msg_fat: bool = False,
+) -> tuple[bytes, int, dict[str, int], dict[int, tuple[int, int, int]], dict[int, bytes]]:
+    paths = ["root.bin"] + [
+        target.as_posix()
+        for target in TARGET_FILES
+        if target.as_posix() != missing_path
+    ]
+    root: dict[str, object] = {"name": "", "dirs": {}, "files": [], "parent": None}
+    for relative_path in paths:
+        parts = PurePosixPath(relative_path).parts
+        node = root
+        for directory_name in parts[:-1]:
+            dirs = node["dirs"]
+            if directory_name not in dirs:
+                dirs[directory_name] = {
+                    "name": directory_name,
+                    "dirs": {},
+                    "files": [],
+                    "parent": node,
+                }
+            node = dirs[directory_name]
+        node["files"].append((parts[-1], relative_path))
 
-    files = [b"ROOT", _narc(b"MSG1"), _narc(b"PLUR"), _narc(b"SCEN")]
+    nodes: list[dict[str, object]] = []
+
+    def collect(node: dict[str, object], parent: dict[str, object] | None) -> None:
+        node["index"] = len(nodes)
+        node["dir_id"] = 0xF000 + len(nodes)
+        node["parent"] = parent
+        nodes.append(node)
+        for _name, child in sorted(node["dirs"].items()):
+            collect(child, node)
+
+    collect(root, None)
+
+    file_ids: dict[str, int] = {}
+    next_file_id = 0
+
+    def assign_file_ids(node: dict[str, object]) -> None:
+        nonlocal next_file_id
+        node["first_file_id"] = next_file_id
+        for _name, relative_path in sorted(node["files"], key=lambda item: item[0]):
+            file_ids[relative_path] = next_file_id
+            next_file_id += 1
+        for _name, child in sorted(node["dirs"].items()):
+            assign_file_ids(child)
+
+    assign_file_ids(root)
+
+    name_cursor = len(nodes) * 8
+    for node in nodes:
+        stream = bytearray()
+        for name, child in sorted(node["dirs"].items()):
+            encoded = name.encode("ascii")
+            stream.append(0x80 | len(encoded))
+            stream += encoded
+            stream += struct.pack("<H", int(child["dir_id"]))
+        for filename, _relative_path in sorted(node["files"], key=lambda item: item[0]):
+            encoded = filename.encode("ascii")
+            stream.append(len(encoded))
+            stream += encoded
+        stream.append(0)
+        node["name_offset"] = name_cursor
+        node["name_stream"] = bytes(stream)
+        name_cursor += len(stream)
+
+    fnt = bytearray(len(nodes) * 8)
+    for node in nodes:
+        if node is root:
+            parent_id = len(nodes)
+        else:
+            parent_id = int(node["parent"]["dir_id"])
+        struct.pack_into(
+            "<IHH",
+            fnt,
+            int(node["index"]) * 8,
+            int(node["name_offset"]),
+            int(node["first_file_id"]),
+            parent_id,
+        )
+    fnt += b"".join(node["name_stream"] for node in nodes)
+
+    path_by_id = {file_id: relative_path for relative_path, file_id in file_ids.items()}
+    file_data: dict[int, bytes] = {}
+    for file_id in range(len(file_ids)):
+        relative_path = path_by_id[file_id]
+        if relative_path == "root.bin":
+            file_data[file_id] = b"ROOT"
+        else:
+            file_data[file_id] = _narc(PurePosixPath(relative_path).name.encode("ascii"))
+
     fnt_offset = 0x200
-    fat_offset = (fnt_offset + len(fnt) + 3) & ~3
-    fat_size = len(files) * 8
-    data_offset = (fat_offset + fat_size + 3) & ~3
+    fat_offset = _align4(fnt_offset + len(fnt))
+    fat_size = len(file_data) * 8
+    data_offset = _align4(fat_offset + fat_size)
 
-    ranges: list[tuple[int, int, int]] = []
+    ranges: dict[int, tuple[int, int, int]] = {}
     cursor = data_offset
-    for file_id, item in enumerate(files):
-        start, actual_end = cursor, cursor + len(item)
-        fat_end = actual_end - 2 if short_pl_msg_fat and file_id == 2 else actual_end
-        ranges.append((start, fat_end, actual_end))
+    for file_id, item in sorted(file_data.items()):
+        start = cursor
+        actual_end = start + len(item)
+        fat_end = actual_end
+        if short_pl_msg_fat and path_by_id[file_id] == "msgdata/pl_msg.narc":
+            fat_end -= 2
+        ranges[file_id] = (start, fat_end, actual_end)
         cursor = actual_end + 64
 
     rom = bytearray(cursor)
@@ -72,16 +146,17 @@ def _synthetic_rom(
     rom[fnt_offset:fnt_offset + len(fnt)] = fnt
 
     fat = bytearray()
-    for item, (start, fat_end, actual_end) in zip(files, ranges):
+    for file_id, item in sorted(file_data.items()):
+        start, fat_end, actual_end = ranges[file_id]
         fat += struct.pack("<II", start, fat_end)
         rom[start:actual_end] = item
     rom[fat_offset:fat_offset + len(fat)] = fat
-    return bytes(rom), fat_offset
+    return bytes(rom), fat_offset, file_ids, ranges, file_data
 
 
 class LocalizationImportTests(unittest.TestCase):
-    def test_extracts_only_the_three_expected_text_archives(self) -> None:
-        rom_data, _fat_offset = _synthetic_rom()
+    def test_extracts_only_the_allowlisted_localized_archives(self) -> None:
+        rom_data, _fat_offset, _file_ids, _ranges, file_data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "test.nds"
@@ -90,43 +165,55 @@ class LocalizationImportTests(unittest.TestCase):
             result = extract_localization(rom, destination)
             self.assertEqual(
                 [entry["path"] for entry in result],
-                ["msgdata/msg.narc", "msgdata/pl_msg.narc", "msgdata/scenario/scr_msg.narc"],
+                [item.as_posix() for item in TARGET_FILES],
             )
-            self.assertEqual((destination / "msgdata/msg.narc").read_bytes(), _narc(b"MSG1"))
-            self.assertEqual((destination / "msgdata/pl_msg.narc").read_bytes(), _narc(b"PLUR"))
-            self.assertEqual((destination / "msgdata/scenario/scr_msg.narc").read_bytes(), _narc(b"SCEN"))
-            self.assertEqual(len(list(destination.rglob("*.*"))), 3)
+            for target in TARGET_FILES:
+                self.assertEqual(
+                    (destination / Path(*target.parts)).read_bytes(),
+                    file_data[next(i for path, i in _file_ids.items() if path == target.as_posix())],
+                )
+            outputs = [path.relative_to(destination).as_posix() for path in destination.rglob("*") if path.is_file()]
+            self.assertEqual(sorted(outputs), sorted(item.as_posix() for item in TARGET_FILES))
+            self.assertFalse((destination / "data/utility.bin").exists())
+            self.assertFalse((destination / "dwc/utility.bin").exists())
 
-    def test_recovers_narc_size_when_short_fat_end_is_inside_unallocated_gap(self) -> None:
-        rom_data, _fat_offset = _synthetic_rom(short_pl_msg_fat=True)
+    def test_recovers_pl_msg_size_when_fat_end_is_short_and_unallocated(self) -> None:
+        rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom(short_pl_msg_fat=True)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "patched.nds"
             destination = root / "out"
             rom.write_bytes(rom_data)
             result = extract_localization(rom, destination)
-            recovered = result[1]
+            index = [item.as_posix() for item in TARGET_FILES].index("msgdata/pl_msg.narc")
+            recovered = result[index]
             self.assertEqual(recovered["path"], "msgdata/pl_msg.narc")
             self.assertTrue(recovered["size_recovered_from_narc_header"])
-            self.assertEqual((destination / "msgdata/pl_msg.narc").read_bytes(), _narc(b"PLUR"))
+            self.assertEqual(
+                (destination / "msgdata/pl_msg.narc").read_bytes(),
+                _data[next(i for path, i in _file_ids.items() if path == "msgdata/pl_msg.narc")],
+            )
 
-    def test_rejects_narc_size_recovery_that_overlaps_another_fat_file(self) -> None:
-        rom_data, fat_offset = _synthetic_rom(short_pl_msg_fat=True)
+    def test_rejects_narc_recovery_that_overlaps_another_fat_file(self) -> None:
+        rom_data, fat_offset, file_ids, ranges, file_data = _synthetic_rom(short_pl_msg_fat=True)
+        altered = bytearray(rom_data)
+        pl_msg_id = file_ids["msgdata/pl_msg.narc"]
+        pl_start, _pl_fat_end, pl_actual_end = ranges[pl_msg_id]
+        overlap_start = pl_start + len(file_data[pl_msg_id]) - 1
+        # Reassign root.bin to a range that overlaps the declared NARC interval.
+        root_id = file_ids["root.bin"]
+        struct.pack_into("<II", altered, fat_offset + root_id * 8, overlap_start, overlap_start + 20)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "overlap.nds"
             destination = root / "out"
-            altered = bytearray(rom_data)
-            pl_start = struct.unpack_from("<I", altered, fat_offset + 2 * 8)[0]
-            overlap_start = pl_start + len(_narc(b"PLUR")) - 1
-            struct.pack_into("<II", altered, fat_offset + 3 * 8, overlap_start, overlap_start + 20)
             rom.write_bytes(altered)
             with self.assertRaisesRegex(RomFormatError, "sobrepõe outro arquivo FAT"):
                 extract_localization(rom, destination)
             self.assertFalse(destination.exists())
 
     def test_rejects_a_different_game_code(self) -> None:
-        rom_data, _fat_offset = _synthetic_rom()
+        rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "wrong.nds"
@@ -136,8 +223,9 @@ class LocalizationImportTests(unittest.TestCase):
             with self.assertRaises(RomFormatError):
                 extract_localization(rom, root / "out")
 
-    def test_missing_text_file_fails_without_creating_output(self) -> None:
-        rom_data, _fat_offset = _synthetic_rom(missing_scenario=True)
+    def test_missing_allowlisted_file_fails_without_creating_output(self) -> None:
+        missing = TARGET_FILES[-1].as_posix()
+        rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom(missing_path=missing)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "missing.nds"
@@ -148,23 +236,24 @@ class LocalizationImportTests(unittest.TestCase):
             self.assertFalse(destination.exists())
 
     def test_invalid_fat_range_is_rejected(self) -> None:
-        rom_data, fat_offset = _synthetic_rom()
+        rom_data, fat_offset, file_ids, _ranges, _data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "bad-fat.nds"
             altered = bytearray(rom_data)
-            struct.pack_into("<II", altered, fat_offset + 8, len(altered) + 100, len(altered) + 120)
+            first_id = file_ids["root.bin"]
+            struct.pack_into("<II", altered, fat_offset + first_id * 8, len(altered) + 100, len(altered) + 120)
             rom.write_bytes(altered)
             with self.assertRaises(RomFormatError):
                 extract_localization(rom, root / "out")
 
     def test_existing_output_is_not_overwritten_without_force(self) -> None:
-        rom_data, _fat_offset = _synthetic_rom()
+        rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             rom = root / "test.nds"
             destination = root / "out"
-            target = destination / "msgdata/msg.narc"
+            target = destination / Path(*TARGET_FILES[0].parts)
             target.parent.mkdir(parents=True)
             target.write_bytes(b"preserve me")
             rom.write_bytes(rom_data)

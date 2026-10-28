@@ -20,9 +20,13 @@ HEADER_SIZE = 0x200
 MAX_ROM_SIZE = 512 * 1024 * 1024
 MAX_DIRECTORIES = 2048
 TARGET_FILES = (
-    PurePosixPath("msgdata/msg.narc"),
+    PurePosixPath("battle/graphic/pl_b_plist_gra.narc"),
+    PurePosixPath("data/slot.narc"),
+    PurePosixPath("demo/title/op_demo.narc"),
+    PurePosixPath("graphic/pl_bag_gra.narc"),
+    PurePosixPath("graphic/pl_plist_gra.narc"),
+    PurePosixPath("graphic/pl_pst_gra.narc"),
     PurePosixPath("msgdata/pl_msg.narc"),
-    PurePosixPath("msgdata/scenario/scr_msg.narc"),
 )
 CHUNK_SIZE = 1024 * 1024
 
@@ -224,7 +228,7 @@ def extract_localization(
     *,
     force: bool = False,
 ) -> list[dict[str, str | int | bool]]:
-    """Extract the three text archives to destination; return metadata only."""
+    """Extract the allowlisted localized archives to destination; return metadata only."""
     rom_path = Path(rom_path).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
     files, fat_entries, rom_size = _index_rom(rom_path)
@@ -296,7 +300,7 @@ def extract_localization(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Importa somente três bancos de texto de Pokémon Platinum CPUE para um diretório local."
+        description="Importa recursos NARC localizados explicitamente autorizados de Pokémon Platinum CPUE para um diretório local."
     )
     parser.add_argument("--rom", required=True, help="Caminho local para o arquivo .nds do próprio usuário.")
     parser.add_argument(
