@@ -44,7 +44,7 @@ jobs:
           set +o pipefail
           yes | "$sdkmanager_path" --licenses
           set -o pipefail
-          "$sdkmanager_path" "platforms;android-35" "ndk;27.2.12479018"
+          "$sdkmanager_path" "platforms;android-34" "platforms;android-35" "build-tools;34.0.0" "ndk;27.2.12479018"
           echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$sdk_root/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "$sdk_root/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
@@ -163,6 +163,90 @@ jobs:
           cp "$ENET_ANDROID_LIBDIR/libenet.a" android-native-artifact/
           cp "$RUNNER_TEMP/android-build-preparation.json" android-native-artifact/
           cp "$RUNNER_TEMP/android-gles-report.json" android-native-artifact/
+      - name: Set up JDK for Android APK packaging
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Package experimental Android APK with SDLActivity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          project_dir="$RUNNER_TEMP/platina-android-apk"
+          rm -rf "$project_dir"
+          cp -a "$SDL_SOURCE/android-project" "$project_dir"
+
+          app_dir="$project_dir/app"
+          native_lib_dir="$app_dir/libs/arm64-v8a"
+          mkdir -p "$native_lib_dir"
+          cp "$GITHUB_WORKSPACE/android-native-artifact/libmain.so" "$native_lib_dir/libmain.so"
+          cp "$GITHUB_WORKSPACE/android-native-artifact/libSDL2.so" "$native_lib_dir/libSDL2.so"
+          cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$native_lib_dir/libc++_shared.so"
+
+          cat > "$app_dir/build.gradle" <<'EOF'
+          apply plugin: 'com.android.application'
+
+          android {
+              namespace "org.libsdl.app"
+              compileSdkVersion 34
+
+              defaultConfig {
+                  applicationId "org.carloscostaxavier.platinareluzente"
+                  minSdkVersion 24
+                  targetSdkVersion 34
+                  versionCode 1
+                  versionName "0.1.0-experimental"
+                  ndk {
+                      abiFilters 'arm64-v8a'
+                  }
+              }
+
+              sourceSets.main {
+                  jniLibs.srcDir 'libs'
+              }
+
+              packagingOptions {
+                  jniLibs {
+                      useLegacyPackaging = true
+                  }
+              }
+          }
+
+          dependencies {
+              implementation fileTree(include: ['*.jar'], dir: 'libs')
+          }
+          EOF
+
+          strings_xml="$app_dir/src/main/res/values/strings.xml"
+          sed -i 's/<string name="app_name">Game<\\/string>/<string name="app_name">Platina Reluzente (experimental)<\\/string>/' "$strings_xml"
+          grep -q 'Platina Reluzente (experimental)' "$strings_xml"
+
+          manifest="$app_dir/src/main/AndroidManifest.xml"
+          sed -i 's/android:glEsVersion="0x00020000"/android:glEsVersion="0x00030002"/' "$manifest"
+          grep -q 'android:glEsVersion="0x00030002"' "$manifest"
+
+          chmod +x "$project_dir/gradlew"
+          (
+            cd "$project_dir"
+            ./gradlew --no-daemon --stacktrace assembleDebug
+          )
+
+          apk="$app_dir/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          zipinfo -1 "$apk" | grep -Fx 'lib/arm64-v8a/libmain.so'
+          zipinfo -1 "$apk" | grep -Fx 'lib/arm64-v8a/libSDL2.so'
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+          mkdir -p "$GITHUB_WORKSPACE/android-apk-artifact"
+          cp "$apk" "$GITHUB_WORKSPACE/android-apk-artifact/Platina-Reluzente-Android-arm64-experimental.apk"
+      - name: Upload experimental Android APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platina-reluzente-android-arm64-experimental-apk
+          path: android-apk-artifact/Platina-Reluzente-Android-arm64-experimental.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Write summary
         if: always()
         run: |
@@ -170,7 +254,8 @@ jobs:
             echo "## Android native ARM64 cross-build"
             echo
             echo "Expected ABI: arm64-v8a; minimum Android API: 24."
-            echo "This job builds native shared libraries only. It does not produce a playable APK or include ROM/game assets."
+            echo "On success, this job packages an experimental arm64-v8a APK with SDLActivity and the native libraries."
+            echo "The APK is a native packaging milestone only; ROM selection/data extraction and on-device gameplay remain unverified."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload ARM64 native cross-build artifact
         if: success()
