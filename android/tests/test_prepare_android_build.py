@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
+from android.scripts.prepare_android_build import PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -155,6 +155,9 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("lib/ppwlobby/meson.build", paths)
             self.assertIn("lib/ppwlobby/include/ilobby/class_ov66_02243B64_sub1.h", paths)
             self.assertIn("lib/ppwlobby/include/ilobby/dwci_lobbydata.h", paths)
+            self.assertIn("lib/ppwlobby/include/ilobby/dwci_lobbybase.h", paths)
+            self.assertIn("lib/ppwlobby/libraries/ilobby/src/dwci_lobby.cpp", paths)
+            self.assertIn("lib/ppwlobby/libraries/ppwlobby/src/ppw_lobby.cpp", paths)
             self.assertIn("subprojects/libvct/meson.build", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
@@ -287,6 +290,63 @@ endif
                 second_text,
             )
             self.assertEqual([], patch_android_ppwlobby_map_allocators(root))
+
+
+    def test_android_ppwlobby_allocator_and_callback_handles_support_arm64(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "lib" / "ppwlobby" / "include" / "ilobby" / "dwci_lobbybase.h"
+            ilobby = root / "lib" / "ppwlobby" / "libraries" / "ilobby" / "src" / "dwci_lobby.cpp"
+            lobby = root / "lib" / "ppwlobby" / "libraries" / "ppwlobby" / "src" / "ppw_lobby.cpp"
+            for path in (base, ilobby, lobby):
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+            base.write_text(
+                "#include <limits>\n"
+                "template <class T> class PPW_Allocator { };\n"
+                "#endif // ILOBBY_LOBBYBASE_H\n",
+                encoding="utf-8",
+            )
+            ilobby.write_text(
+                "(u32)param6\n" * 6
+                + "(u32)param4\n" * 4
+                + "(u32)param7\n" * 2,
+                encoding="utf-8",
+            )
+            lobby.write_text("(PPW_LOBBY_CHANNEL_KIND)(u32)param3\n" * 3, encoding="utf-8")
+
+            changes = patch_android_ppwlobby_stdlib_compat(root)
+
+            base_text = base.read_text(encoding="utf-8")
+            ilobby_text = ilobby.read_text(encoding="utf-8")
+            lobby_text = lobby.read_text(encoding="utf-8")
+            self.assertEqual(
+                [
+                    "PPW lobby: add libc++ allocator equality and ARM64 callback-token helpers",
+                    "PPW lobby: decode opaque 32-bit callback IDs through uintptr_t",
+                ],
+                changes,
+            )
+            self.assertIn("#include <stdint.h>", base_text)
+            self.assertIn(
+                "inline bool operator==(const PPW_Allocator<T> &, const PPW_Allocator<U> &) throw()",
+                base_text,
+            )
+            self.assertIn(
+                "inline bool operator!=(const PPW_Allocator<T> &, const PPW_Allocator<U> &) throw()",
+                base_text,
+            )
+            self.assertIn(
+                "return static_cast<u32>(reinterpret_cast<uintptr_t>(param));",
+                base_text,
+            )
+            self.assertEqual(6, ilobby_text.count("PPW_CallbackParamId(param6)"))
+            self.assertEqual(4, ilobby_text.count("PPW_CallbackParamId(param4)"))
+            self.assertEqual(2, ilobby_text.count("PPW_CallbackParamId(param7)"))
+            self.assertEqual(3, lobby_text.count("(PPW_LOBBY_CHANNEL_KIND)PPW_CallbackParamId(param3)"))
+            self.assertNotIn("(u32)param6", ilobby_text)
+            self.assertNotIn("(u32)param3", lobby_text)
+            self.assertEqual([], patch_android_ppwlobby_stdlib_compat(root))
 
 
     def test_ppwlobby_static_libraries_enable_android_pic_idempotently(self):
