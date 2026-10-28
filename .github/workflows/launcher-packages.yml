@@ -8,7 +8,6 @@ on:
   workflow_run:
     workflows:
       - Native desktop build and localization checks
-      - Android native ARM64 cross-build
     branches: [main]
     types: [completed]
 
@@ -21,7 +20,7 @@ jobs:
     name: Require Windows, Linux and Android to pass on the same commit
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 100
     outputs:
       ready: ${{ steps.find.outputs.ready }}
       desktop_run_id: ${{ steps.find.outputs.desktop_run_id }}
@@ -33,27 +32,53 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const sha = context.payload.workflow_run.head_sha;
-            const response = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head_sha: sha,
-              per_page: 100
-            });
-            const runs = response.data.workflow_runs;
-            const desktop = runs.find(r => r.name === 'Native desktop build and localization checks' &&
-              r.head_sha === sha && r.head_branch === 'main' && r.status === 'completed' && r.conclusion === 'success');
-            const android = runs.find(r => r.name === 'Android native ARM64 cross-build' &&
-              r.head_sha === sha && r.head_branch === 'main' && r.status === 'completed' && r.conclusion === 'success');
-            if (!desktop || !android) {
-              core.setOutput('ready', 'false');
-              core.notice('Pacotes aguardando validação: Windows, Linux e Android precisam concluir com sucesso no mesmo commit. Uma nova execução será iniciada quando o outro workflow terminar.');
+            const desktop = context.payload.workflow_run;
+            if (desktop.name !== 'Native desktop build and localization checks' ||
+                desktop.head_branch !== 'main' || desktop.status !== 'completed' ||
+                desktop.conclusion !== 'success') {
+              core.setFailed('Packages require a successful Windows+Linux build from main.');
               return;
             }
-            core.setOutput('ready', 'true');
-            core.setOutput('desktop_run_id', String(desktop.id));
-            core.setOutput('android_run_id', String(android.id));
+
+            const sha = desktop.head_sha;
             core.setOutput('head_sha', sha);
+            core.setOutput('desktop_run_id', String(desktop.id));
+
+            const deadline = Date.now() + 95 * 60 * 1000;
+            const sleep = (milliseconds) => new Promise(resolve => setTimeout(resolve, milliseconds));
+            while (Date.now() < deadline) {
+              const response = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head_sha: sha,
+                per_page: 100
+              });
+              const candidates = response.data.workflow_runs
+                .filter(run => run.name === 'Android native ARM64 cross-build' &&
+                  run.head_sha === sha && run.head_branch === 'main')
+                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+              const android = candidates[0];
+
+              if (android && android.status === 'completed') {
+                if (android.conclusion !== 'success') {
+                  core.setFailed('Android native build for commit ' + sha +
+                    ' concluded ' + android.conclusion + '. No cross-platform packages were published.');
+                  return;
+                }
+                core.setOutput('android_run_id', String(android.id));
+                core.setOutput('ready', 'true');
+                core.info('Windows and Linux passed in desktop run ' + desktop.id +
+                  '; Android passed in run ' + android.id + ' for the same commit ' + sha + '.');
+                return;
+              }
+
+              core.info(android
+                ? 'Waiting for Android build ' + android.id + ' (status: ' + android.status + ') on ' + sha
+                : 'Waiting for the Android build to start on commit ' + sha);
+              await sleep(30000);
+            }
+
+            core.setFailed('Timed out waiting for the matching Android build. No cross-platform packages were published.');
 
   launcher-source-checks:
     name: Launcher source checks
