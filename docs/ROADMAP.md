@@ -22,10 +22,10 @@ O foco inicial é compilar e executar a base nativa, sem otimização prematura.
 - [x] Build limpo Linux x86-64 na CI, sem artefatos de build preexistentes.
 - [x] Compilar o executável Windows x64 na CI.
 - [x] Confirmar que os pacotes Linux e Windows contêm os arquivos de animação obrigatórios `wazaeffect/we.arc` e `battle/skill/waza_seq.narc` e passam pela verificação dos 340 caminhos do manifesto.
-- [ ] Confirmar que o jogo inicia com a ROM local USA Rev. 1 e chega à tela inicial; o teste automático pré-ROM apenas confirma que a interface fica ativa sem dados do jogo.
-- [ ] Confirmar o smoke test pré-ROM de Linux na CI executando um `pokeplatinum-x86_64.AppImage` descoberto dentro de `build_linux` com diretório de trabalho temporário vazio; ele comprova apenas que o pacote inicia a interface sem ROM, não que o jogo foi carregado.
+- [ ] Executar o jogo com a ROM local USA Rev. 1, confirmar extração dos dados, tela de título e início de uma nova partida; a execução atual da CI não fornece ROM.
+- [x] Testar o AppImage Linux em diretório temporário vazio: a janela `libntr Application` foi encontrada e o processo permaneceu ativo por 15 segundos na execução [40691585390](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40691585390). Isso só cobre a interface pré-ROM.
 - [ ] Reproduzir as instruções numa máquina limpa.
-- [ ] Confirmar inicialização com uma cópia local válida da ROM USA Rev. 1.
+- [ ] Reproduzir o primeiro carregamento com uma cópia local válida da ROM USA Rev. 1 e verificar os erros de extração/carregamento.
 - [ ] Confirmar que logs e erros de carregamento identificam os problemas.
 - [x] Manter ROMs e recursos derivados fora do repositório e dos artefatos de CI.
 
