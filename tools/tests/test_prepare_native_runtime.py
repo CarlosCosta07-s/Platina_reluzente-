@@ -3,12 +3,19 @@ import unittest
 from pathlib import Path
 
 from scripts.prepare_native_runtime import (
+    LEGACY_PATCHED_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
     RuntimePreparationError,
     prepare_native_runtime,
 )
 
-UPSTREAM_HEADER = r'''  // Read the first 0x160 bytes of the rom and put it in the HW_ROM_HEADER_BUF
+UPSTREAM_HEADER = r'''#include <SDL2/SDL.h>
+
+int main(int argc, char *argv[]) {
+#ifdef SDK_BUILD_NX
+  // platform-specific setup
+#endif
+  // Read the first 0x160 bytes of the rom and put it in the HW_ROM_HEADER_BUF
   FILE *romFile;
   romFile = fopen("header.bin", "r");
 
@@ -16,7 +23,9 @@ UPSTREAM_HEADER = r'''  // Read the first 0x160 bytes of the rom and put it in t
     // Read the fields of the struct
     fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
     fclose(romFile);
-  }'''
+  }
+  return 0;
+}'''
 
 
 class NativeRuntimePreparationTests(unittest.TestCase):
@@ -35,8 +44,29 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             content = source.read_text(encoding="utf-8")
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', content)
             self.assertIn('fopen(importedRomPath, "rb")', content)
+            self.assertIn('SDL_AndroidGetInternalStoragePath()', content)
+            self.assertIn('std::string(androidInternalStoragePath) + "/roms/current.nds"', content)
+            self.assertIn('std::string(androidInternalStoragePath) + "/pokeplatinum"', content)
+            self.assertIn('chdir(androidRuntimeDirectory.c_str())', content)
+            self.assertIn('#include <SDL2/SDL_system.h>', content)
             self.assertIn('fopen("header.bin", "rb")', content)
             self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
+            self.assertFalse(prepare_native_runtime(root))
+
+    def test_upgrades_the_previous_desktop_only_rom_handoff_patch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(
+                root,
+                '#include <SDL2/SDL.h>\\n\\nint main(int argc, char *argv[]) {\\n'
+                + LEGACY_PATCHED_HEADER_LOAD
+                + '\\n}\\n',
+            )
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertIn('SDL_AndroidGetInternalStoragePath()', content)
+            self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
+            self.assertNotIn(LEGACY_PATCHED_HEADER_LOAD, content)
             self.assertFalse(prepare_native_runtime(root))
 
     def test_refuses_unknown_upstream_source_without_overwriting_it(self):
