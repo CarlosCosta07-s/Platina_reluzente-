@@ -195,6 +195,31 @@ trainer_ai_ss = custom_target("""
 
 
 
+def patch_android_sim_config_path(root: Path) -> list[str]:
+    """Keep SDL simulator settings outside the replaceable Android runtime asset tree."""
+    path = root / "libraries" / "sim" / "src" / "config" / "sim_config.c"
+    if not path.is_file():
+        raise PatchError(f"Simulator configuration source is missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    old = '#define SIM_CONFIG_FILE_PATH "./sim_config.ini"'
+    new = (
+        "#if defined(SDK_BUILD_ANDROID)\n"
+        '#define SIM_CONFIG_FILE_PATH "../sim_config.ini"\n'
+        "#else\n"
+        '#define SIM_CONFIG_FILE_PATH "./sim_config.ini"\n'
+        "#endif"
+    )
+    if new in original:
+        if original.count(new) != 1:
+            raise PatchError("Android simulator config path patch is duplicated")
+        return []
+    if original.count(old) != 1:
+        raise PatchError("Simulator config path: expected exactly one default config path")
+    path.write_text(original.replace(old, new, 1), encoding="utf-8")
+    return ["libntr simulator: persist Android config beside the replaceable runtime assets"]
+
+
 def patch_libvct(root: Path) -> list[str]:
     """Expose staged SDL2 headers to libvct's independent Meson subproject."""
     path = root / "meson.build"
@@ -1319,6 +1344,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         changes.extend(patch_android_ppwlobby_map_allocators(staged))
         changes.extend(patch_android_ppwlobby_stdlib_compat(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
+        changes.extend(patch_android_sim_config_path(staged / "subprojects/libntr"))
         changes.extend(patch_libvct(staged / "subprojects/libvct"))
         for name, (arg_name, dwc) in sdk_projects.items():
             sdk_root = staged / "subprojects" / name
@@ -1364,6 +1390,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/include/nitro/wm/common/wm.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
+        "subprojects/libntr/libraries/sim/src/config/sim_config.c",
         "tools/scripts/copy_pc_files.sh",
         "subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp",
         "subprojects/libntr/libraries/sim/src/sim_g2.cpp",
