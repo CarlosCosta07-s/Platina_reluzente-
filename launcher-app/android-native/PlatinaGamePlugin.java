@@ -91,6 +91,17 @@ public class PlatinaGamePlugin extends Plugin {
     private void extractRuntimeAssets() throws IOException {
         File filesDir = getContext().getFilesDir();
         File destination = new File(filesDir, "pokeplatinum");
+        File staging = new File(filesDir, "pokeplatinum.staging");
+        File previous = new File(filesDir, "pokeplatinum.previous");
+
+        // Recover an interrupted replacement before cleaning up stale backups.
+        // If a prior process moved the destination but died before installing
+        // staging, keep the last usable runtime rather than deleting its backup.
+        if (!destination.exists() && previous.exists() && !previous.renameTo(destination)) {
+            throw new IOException("Não foi possível recuperar a pasta de recursos anterior.");
+        }
+        if (destination.exists() && previous.exists()) deleteRecursively(previous);
+
         String expectedVersion = readAssetText("pokeplatinum/build-version.txt").trim();
         File stamp = new File(destination, "build-version.txt");
         if (destination.isDirectory()
@@ -99,10 +110,7 @@ public class PlatinaGamePlugin extends Plugin {
                 && stamp.isFile()
                 && expectedVersion.equals(readFileText(stamp).trim())) return;
 
-        File staging = new File(filesDir, "pokeplatinum.staging");
-        File previous = new File(filesDir, "pokeplatinum.previous");
         deleteRecursively(staging);
-        deleteRecursively(previous);
         copyAssetTree("pokeplatinum", staging);
         if (!new File(staging, "header.bin").isFile()
                 || !new File(staging, "firmware.bin").isFile()
