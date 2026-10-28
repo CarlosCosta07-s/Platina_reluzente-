@@ -80,7 +80,10 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("android_enet_libdir", sim)
             self.assertIn("GLESv3", sim)
             self.assertIn("or build_target == 'android'", sim)
-            self.assertIn("SDK_BUILD_ANDROID", (root / "meson.build").read_text(encoding="utf-8"))
+            libntr_meson = (root / "meson.build").read_text(encoding="utf-8")
+            self.assertIn("SDK_BUILD_ANDROID", libntr_meson)
+            self.assertNotIn("project('libntr', 'c', 'cpp', 'nasm'", libntr_meson)
+            self.assertIn("add_languages('nasm', required: true)", libntr_meson)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:

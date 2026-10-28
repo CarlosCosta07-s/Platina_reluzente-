@@ -185,9 +185,17 @@ def patch_libntr(root: Path) -> list[str]:
 
     # libntr itself also declares NASM as a required Meson language. As with
     # the parent project, keep it for desktop and skip detection on Android.
-    text, changed = replace_once(
-        text, "project('libntr', 'c', 'cpp', 'nasm',",
-        "project('libntr', 'c', 'cpp',", "libntr optional NASM language")
+    old_project = "project('libntr', 'c', 'cpp', 'nasm',\\n    default_options:"
+    new_project = "project('libntr', 'c', 'cpp',\\n    default_options:"
+    if old_project in text:
+        if text.count(old_project) != 1:
+            raise PatchError("libntr: duplicate NASM project declarations")
+        text = text.replace(old_project, new_project, 1)
+        changed = True
+    elif new_project in text:
+        changed = False
+    else:
+        raise PatchError("libntr: expected exact Meson project declaration")
     if changed:
         changes.append("libntr: make NASM desktop-only")
     libntr_target_line = "build_target = get_option('build_target')\n"
