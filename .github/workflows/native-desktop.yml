@@ -1,7 +1,7 @@
 name: Native desktop build and localization checks
 
 concurrency:
-  group: native-desktop-${{ github.ref }}
+  group: native-desktop-v2-${{ github.ref }}
   cancel-in-progress: true
 
 on:
