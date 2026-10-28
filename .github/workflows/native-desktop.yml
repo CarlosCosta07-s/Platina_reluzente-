@@ -1,8 +1,8 @@
 name: Native desktop build and localization checks
 
 concurrency:
-  group: native-desktop-appimage-v2-${{ github.ref }}
-  cancel-in-progress: true
+  group: native-desktop-appimage-v3-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   push:
@@ -14,6 +14,10 @@ on:
       - "tools/**"
       - "vendor/**"
       - "android/**"
+      - "launcher-app/**"
+      - ".github/workflows/android-native-cross-build.yml"
+      - ".github/workflows/android-graphics-compat.yml"
+      - ".github/workflows/launcher-packages.yml"
   workflow_dispatch:
 
 permissions:
@@ -144,7 +148,6 @@ jobs:
 
   windows:
     name: Windows x64 compile
-    needs: linux
     runs-on: windows-latest
     timeout-minutes: 90
     steps:

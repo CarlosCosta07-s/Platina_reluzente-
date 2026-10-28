@@ -1,14 +1,22 @@
 name: Launcher packages for manual testing
 
 concurrency:
-  group: launcher-packages-${{ github.ref }}
-  cancel-in-progress: true
+  group: launcher-packages-v2-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   push:
     branches: [main]
     paths:
       - "launcher-app/**"
+      - "android/**"
+      - "scripts/**"
+      - "tools/**"
+      - "vendor/**"
+      - ".gitmodules"
+      - ".github/workflows/native-desktop.yml"
+      - ".github/workflows/android-native-cross-build.yml"
+      - ".github/workflows/android-graphics-compat.yml"
       - ".github/workflows/launcher-packages.yml"
   workflow_dispatch:
 

@@ -1,12 +1,23 @@
 name: Android native ARM64 cross-build
 
+concurrency:
+  group: android-native-build-v2-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     branches: [main]
     paths:
       - "android/**"
       - ".github/workflows/android-native-cross-build.yml"
-      - "scripts/pin_native_dependencies.py"
+      - "scripts/**"
+      - "tools/**"
+      - "vendor/**"
+      - ".gitmodules"
+      - "launcher-app/**"
+      - ".github/workflows/native-desktop.yml"
+      - ".github/workflows/android-graphics-compat.yml"
+      - ".github/workflows/launcher-packages.yml"
   workflow_dispatch:
 
 permissions:
