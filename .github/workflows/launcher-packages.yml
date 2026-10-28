@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
+      ready: ${{ steps.find.outputs.ready }}
       desktop_run_id: ${{ steps.find.outputs.desktop_run_id }}
       android_run_id: ${{ steps.find.outputs.android_run_id }}
       head_sha: ${{ steps.find.outputs.head_sha }}
@@ -45,9 +46,11 @@ jobs:
             const android = runs.find(r => r.name === 'Android native ARM64 cross-build' &&
               r.head_sha === sha && r.head_branch === 'main' && r.status === 'completed' && r.conclusion === 'success');
             if (!desktop || !android) {
-              core.setFailed('Pacotes bloqueados: Windows/Linux e Android precisam passar no mesmo commit.');
+              core.setOutput('ready', 'false');
+              core.notice('Pacotes aguardando validação: Windows, Linux e Android precisam concluir com sucesso no mesmo commit. Uma nova execução será iniciada quando o outro workflow terminar.');
               return;
             }
+            core.setOutput('ready', 'true');
             core.setOutput('desktop_run_id', String(desktop.id));
             core.setOutput('android_run_id', String(android.id));
             core.setOutput('head_sha', sha);
@@ -55,6 +58,7 @@ jobs:
   launcher-source-checks:
     name: Launcher source checks
     needs: verify-platform-builds
+    if: ${{ needs.verify-platform-builds.outputs.ready == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
