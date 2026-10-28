@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_wifi_socket_headers, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -367,6 +367,33 @@ libsim = library('sim',
             self.assertEqual(1, meson_result.count("android_include"))
 
 
+    def test_android_dwc_auth_source_includes_errno_and_wchar_headers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "libraries" / "auth" / "src" / "dwc_auth.c"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "#include <nitro.h>\n"
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+                "#include <errno.h>\n"
+                "#include <wchar.h>\n"
+                "#endif\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                ["libntrdwc: include errno/wchar declarations for Android"],
+                patch_android_dwc_auth_headers(root),
+            )
+            updated = source.read_text(encoding="utf-8")
+            self.assertIn(
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)",
+                updated,
+            )
+            self.assertIn("#include <errno.h>", updated)
+            self.assertIn("#include <wchar.h>", updated)
+            self.assertEqual([], patch_android_dwc_auth_headers(root))
+
     def test_android_wifi_network_source_includes_posix_socket_headers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -456,6 +483,7 @@ libsim = library('sim',
                 "subprojects/libntrsystem/include/nnsys/g3d/glbstate.h",
                 "subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h",
                 "subprojects/libntrwifi/libraries/cps/src/network.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_auth.c",
             ):
                 target = staged / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -463,12 +491,14 @@ libsim = library('sim',
             paths = android_patch_copy_paths(staged, {
                 "libntrsystem": ("nitrosystem_args", False),
                 "libntrwifi": ("nitrowifi_args", False),
+                "libntrdwc": ("nitrodwc_args", True),
             })
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/kernel.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/sbc.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/glbstate.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h", paths)
             self.assertIn("subprojects/libntrwifi/libraries/cps/src/network.c", paths)
+            self.assertIn("subprojects/libntrdwc/libraries/auth/src/dwc_auth.c", paths)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:

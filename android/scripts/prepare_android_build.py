@@ -835,6 +835,31 @@ def patch_android_wifi_socket_headers(root: Path) -> list[str]:
     path.write_text(updated, encoding="utf-8")
     return ["libntrwifi: include POSIX socket headers for Android"]
 
+
+def patch_android_dwc_auth_headers(root: Path) -> list[str]:
+    """Expose errno and wide-character declarations for the Android DWC target."""
+    path = root / "libraries" / "auth" / "src" / "dwc_auth.c"
+    if not path.is_file():
+        raise PatchError(f"Android DWC authentication source is missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    linux_condition = "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)"
+    android_condition = (
+        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) "
+        "|| defined(SDK_BUILD_ANDROID)"
+    )
+    lines = [line.strip() for line in original.splitlines()]
+    if lines.count(android_condition) == 1 and lines.count(linux_condition) == 0:
+        return []
+    if lines.count(linux_condition) != 1:
+        raise PatchError(
+            f"{path}: expected exactly one Linux/NX errno/wchar include condition"
+        )
+
+    updated = original.replace(linux_condition, android_condition, 1)
+    path.write_text(updated, encoding="utf-8")
+    return ["libntrdwc: include errno/wchar declarations for Android"]
+
 def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     sdl_inc, enet_inc = sdl / "include", enet / "include" / "enet"
     if not sdl_inc.is_dir() or not enet_inc.is_dir():
@@ -886,6 +911,8 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
                 changes.extend(patch_sdk_g3d_inline_linkage(sdk_root))
             if name == "libntrwifi":
                 changes.extend(patch_android_wifi_socket_headers(sdk_root))
+            if name == "libntrdwc":
+                changes.extend(patch_android_dwc_auth_headers(sdk_root))
         stage_headers(staged / "subprojects/libntr", sdl, enet)
 
         rels = android_patch_copy_paths(staged, sdk_projects)
@@ -950,6 +977,8 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
             )
         if name == "libntrwifi":
             rels.append("subprojects/libntrwifi/libraries/cps/src/network.c")
+        if name == "libntrdwc":
+            rels.append("subprojects/libntrdwc/libraries/auth/src/dwc_auth.c")
         # patch_sdk_project modifies PIC settings in these nested libraries.
         rels.extend(
             path.relative_to(staged).as_posix()
