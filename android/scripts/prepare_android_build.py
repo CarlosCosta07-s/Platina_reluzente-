@@ -358,6 +358,26 @@ def patch_libntr(root: Path) -> list[str]:
         changes.append("libntr: preserve 32-byte CARDRomStat buffer alignment on Android")
     rom_header_path.write_text(rom_header, encoding="utf-8")
 
+    # On Android, host-side callback/function pointers are 64-bit, so the
+    # legacy DS-era fixed workspace bound can be smaller than MBFakeWork.
+    # Keep the original bound on desktop and raise only the Android allocator
+    # contract; MB_FakeGetWorkSize() continues to return the exact sizeof.
+    fake_child_header_path = root / "include" / "nitro" / "mb" / "mb_fake_child.h"
+    fake_child_header = fake_child_header_path.read_text(encoding="utf-8")
+    fake_child_header, fake_child_changed = replace_once(
+        fake_child_header,
+        "#define MB_FAKE_WORK_SIZE       (0x5f20)",
+        "#ifdef SDK_BUILD_ANDROID\n"
+        "#define MB_FAKE_WORK_SIZE       (0x7000)\n"
+        "#else\n"
+        "#define MB_FAKE_WORK_SIZE       (0x5f20)\n"
+        "#endif",
+        "Android MB fake-work buffer size",
+    )
+    if fake_child_changed:
+        changes.append("libntr: enlarge fake multiplayer workspace only for Android")
+    fake_child_header_path.write_text(fake_child_header, encoding="utf-8")
+
     path.write_text(text, encoding="utf-8")
 
     sim_path = root / "libraries/sim/meson.build"
@@ -575,6 +595,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/meson.options",
         "subprojects/libntr/meson.build",
         "subprojects/libntr/include/nitro/types.h",
+        "subprojects/libntr/include/nitro/mb/mb_fake_child.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
     ]
