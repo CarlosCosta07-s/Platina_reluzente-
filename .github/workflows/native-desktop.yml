@@ -1,7 +1,7 @@
 name: Native desktop build and localization checks
 
 concurrency:
-  group: native-desktop-appimage-v1-${{ github.ref }}
+  group: native-desktop-appimage-v2-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -118,6 +118,7 @@ jobs:
 
   windows:
     name: Windows x64 compile
+    needs: linux
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
