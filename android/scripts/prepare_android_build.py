@@ -301,13 +301,22 @@ def patch_libntr(root: Path) -> list[str]:
             "libntr Android SDK flags")
         if changed:
             changes.append("libntr: add Android AArch64 SDK flags")
-    # SDL headers are required by the shared NitroSDK precompiled header,
-    # not only by the simulator target. Stage them once and expose them to
-    # every C/C++ target in libntr for Android cross-compilation.
-    android_include_marker = "if (build_target == 'android')\n    add_project_arguments('-I' + meson.current_source_dir() / 'libraries/sim/android_include', language: ['c', 'cpp'])\nendif\n"
-    if "add_project_arguments('-I' + meson.current_source_dir() / 'libraries/sim/android_include'" not in text:
-        text += "\n" + android_include_marker
-        changes.append("libntr: expose staged SDL2/ENet headers to all Android targets")
+    # SDL headers are needed by the common NitroSDK PCH, so add their
+    # include directory before any build target is declared in this subproject.
+    android_include_marker = (
+        "if (build_target == 'android')\n"
+        "    add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'libraries/sim/android_include'), language: ['c', 'cpp'])\n"
+        "endif\n"
+    )
+    if "add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'libraries/sim/android_include')" not in text:
+        text, changed = replace_once(
+            text,
+            "build_target = get_option('build_target')\n",
+            "build_target = get_option('build_target')\n" + android_include_marker,
+            "libntr Android SDL2/ENet headers",
+        )
+        if changed:
+            changes.append("libntr: expose staged SDL2/ENet headers before target declarations")
 
     path.write_text(text, encoding="utf-8")
 

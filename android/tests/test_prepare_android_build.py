@@ -152,7 +152,9 @@ libsim = library('sim',
             self.assertIn("pic: build_target == 'android',", os_library)
             libntr_meson = (root / "meson.build").read_text(encoding="utf-8")
             self.assertIn("SDK_BUILD_ANDROID", libntr_meson)
-            self.assertIn("add_project_arguments('-I' + meson.current_source_dir() / 'libraries/sim/android_include'", libntr_meson)
+            include_arg = "add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'libraries/sim/android_include')"
+            self.assertIn(include_arg, libntr_meson)
+            self.assertLess(libntr_meson.index(include_arg), libntr_meson.index("if (build_target == 'nx')"))
             self.assertNotIn("project('libntr', 'c', 'cpp', 'nasm'", libntr_meson)
             self.assertIn("add_languages('nasm', required: true)", libntr_meson)
 
