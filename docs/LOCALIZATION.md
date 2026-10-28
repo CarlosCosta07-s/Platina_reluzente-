@@ -15,7 +15,7 @@ A cópia USA fornecida para o desenvolvimento corresponde à Rev. 1 e serve como
 
 ## Diferenças encontradas na variante PT-BR
 
-A cópia PT-BR possui código de jogo CPUE, mas não tem a mesma impressão digital da Rev. 1. Uma comparação local de 462 entradas da tabela FAT encontrou dez entradas diferentes:
+A cópia PT-BR possui código de jogo CPUE, mas não tem a mesma impressão digital da Rev. 1. A impressão digital SHA-1 da cópia exata usada para estabelecer os hashes de referência é `3d92f853eda6e70e9272809f01277db5fdb870ab`. O verificador aceita somente os sete recursos com hashes correspondentes a essa variante; outra edição PT-BR será recusada até que seja analisada e adicionada deliberadamente. Uma comparação local de 462 entradas da tabela FAT encontrou dez entradas diferentes:
 
 - sete recursos NARC selecionados para importação local;
 - data/utility.bin e dwc/utility.bin, que não fazem parte do allowlist;
