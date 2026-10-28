@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -74,6 +74,31 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertLess(result.index(guard), result.index('if [[ "$4" == "-nx" ]]'))
             self.assertEqual([], patch_android_copy_script(root))
 
+    def test_libvct_receives_android_sdl_include_path_idempotently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            meson = root / "meson.build"
+            meson.write_text(
+                "project('libvct', 'c')\\n"
+                "build_target = get_option('build_target')\\n"
+                "nitrosdk_dep = dependency('NitroSDK')\\n",
+                encoding="utf-8",
+            )
+
+            changes = patch_libvct(root)
+            result = meson.read_text(encoding="utf-8")
+            marker = "add_project_arguments('-I' + (meson.current_source_dir() / '../libntr/libraries/sim/android_include')"
+            self.assertEqual(
+                ["libvct: expose staged SDL2 headers to Android compilation"],
+                changes,
+            )
+            self.assertIn("if (build_target == 'android')", result)
+            self.assertIn(marker, result)
+            self.assertLess(result.index(marker), result.index("nitrosdk_dep = dependency"))
+            self.assertEqual([], patch_libvct(root))
+            self.assertEqual(1, result.count("android_include"))
+
+
     def test_copyback_includes_nested_libntr_meson_files_patched_for_pic(self):
         with tempfile.TemporaryDirectory() as tmp:
             staged = Path(tmp)
@@ -87,6 +112,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             paths = android_patch_copy_paths(staged, {})
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
+            self.assertIn("subprojects/libvct/meson.build", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
             self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
