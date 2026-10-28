@@ -44,6 +44,8 @@ class AndroidMesonPatchTests(unittest.TestCase):
             paths = android_patch_copy_paths(staged, {})
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
+            self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
+            self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
             self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
             self.assertIn("subprojects/libntr/include/nitro/mb/mb_fake_child.h", paths)
             self.assertIn("subprojects/libntr/include/nitro/wm/common/wm.h", paths)
@@ -172,11 +174,26 @@ libsim = library('sim',
             (root / "libraries/sim/src").mkdir(parents=True)
             (root / "libraries/sim/src/sim_main.cpp").write_text(
                 "#define SDL_MAIN_HANDLED\nint main() { return 0; }\n", encoding="utf-8")
+            (root / "libraries/sim/src/sim_g3_CommandProcessor.cpp").write_text(
+                "paramPtr = (void *)cmdBlockPtr + 4;\nparamPtr += paramSize;\n", encoding="utf-8")
+            (root / "libraries/sim/src/sim_g2.cpp").write_text(
+                "a = (u16 *)(getBgExtPlttVramBank(isSub) + n);\n"
+                "b = (u16 *)(getBgExtPlttVramBank(isSub) + n);\n"
+                "c = (u16 *)(getBgExtPlttVramBank(isSub) + n);\n"
+                "d = (u16 *)(getBgExtPlttVramBank(isSub) + n);\n", encoding="utf-8")
             (root / "libraries/sim/src/g3_draw.cpp").write_text(
                 "u8 * vramTex = (u8*)(getTextureVramBank() + s_texImageParam.textureOffset);\n"
                 "u8 * vramPltt = (u8*)(getTexPlttVramBank() + s_texPlttBase);\n",
                 encoding="utf-8")
             patch_libntr(root)
+            command_processor = (root / "libraries/sim/src/sim_g3_CommandProcessor.cpp").read_text(encoding="utf-8")
+            self.assertIn("paramPtr = (u8 *)cmdBlockPtr + 4;", command_processor)
+            self.assertIn("paramPtr = (u8 *)paramPtr + paramSize;", command_processor)
+            self.assertNotIn("paramPtr += paramSize;", command_processor)
+            g2_text = (root / "libraries/sim/src/sim_g2.cpp").read_text(encoding="utf-8")
+            self.assertEqual(g2_text.count("(u8 *)getBgExtPlttVramBank(isSub) +"), 4)
+            second_changes = patch_libntr(root)
+            self.assertEqual([], [change for change in second_changes if "pointer offset" in change or "extended-palette" in change])
             sim = (root / "libraries/sim/meson.build").read_text(encoding="utf-8")
             draw = (root / "libraries/sim/src/g3_draw.cpp").read_text(encoding="utf-8")
             self.assertIn("((u8*)getTextureVramBank() + s_texImageParam.textureOffset)", draw)

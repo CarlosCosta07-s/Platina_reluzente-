@@ -550,6 +550,41 @@ def patch_libntr(root: Path) -> list[str]:
 
     # Clang used by the Android NDK rejects arithmetic on void*. Preserve
     # the byte-offset semantics by converting VRAM bases to u8* first.
+    # The ARM64 NDK Clang compiler rejects arithmetic on void*. Preserve
+    # byte addressing for the command-list decoder and extended palette banks.
+    command_processor_path = root / "libraries/sim/src/sim_g3_CommandProcessor.cpp"
+    command_processor = command_processor_path.read_text(encoding="utf-8")
+    command_processor_replacements = (
+        (
+            "paramPtr = (void *)cmdBlockPtr + 4;",
+            "paramPtr = (u8 *)cmdBlockPtr + 4;",
+            "Android command-list header pointer offset",
+        ),
+        (
+            "paramPtr += paramSize;",
+            "paramPtr = (u8 *)paramPtr + paramSize;",
+            "Android command-list parameter offset",
+        ),
+    )
+    for old, new, label in command_processor_replacements:
+        command_processor, cmd_changed = replace_once(command_processor, old, new, label)
+        if cmd_changed:
+            changes.append("libntr simulator: fix " + label + " for Clang")
+    command_processor_path.write_text(command_processor, encoding="utf-8")
+
+    g2_path = root / "libraries/sim/src/sim_g2.cpp"
+    g2_text = g2_path.read_text(encoding="utf-8")
+    g2_text, g2_matches = re.subn(
+        r"(?<!\\(u8 \\*\\))getBgExtPlttVramBank\\(isSub\\) \\+",
+        r"(u8 *)getBgExtPlttVramBank(isSub) +",
+        g2_text,
+    )
+    if g2_matches not in (0, 4):
+        raise PatchError("Android extended-palette pointer patch matched an unexpected number of expressions")
+    if g2_matches:
+        changes.append("libntr simulator: use byte pointers for Android extended-palette VRAM offsets")
+    g2_path.write_text(g2_text, encoding="utf-8")
+
     draw_path = root / "libraries/sim/src/g3_draw.cpp"
     draw = draw_path.read_text(encoding="utf-8")
     draw_replacements = (
@@ -649,6 +684,8 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/include/nitro/wm/common/wm.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
+        "subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp",
+        "subprojects/libntr/libraries/sim/src/sim_g2.cpp",
         "subprojects/libntr/libraries/sim/src/g3_draw.cpp",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
