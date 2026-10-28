@@ -37,6 +37,12 @@ ANDROID_SYSTEM_INCLUDES = r'''#if defined(__ANDROID__)
 #include <unistd.h>
 #endif'''
 
+# SDLActivity resolves the exported SDL_main symbol on Android. Keep SDL_MAIN_HANDLED
+# only on desktop, where the upstream simulator intentionally owns a normal main().
+ANDROID_SDL_ENTRYPOINT_BLOCK = r'''#if !defined(SDK_BUILD_ANDROID)
+#define SDL_MAIN_HANDLED
+#endif'''
+
 ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
   // The Android plugin extracts the complete runtime tree to this private path.
   // Set it as the working directory before relative game/config/data files load.
@@ -81,6 +87,18 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
 
 class RuntimePreparationError(RuntimeError):
     pass
+
+
+def _ensure_android_sdl_entrypoint(source: str) -> tuple[str, bool]:
+    """Let SDL rename the native entrypoint to SDL_main only for Android."""
+    original = "#define SDL_MAIN_HANDLED"
+    if source.count(ANDROID_SDL_ENTRYPOINT_BLOCK) == 1:
+        return source, False
+    if ANDROID_SDL_ENTRYPOINT_BLOCK in source:
+        raise RuntimePreparationError("Duplicate or partial Android SDL entrypoint patch detected.")
+    if source.count(original) != 1:
+        raise RuntimePreparationError("Expected exactly one SDL_MAIN_HANDLED definition for entrypoint patch.")
+    return source.replace(original, ANDROID_SDL_ENTRYPOINT_BLOCK, 1), True
 
 
 def _ensure_android_system_includes(source: str) -> tuple[str, bool]:
@@ -129,6 +147,7 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
             "Expected exactly one recognized upstream or patched ROM-header loader in sim_main.cpp; refusing an uncertain patch."
         )
 
+    current, entrypoint_changed = _ensure_android_sdl_entrypoint(current)
     current, include_changed = _ensure_android_system_includes(current)
     current, main_changed = _ensure_android_working_directory(current)
     changed = current != original
