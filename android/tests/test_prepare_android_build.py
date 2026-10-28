@@ -131,6 +131,8 @@ class AndroidMesonPatchTests(unittest.TestCase):
             )
             self.assertIn("if (build_target == 'android')", result)
             self.assertIn(marker, result)
+            self.assertIn("language: 'c')", result)
+            self.assertNotIn("language: ['c', 'cpp']", result)
             self.assertLess(result.index(marker), result.index("nitrosdk_dep = dependency"))
             self.assertEqual([], patch_libvct(root))
             self.assertEqual(1, result.count("android_include"))
