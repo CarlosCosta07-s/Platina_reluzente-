@@ -1,4 +1,4 @@
-name: Native desktop build
+name: Native desktop build and localization checks
 
 on:
   push:
@@ -11,6 +11,22 @@ permissions:
   contents: read
 
 jobs:
+  localization-importer:
+    name: Localizer parser unit tests (no ROM required)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Compile Python files
+        run: python -m py_compile tools/import_localization.py tools/tests/test_import_localization.py
+      - name: Run parser unit tests
+        run: python -m unittest discover -s tools/tests -v
+
   linux:
     name: Linux x86-64 compile
     runs-on: ubuntu-24.04
@@ -54,5 +70,6 @@ jobs:
         run: .\Launch_Msys2.ps1 "make win64"
         shell: powershell
 
-# CI compiles the upstream native code only. It intentionally does not upload
-# executables, ROMs, extracted NARC files, or compiled game assets.
+# CI runs source-level parser tests and compiles the upstream native code.
+# It intentionally does not upload executables, ROMs, extracted NARC files,
+# or compiled game assets.

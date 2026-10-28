@@ -8,6 +8,8 @@ O foco inicial é **conseguir compilar e executar a base nativa**, sem otimizaç
 - [x] Fixar a revisão do porte desktop upstream como submódulo externo.
 - [x] Criar scripts de build desktop e workflow de CI somente para `main`.
 - [x] Documentar o escopo legal, a política de assets e a estratégia de localização.
+- [x] Implementar um importador local que extrai somente os três bancos de texto necessários.
+- [x] Adicionar testes sintéticos do importador e executar localmente contra as duas cópias fornecidas.
 - [ ] Confirmar que a primeira execução de CI compila Linux.
 - [ ] Confirmar que a primeira execução de CI compila Windows x64.
 
@@ -22,10 +24,10 @@ Critérios de aceite:
 
 ## Marco 2 — original + PT-BR
 
-- [ ] documentar e validar os formatos e os requisitos reais de ROM aceitos;
-- [ ] criar ferramenta local de importação/verificação de dados, sem distribuição de arquivos proprietários;
-- [ ] validar os bancos de texto da variante PT-BR enviada;
-- [ ] testar acentos, fontes, menus, diálogos, eventos e save/load;
+- [x] Extrair localmente `msgdata/msg.narc`, `msgdata/pl_msg.narc` e `msgdata/scenario/scr_msg.narc` das duas cópias fornecidas.
+- [ ] validar a execução com os textos originais depois de compilar o porte;
+- [ ] importar os bancos PT-BR no diretório local usado pelo executável;
+- [ ] testar acentos, fontes, menus, diálogos, eventos de história e save/load;
 - [ ] testar separadamente qualquer divergência de executável/dados da ROM modificada.
 
 ## Marco 3 — Android nativo

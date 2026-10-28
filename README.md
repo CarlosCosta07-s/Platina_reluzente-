@@ -10,7 +10,7 @@ O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em 
 - **Windows/Linux:** há configuração de compilação contínua; a primeira execução do workflow ainda precisa confirmar o resultado no nosso repositório.
 - **Android:** ainda não implementado nem validado. O backend gráfico desktop depende de OpenGL 4.2; Android exige um backend compatível, provavelmente OpenGL ES/Vulkan, além de integração com ciclo de vida, entrada por toque, áudio e armazenamento.
 - **Versão original:** o ponto de referência inicial é Pokémon Platinum USA Rev. 1, identificado no upstream por SHA-1 `0862ec35b24de5c7e2dcb88c9eea0873110d755c`.
-- **Português brasileiro:** é um objetivo explícito. A cópia PT-BR fornecida para testes tem código de jogo `CPUE`, mas não coincide com a impressão digital da Rev. 1 original; por isso será tratada como uma variante modificada até validarmos a extração e os bancos de texto.
+- **Português brasileiro:** é um objetivo explícito. O importador local dos bancos de texto está implementado e foi testado com as duas cópias fornecidas; ainda falta validar a execução do jogo com os textos aplicados.
 
 Não anunciamos o porte como concluído, jogável do início ao fim ou compatível com Android antes de termos compilação e testes reproduzíveis.
 
@@ -43,7 +43,7 @@ cd Platina_reluzente-
 git submodule update --init --recursive
 ```
 
-Linux (ambiente de build recomendado pelo upstream):
+Linux:
 
 ```bash
 ./scripts/build-native.sh linux
@@ -58,7 +58,26 @@ cd ..\..
 .\scripts\build-native.ps1
 ```
 
-Os builds de desktop **compilam o código**; eles não executam testes de jogo automaticamente. Para jogar, use somente uma cópia de jogo obtida legalmente e mantenha ROMs e recursos extraídos fora deste repositório. Consulte os documentos legais antes de distribuir qualquer compilação.
+Os builds de desktop **compilam o código**; eles não executam testes de jogo automaticamente. Para jogar, use somente uma cópia obtida legalmente e mantenha ROMs e recursos extraídos fora deste repositório. Consulte os documentos legais antes de distribuir qualquer compilação.
+
+## Importar os textos PT-BR localmente
+
+Depois de compilar e abrir o porte uma vez com a cópia original para preparar os dados de jogo locais, feche o jogo e execute o importador. Exemplo para Linux:
+
+```bash
+python3 tools/import_localization.py \
+  --rom "/caminho/local/PK Plat [PT-BR].nds" \
+  --destination "vendor/pokeplatinum-native/build_linux/pokeplatinum" \
+  --force
+```
+
+Para Windows, use o diretório `vendor/pokeplatinum-native/build_win64/pokeplatinum`. O importador modifica apenas os três bancos de texto selecionados no diretório de destino; não altera a ROM de origem nem faz upload. Ele valida a estrutura NARC e recusa uma recuperação de tamanho que se sobreponha a outro arquivo da ROM. Veja [a documentação de localização](docs/LOCALIZATION.md).
+
+Execute os testes automatizados da ferramenta sem precisar de ROM:
+
+```bash
+python3 -m unittest discover -s tools/tests -v
+```
 
 ## Regra do repositório
 

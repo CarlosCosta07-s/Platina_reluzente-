@@ -1,0 +1,22 @@
+# Local ROMs, saves, and game-derived archives: never commit user-owned data.
+*.nds
+*.narc
+*.sav
+*.dsv
+*.cia
+*.3ds
+*.cci
+*.zip
+/roms/
+/ROMs/
+/local-data/
+/.local-data/
+
+# Build outputs and Python cache.
+build/
+build_*/
+vendor/pokeplatinum-native/build/
+vendor/pokeplatinum-native/build_*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
