@@ -31,6 +31,11 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
         )
         (root / "include/simulator/g3_draw.h").write_text(GLAD + "\n", encoding="utf-8")
         (root / "libraries/sim/src/g3_handler.cpp").write_text(GLAD + "\n#include <nitro/gx/g3.h>\n", encoding="utf-8")
+        (root / "libraries/sim/src/sim_g2.cpp").write_text(GLAD + "\n", encoding="utf-8")
+        (root / "libraries/sim/src/sim_g3_Texture.cpp").write_text(
+            '#include "simulator/sim_g3_Texture.hpp"\n#include "simulator/glad/glad.h"\n',
+            encoding="utf-8",
+        )
         (root / "include/simulator/g3_handler.h").write_text(GLAD + "\n", encoding="utf-8")
         (root / "libraries/sim/src/g3_draw.cpp").write_text(
             '#include <stdio.h>\n#define G3_DRAW_MAX_ITEMS 1000\n'
@@ -59,6 +64,12 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertIn("GLES3/gl32.h", handler)
             handler_cpp = (root / "libraries/sim/src/g3_handler.cpp").read_text(encoding="utf-8")
             self.assertIn("GLES3/gl32.h", handler_cpp)
+            sim_g2 = (root / "libraries/sim/src/sim_g2.cpp").read_text(encoding="utf-8")
+            self.assertIn("GLES3/gl32.h", sim_g2)
+            self.assertLess(sim_g2.index("#if defined(SDK_BUILD_ANDROID)"), sim_g2.index("#elif defined(SDK_BUILD_NX)"))
+            texture_cpp = (root / "libraries/sim/src/sim_g3_Texture.cpp").read_text(encoding="utf-8")
+            self.assertIn("GLES3/gl32.h", texture_cpp)
+            self.assertLess(texture_cpp.index("#if defined(SDK_BUILD_ANDROID)"), texture_cpp.index("#elif defined(SDK_BUILD_NX)"))
             self.assertLess(handler_cpp.index("#if defined(SDK_BUILD_ANDROID)"), handler_cpp.index("#include <GLES3/gl32.h>"))
             self.assertLess(handler_cpp.index("#include <GLES3/gl32.h>"), handler_cpp.index("#elif defined(SDK_BUILD_NX)"))
             self.assertLess(handler.index("#if defined(SDK_BUILD_ANDROID)"), handler.index("#include <GLES3/gl32.h>"))
@@ -84,9 +95,27 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             root.mkdir()
             self.make_source(root)
             prepare_android_graphics(root)
-            first = (root / "libraries/sim/src/sim_main.cpp").read_text(encoding="utf-8")
+            first = {
+                relative: (root / relative).read_text(encoding="utf-8")
+                for relative in (
+                    "libraries/sim/src/sim_main.cpp",
+                    "libraries/sim/src/sim_g2.cpp",
+                    "libraries/sim/src/sim_g3_Texture.cpp",
+                    "libraries/sim/src/g3_handler.cpp",
+                    "include/simulator/g3_draw.h",
+                    "include/simulator/g3_handler.h",
+                    "libraries/sim/src/g3_draw.cpp",
+                    "libraries/sim/meson.build",
+                )
+            }
             prepare_android_graphics(root)
-            self.assertEqual(first, (root / "libraries/sim/src/sim_main.cpp").read_text(encoding="utf-8"))
+            self.assertEqual(
+                first,
+                {
+                    relative: (root / relative).read_text(encoding="utf-8")
+                    for relative in first
+                },
+            )
 
     def test_unknown_source_is_rejected_before_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
