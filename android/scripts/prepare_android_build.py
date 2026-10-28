@@ -299,11 +299,6 @@ def patch_libntr(root: Path) -> list[str]:
             "meson.get_compiler('c', native: false).find_library('enet', dirs: get_option('android_enet_libdir'))",
             "ENet target library lookup",
         ),
-        (
-            "meson.get_compiler('c').find_library(system_library)",
-            "meson.get_compiler('c', native: false).find_library(system_library)",
-            "Android system library lookup",
-        ),
     )
     for old, new, label in target_library_replacements:
         if old in sim:
@@ -325,6 +320,16 @@ def patch_libntr(root: Path) -> list[str]:
         sim, changed = replace_once(sim, marker, replacement, "libntr Android platform libraries")
         if changed:
             changes.append("libntr simulator: link GLES and Android platform libraries")
+    old_system_lookup = "meson.get_compiler('c').find_library(system_library)"
+    new_system_lookup = "meson.get_compiler('c', native: false).find_library(system_library)"
+    if old_system_lookup in sim:
+        sim, changed = replace_once(
+            sim, old_system_lookup, new_system_lookup, "Android system library lookup"
+        )
+        if changed:
+            changes.append("libntr simulator: use target compiler for Android system libraries")
+    elif new_system_lookup not in sim:
+        raise PatchError("Android system library lookup: expected target-library lookup marker missing")
     new_include_marker = "include_directories: [nitrosdk_includes, libsim_includes] + libsim_android_includes,"
     if new_include_marker not in sim:
         sim, changed = replace_once(
