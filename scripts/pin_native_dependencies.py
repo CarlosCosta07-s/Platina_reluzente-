@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Temporarily pin moving Meson wraps for a reproducible native build.
 
-Only four known wrap files and their expected upstream URLs are accepted.
+Only explicitly pinned wrap files and their expected upstream URLs are accepted.
 Updates are planned and validated before any write, then restored after builds
 so the external source checkout is not left dirty.
 """
@@ -30,6 +30,10 @@ PINNED_DEPENDENCIES: dict[str, tuple[str, str]] = {
     "libntrdwc.wrap": (
         "https://github.com/cybervisi0n/libntrdwc.git",
         "16246ba7b4269e6686f3e4da068e3c996a103739",
+    ),
+    "libvct.wrap": (
+        "https://github.com/cybervisi0n/libvct.git",
+        "a34ad47fc0d7d964483c287759b704b3b1f3b967",
     ),
 }
 MOVING_REVISION = "main"
