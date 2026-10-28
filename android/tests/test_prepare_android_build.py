@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
+from android.scripts.prepare_android_build import PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -111,6 +111,34 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertLess(result.index(guard), result.index('if [[ "$4" == "-nx" ]]'))
             self.assertEqual([], patch_android_copy_script(root))
 
+    def test_android_sim_config_survives_runtime_asset_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "libraries" / "sim" / "src" / "config" / "sim_config.c"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                '#define SIM_CONFIG_FILE_PATH "./sim_config.ini"\n',
+                encoding="utf-8",
+            )
+
+            changes = patch_android_sim_config_path(root)
+
+            result = config.read_text(encoding="utf-8")
+            self.assertEqual(
+                ["libntr simulator: persist Android config beside the replaceable runtime assets"],
+                changes,
+            )
+            self.assertIn(
+                '#if defined(SDK_BUILD_ANDROID)\n'
+                '#define SIM_CONFIG_FILE_PATH "../sim_config.ini"\n'
+                '#else\n'
+                '#define SIM_CONFIG_FILE_PATH "./sim_config.ini"\n'
+                '#endif',
+                result,
+            )
+            self.assertEqual([], patch_android_sim_config_path(root))
+
+
     def test_libvct_receives_android_sdl_include_path_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -161,6 +189,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("lib/ppwlobby/libraries/ilobby/src/dwci_lobby.cpp", paths)
             self.assertIn("lib/ppwlobby/libraries/ppwlobby/src/ppw_lobby.cpp", paths)
             self.assertIn("subprojects/libvct/meson.build", paths)
+            self.assertIn("subprojects/libntr/libraries/sim/src/sim_config.c", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
             self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
