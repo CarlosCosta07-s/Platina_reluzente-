@@ -138,6 +138,7 @@ jobs:
           needs_exe_wrapper = true
 
           [built-in options]
+          b_staticpic = true
           c_args = ['-fPIC']
           cpp_args = ['-fPIC']
           c_link_args = ['-Wl,-z,max-page-size=16384']
@@ -146,6 +147,12 @@ jobs:
           meson setup "$RUNNER_TEMP/build_android" "$NATIVE_SOURCE" \
             --cross-file "$RUNNER_TEMP/android-arm64.ini" \
             -Dbuild_target=android \
+            -Db_staticpic=true \
+            -Dlibntr:b_staticpic=true \
+            -Dlibntrsystem:b_staticpic=true \
+            -Dlibntrwifi:b_staticpic=true \
+            -Dlibntrdwc:b_staticpic=true \
+            -Dlibvct:b_staticpic=true \
             -Dlibntr:android_sdl2_libdir="$SDL2_ANDROID_LIBDIR" \
             -Dlibntr:android_enet_libdir="$ENET_ANDROID_LIBDIR"
       - name: Compile native game library
