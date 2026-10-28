@@ -22,6 +22,7 @@ O foco inicial é compilar e executar a base nativa, sem otimização prematura.
 - [x] Build limpo Linux x86-64 na CI, sem artefatos de build preexistentes.
 - [x] Compilar o executável Windows x64 na CI.
 - [x] Confirmar que os pacotes Linux e Windows contêm os arquivos de animação obrigatórios `wazaeffect/we.arc` e `battle/skill/waza_seq.narc` e passam pela verificação dos 340 caminhos do manifesto.
+- [ ] Confirmar que o jogo inicia com a ROM local USA Rev. 1 e chega à tela inicial; o teste automático pré-ROM apenas confirma que a interface fica ativa sem dados do jogo.
 - [ ] Reproduzir as instruções numa máquina limpa.
 - [ ] Confirmar inicialização com uma cópia local válida da ROM USA Rev. 1.
 - [ ] Confirmar que logs e erros de carregamento identificam os problemas.

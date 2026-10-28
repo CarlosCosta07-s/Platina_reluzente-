@@ -67,7 +67,7 @@ jobs:
       - name: Install runner utilities
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fuse git python3 wget zip
+          sudo apt-get install -y --no-install-recommends fuse git python3 wget zip xvfb xauth
       - name: Install build toolchain
         working-directory: vendor/pokeplatinum-native
         run: ./drun.sh make skrew
@@ -76,6 +76,8 @@ jobs:
         run: ./drun.sh make linux
       - name: Verify complete Linux runtime package
         run: python "$GITHUB_WORKSPACE/scripts/verify_native_package.py" --build-dir "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux" --package-dir "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux/pokeplatinum" --filesys-csv "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/platinum.us/filesys.csv"
+      - name: Smoke-test Linux first-launch UI without a ROM
+        run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux/pokeplatinum/main" 15
       - name: Audit Android graphics compatibility requirements
         run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Restore Meson dependency references
