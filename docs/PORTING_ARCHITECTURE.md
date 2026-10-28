@@ -22,6 +22,12 @@ Isso é preferível a reconstruir as mecânicas do zero em uma engine genérica.
 | Android | Android NDK + backend gráfico compatível | Compilar para ARM64 e integrar ciclo de vida, entrada e armazenamento |
 | Entrada/áudio/ciclo de vida móveis | Avaliar SDL3 onde isso não conflitar com a camada existente | APIs portáveis de plataforma; não será usada como engine substituta |
 
+## Dependências reproduzíveis
+
+A versão fixada do porte desktop contém arquivos Meson `.wrap` que apontam para a branch móvel `main` das bibliotecas libntr. O script `scripts/pin-native-dependencies.py` substitui essas referências por commits verificados e compatíveis com a revisão do porte usada neste projeto. O script só altera quatro arquivos conhecidos, valida as URLs antes de escrever e falha de forma explícita se encontrar revisões desconhecidas. Ele é executado automaticamente pelos scripts de build do projeto.
+
+A compilação no GitHub Actions prepara o código upstream como um checkout Git independente, porque um gerador de cabeçalho do upstream consulta os hashes Git da árvore principal e da libntr. Essa preparação evita depender de caminhos internos da metadata de um submódulo aninhado.
+
 ## Fluxo de execução planejado
 
 1. O código C/C++ é compilado pelo toolchain do sistema-alvo.
@@ -34,7 +40,7 @@ A camada de compatibilidade implementa comportamento de APIs do DS; isso não é
 
 ## Windows/Linux agora
 
-O upstream já possui alvos `win64` e `linux` em Meson. Este repositório os aciona por scripts e CI, sem publicar executáveis ou recursos do jogo. Primeiro validaremos uma compilação limpa de cada alvo; depois será necessário smoke test manual com uma cópia local válida.
+O upstream já possui alvos `win64` e `linux` em Meson. Este repositório os aciona por scripts e CI. Primeiro validaremos uma compilação limpa de cada alvo; depois será necessário smoke test manual com uma cópia local válida.
 
 ## Android — trabalho necessário
 
@@ -44,7 +50,7 @@ O caminho de desktop utiliza OpenGL 4.2; não devemos presumir que essa API este
 2. implementar e testar um backend OpenGL ES adequado ou optar por Vulkan caso os requisitos não possam ser atendidos de forma robusta;
 3. integrar eventos de pausa/retomada, toque, controladores, áudio e armazenamento com o Android NDK;
 4. compilar um APK arm64-v8a em CI;
-5. testar inicialização, tela inicial, áudio, salvamento e retomada em dispositivo/emulador **de sistema Android**. Um emulador de Android pode ser usado para testar o aplicativo Android; não será usado como emulador de Nintendo DS.
+5. testar inicialização, tela inicial, áudio, salvamento e retomada em dispositivo real e/ou emulador de Android. Um emulador de Android pode ser usado para testar o aplicativo Android; não será usado como emulador de Nintendo DS.
 
 Não declare Android concluído até os critérios acima serem atendidos. Não introduza stubs que simplesmente retornem sucesso para APIs gráficas essenciais.
 

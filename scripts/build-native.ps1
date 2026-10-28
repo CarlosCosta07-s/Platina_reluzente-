@@ -12,15 +12,16 @@ if (-not (Test-Path (Join-Path $nativeDir "Makefile"))) {
     exit 2
 }
 
-$launcher = Join-Path $nativeDir "Launch_Msys2.ps1"
+$launcher = Join-Path $nativeDir "Launch_MSys2.ps1"
 if (-not (Test-Path $launcher)) {
-    Write-Error "Launch_Msys2.ps1 não existe no submódulo nativo."
+    Write-Error "Launch_MSys2.ps1 não existe no submódulo nativo."
     exit 2
 }
 
 Push-Location $nativeDir
 try {
-    & $launcher "make $Target"
+    # Use Python from the installed MSYS2 environment, then build in the same shell.
+    & $launcher "python3 ../../scripts/pin-native-dependencies.py . && make $Target"
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

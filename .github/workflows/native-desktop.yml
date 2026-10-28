@@ -16,7 +16,7 @@ env:
 
 jobs:
   localization-importer:
-    name: Localizer parser unit tests (no ROM required)
+    name: Importer and dependency-pinning unit tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/import_localization.py tools/tests/test_import_localization.py
-      - name: Run parser unit tests
+        run: python -m py_compile tools/import_localization.py scripts/pin-native-dependencies.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py
+      - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
 
   linux:
@@ -41,6 +41,10 @@ jobs:
     steps:
       - name: Checkout main
         uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Checkout pinned native source with standalone Git metadata
         shell: bash
         run: |
@@ -53,6 +57,8 @@ jobs:
           git -C "$native_dir" fetch --depth=1 origin "$NATIVE_SOURCE_COMMIT"
           git -C "$native_dir" checkout --detach FETCH_HEAD
           test "$(git -C "$native_dir" rev-parse HEAD)" = "$NATIVE_SOURCE_COMMIT"
+      - name: Pin Meson dependency commits
+        run: python "$GITHUB_WORKSPACE/scripts/pin-native-dependencies.py" "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
       - name: Install runner utilities
         run: |
           sudo apt-get update
@@ -71,6 +77,10 @@ jobs:
     steps:
       - name: Checkout main
         uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Checkout pinned native source with standalone Git metadata
         shell: pwsh
         run: |
@@ -91,14 +101,18 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $actual -ne $env:NATIVE_SOURCE_COMMIT) {
             throw "Native source commit mismatch. Expected $env:NATIVE_SOURCE_COMMIT; got $actual"
           }
+      - name: Pin Meson dependency commits
+        shell: pwsh
+        run: |
+          python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin-native-dependencies.py") (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
       - name: Install MSYS2 build environment
         working-directory: vendor/pokeplatinum-native
         run: .\Install_MSys2.ps1
         shell: powershell
       - name: Compile native Windows target
         working-directory: vendor/pokeplatinum-native
-        run: .\Launch_Msys2.ps1 "make win64"
+        run: .\Launch_MSys2.ps1 "make win64"
         shell: powershell
 
-# CI compiles source and tests the local importer only. It does not upload
-# executables, ROMs, extracted NARC files, or compiled game assets.
+# CI compiles source and tests local maintenance tools only. It intentionally
+# does not upload executables, ROMs, extracted NARC files, or game assets.
