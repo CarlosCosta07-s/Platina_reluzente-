@@ -58,9 +58,9 @@ A auditoria Android depende de a configuração do build já ter baixado o subpr
 
 Na CI, o teste abaixo abre o executável num display X11 virtual com OpenGL por software, a partir de um diretório de trabalho temporário vazio, e exige que uma janela visível `libntr Application` seja criada e que o processo permaneça ativo por 15 segundos:
 
-    bash scripts/smoke-test-native-startup.sh vendor/pokeplatinum-native/build_linux/pokeplatinum/main 15
+    bash scripts/smoke-test-native-startup.sh vendor/pokeplatinum-native/build_linux/pokeplatinum/pokeplatinum.AppImage 15
 
-O teste executa o binário pelo caminho absoluto original enquanto usa o diretório temporário como diretório de trabalho. Isso preserva a resolução de bibliotecas nativas adjacentes ao executável sem disponibilizar arquivos de jogo ao teste. Nenhuma ROM é fornecida e gameplay não é testado. A confirmação real depende de abrir o executável a partir de `build_linux/pokeplatinum`, selecionar a ROM local USA Rev. 1 na primeira abertura e confirmar a tela inicial. O teste pré-ROM não substitui essa etapa.
+O teste usa o `pokeplatinum.AppImage`, que incorpora o runtime de desktop, em vez de executar o ELF `main` isolado fora do seu ambiente de distribuição. O AppImage é chamado pelo caminho absoluto enquanto o diretório de trabalho fica temporariamente vazio; assim o teste não depende de uma cópia da ROM nem dos arquivos de jogo extraídos no diretório atual. Nenhuma ROM é fornecida e gameplay não é testado. A confirmação real depende de abrir o executável a partir de `build_linux/pokeplatinum`, selecionar a ROM local USA Rev. 1 na primeira abertura e confirmar a tela inicial. O teste pré-ROM não substitui essa etapa.
 
 
 Depois de compilar, o verificador compara todos os caminhos do manifesto upstream `platinum.us/filesys.csv` com os arquivos de origem produzidos pelo build e os arquivos copiados para a pasta runtime. Ele detecta arquivos ausentes, cópias com tamanho/hash divergente e os arquivos de animação obrigatórios:
