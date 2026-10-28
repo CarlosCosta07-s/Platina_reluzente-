@@ -46,6 +46,31 @@ def add_target_option(path: Path) -> bool:
     return changed
 
 
+
+def patch_android_copy_script(root: Path) -> list[str]:
+    """Allow the upstream copy script to stage assets without running linuxdeploy."""
+    script = root / "tools" / "scripts" / "copy_pc_files.sh"
+    if not script.is_file():
+        if (root / "tools" / "scripts").is_dir():
+            raise PatchError("Android runtime staging requires tools/scripts/copy_pc_files.sh")
+        return []
+    text = script.read_text(encoding="utf-8")
+    guard = 'if [[ -f "$BUILDDIR/.android-target" ]]; then'
+    if guard in text:
+        return []
+    marker = 'if [[ "$4" == "-nx" ]]; then'
+    if text.count(marker) != 1:
+        raise PatchError("copy_pc_files.sh: expected exactly one host packaging branch")
+    android_guard = (
+        guard + "\n"
+        '    echo "Android runtime assets staged; skipping host executable packaging."\n'
+        "    exit 0\n"
+        "fi\n\n"
+    )
+    script.write_text(text.replace(marker, android_guard + marker, 1), encoding="utf-8")
+    return ["parent copy script: skip host packaging for Android runtime-data target"]
+
+
 def patch_root(root: Path) -> list[str]:
     changes = []
     if add_target_option(root / "meson.options"):
@@ -138,6 +163,7 @@ trainer_ai_ss = custom_target("""
     if changed:
         changes.append("parent Meson: enable PIC for Android")
     path.write_text(text, encoding="utf-8")
+    changes.extend(patch_android_copy_script(root))
     return changes
 
 
@@ -699,6 +725,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/include/nitro/wm/common/wm.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
         "subprojects/libntr/libraries/sim/src/sim_main.cpp",
+        "tools/scripts/copy_pc_files.sh",
         "subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp",
         "subprojects/libntr/libraries/sim/src/sim_g2.cpp",
         "subprojects/libntr/libraries/sim/src/g3_draw.cpp",

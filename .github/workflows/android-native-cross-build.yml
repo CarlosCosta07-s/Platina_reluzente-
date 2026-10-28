@@ -182,6 +182,27 @@ jobs:
           cp "$ENET_ANDROID_LIBDIR/libenet.a" android-native-artifact/
           cp "$RUNNER_TEMP/android-build-preparation.json" android-native-artifact/
           cp "$RUNNER_TEMP/android-gles-report.json" android-native-artifact/
+      - name: Build Android runtime data bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          build="$RUNNER_TEMP/build_android"
+          touch "$build/.android-target"
+          # The upstream asset-copy target expects a file named "main";
+          # the Android product itself is the shared library libmain.so.
+          cp "$build/libmain.so" "$build/main"
+          # This target builds the same resource tree used by desktop, then
+          # the Android guard prevents host AppImage/linuxdeploy packaging.
+          meson compile -C "$build" --verbose
+          runtime="$build/pokeplatinum"
+          test -d "$runtime"
+          test -s "$runtime/header.bin"
+          test -s "$runtime/firmware.bin"
+          mkdir -p android-native-artifact/runtime-data
+          cp -a "$runtime/." android-native-artifact/runtime-data/
+          rm -f android-native-artifact/runtime-data/main
+          printf '%s\n' "$GITHUB_SHA" > android-native-artifact/runtime-data/build-version.txt
+          test -s android-native-artifact/runtime-data/build-version.txt
       - name: Set up JDK for Android APK packaging
         uses: actions/setup-java@v4
         with:
@@ -274,6 +295,7 @@ jobs:
             echo
             echo "Expected ABI: arm64-v8a; minimum Android API: 24."
             echo "On success, this job packages an experimental arm64-v8a APK with SDLActivity and the native libraries."
+            echo "The native artifact includes the shared runtime-data tree produced by the upstream asset-copy target."
             echo "The APK is a native packaging milestone only; ROM selection/data extraction and on-device gameplay remain unverified."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload ARM64 native cross-build artifact

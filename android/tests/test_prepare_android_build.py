@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -31,6 +31,29 @@ endif
 
 
 class AndroidMesonPatchTests(unittest.TestCase):
+    def test_copy_script_skips_host_packaging_only_after_staging_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "tools" / "scripts" / "copy_pc_files.sh"
+            script.parent.mkdir(parents=True)
+            script.write_text(
+                'cp "$BUILDDIR/main" "$OUTPUTDIR/main"\n'
+                'if [[ "$4" == "-nx" ]]; then\n'
+                '  echo switch packaging\n'
+                'else\n'
+                '  echo desktop packaging\n'
+                'fi\n',
+                encoding="utf-8",
+            )
+            changes = patch_android_copy_script(root)
+            result = script.read_text(encoding="utf-8")
+            guard = 'if [[ -f "$BUILDDIR/.android-target" ]]; then'
+            self.assertEqual(1, len(changes))
+            self.assertIn(guard, result)
+            self.assertLess(result.index('cp "$BUILDDIR/main"'), result.index(guard))
+            self.assertLess(result.index(guard), result.index('if [[ "$4" == "-nx" ]]'))
+            self.assertEqual([], patch_android_copy_script(root))
+
     def test_copyback_includes_nested_libntr_meson_files_patched_for_pic(self):
         with tempfile.TemporaryDirectory() as tmp:
             staged = Path(tmp)
