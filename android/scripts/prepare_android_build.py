@@ -71,6 +71,18 @@ def patch_android_copy_script(root: Path) -> list[str]:
     return ["parent copy script: skip host packaging for Android runtime-data target"]
 
 
+
+def stage_android_copy_script(root: Path, staged: Path) -> None:
+    """Copy the host asset-packaging script into the isolated Android patch tree."""
+    relative = Path("tools/scripts/copy_pc_files.sh")
+    source = root / relative
+    if not source.is_file():
+        raise PatchError("Android runtime staging requires tools/scripts/copy_pc_files.sh")
+    target = staged / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
 def patch_root(root: Path) -> list[str]:
     changes = []
     if add_target_option(root / "meson.options"):
@@ -671,6 +683,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         "libntrdwc": ("nitrodwc_args", True),
     }
     required = [root / "meson.options", root / "meson.build",
+                root / "tools/scripts/copy_pc_files.sh",
                 libntr / "meson.options", libntr / "meson.build"]
     required.extend(root / "subprojects" / name / "meson.options" for name in sdk_projects)
     missing = [str(p) for p in required if not p.is_file()]
@@ -687,6 +700,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         # The Android PIC patcher also updates static-library targets outside
         # the top-level Meson file; stage the project-owned lobby directory.
         shutil.copytree(root / "lib" / "ppwlobby", staged / "lib" / "ppwlobby")
+        stage_android_copy_script(root, staged)
         changes = patch_root(staged)
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -31,6 +31,25 @@ endif
 
 
 class AndroidMesonPatchTests(unittest.TestCase):
+    def test_stages_android_copy_script_before_patching(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "upstream"
+            staged = Path(tmp) / "staged"
+            source = root / "tools" / "scripts" / "copy_pc_files.sh"
+            source.parent.mkdir(parents=True)
+            staged.mkdir(parents=True)
+            content = 'cp "$BUILDDIR/main" "$OUTPUTDIR/main"\nif [[ "$4" == "-nx" ]]; then\n  echo switch packaging\nfi\n'
+            source.write_text(content, encoding="utf-8")
+
+            stage_android_copy_script(root, staged)
+
+            staged_script = staged / "tools" / "scripts" / "copy_pc_files.sh"
+            self.assertEqual(content, staged_script.read_text(encoding="utf-8"))
+            changes = patch_android_copy_script(staged)
+            self.assertEqual(1, len(changes))
+            self.assertIn('if [[ -f "$BUILDDIR/.android-target" ]]; then',
+                          staged_script.read_text(encoding="utf-8"))
+
     def test_copy_script_skips_host_packaging_only_after_staging_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
