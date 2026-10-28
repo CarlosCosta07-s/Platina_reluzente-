@@ -70,6 +70,13 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
             self.assertFalse(prepare_native_runtime(root))
 
+    def test_android_rom_open_failure_does_not_fall_back_to_packaged_header(self):
+        android_branch, desktop_branch = PATCHED_HEADER_LOAD.split("#else", 1)
+        self.assertIn("Unable to open imported Android ROM", android_branch)
+        self.assertIn("return 1;", android_branch)
+        self.assertNotIn('fopen("header.bin", "rb")', android_branch)
+        self.assertIn('fopen("header.bin", "rb")', desktop_branch)
+
     def test_upgrades_legacy_android_runtime_path_patch_without_duplicate_chdir(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
