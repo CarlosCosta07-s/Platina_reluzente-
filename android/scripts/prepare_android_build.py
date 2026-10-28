@@ -994,9 +994,14 @@ def patch_libntr(root: Path) -> list[str]:
         "#include <unistd.h>\n"
         "#endif"
     )
-    sim_source, include_changed = replace_once(
-        sim_source, include_old, include_new, "Android SDL internal-storage declarations"
-    )
+    # prepare_native_runtime.py may already have added these headers. Avoid
+    # injecting a duplicate block when both preparation steps run in sequence.
+    if "#include <SDL2/SDL_system.h>" in sim_source and "#include <unistd.h>" in sim_source:
+        include_changed = False
+    else:
+        sim_source, include_changed = replace_once(
+            sim_source, include_old, include_new, "Android SDL internal-storage declarations"
+        )
     if include_changed:
         changes.append("libntr simulator: include Android internal-storage API")
 
@@ -1016,9 +1021,14 @@ def patch_libntr(root: Path) -> list[str]:
   // TODO: This broke the linux AppImage build
   //chdir(SDL_GetBasePath());
 #endif"""
-    sim_source, cwd_changed = replace_once(
-        sim_source, cwd_old, cwd_new, "Android runtime working directory"
-    )
+    # The shared native-runtime preparer inserts this at main() entry. The
+    # fallback here supports standalone Android preparation; do not chdir twice.
+    if "const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();" in sim_source:
+        cwd_changed = False
+    else:
+        sim_source, cwd_changed = replace_once(
+            sim_source, cwd_old, cwd_new, "Android runtime working directory"
+        )
     if cwd_changed:
         changes.append("libntr simulator: use the extracted runtime directory on Android")
 
@@ -1034,7 +1044,13 @@ def patch_libntr(root: Path) -> list[str]:
         "  }\n"
         "#endif"
     )
-    if rom_old in sim_source:
+    # prepare_native_runtime.py now handles the Android header reader before
+    # this patcher runs. Recognize that complete form instead of inserting a
+    # second Android block into the desktop-only #else branch.
+    android_rom_marker = 'std::string(androidInternalStoragePath) + "/roms/current.nds"'
+    if android_rom_marker in sim_source:
+        rom_changed = False
+    elif rom_old in sim_source:
         rom_new = (
             desktop_rom_marker + "\n"
             + android_rom_fallback + "\n"
