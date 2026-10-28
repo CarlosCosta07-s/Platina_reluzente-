@@ -38,7 +38,11 @@ jobs:
 
       - name: Validate native Linux smoke-test shell syntax
         shell: bash
-        run: bash -n scripts/smoke-test-native-startup.sh scripts/build-native.sh
+        run: |
+          set -Eeuo pipefail
+          for script in scripts/smoke-test-native-startup.sh scripts/build-native.sh; do
+            bash -n "$script"
+          done
 
   linux:
     name: Linux x86-64 compile
