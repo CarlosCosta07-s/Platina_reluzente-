@@ -425,6 +425,9 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         shutil.copy2(root / "meson.options", staged / "meson.options")
         shutil.copy2(root / "meson.build", staged / "meson.build")
         shutil.copytree(root / "subprojects", staged / "subprojects")
+        # The Android PIC patcher also updates static-library targets outside
+        # the top-level Meson file; stage the project-owned lobby directory.
+        shutil.copytree(root / "lib" / "ppwlobby", staged / "lib" / "ppwlobby")
         changes = patch_root(staged)
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
