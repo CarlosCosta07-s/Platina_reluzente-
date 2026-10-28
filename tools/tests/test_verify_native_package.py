@@ -70,7 +70,7 @@ class VerifyNativePackageTests(unittest.TestCase):
     def test_mismatched_copy_hash_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             build, package, manifest = _tree(Path(tmp))
-            (package / "icons" / "test.dat").write_bytes(b"modified")
+            (package / "icons" / "test.dat").write_bytes(b"ICON")
             report = verify_native_package(build, package, manifest)
             self.assertFalse(report["ready"])
             self.assertTrue(report["hash_mismatches"])
