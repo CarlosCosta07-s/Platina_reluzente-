@@ -259,6 +259,12 @@ libsim = library('sim',
 
             result = fnd_file.read_text(encoding="utf-8")
             self.assertIn("pic: build_target == 'nx' or build_target == 'android'", result)
+            meson_result = (root / "meson.build").read_text(encoding="utf-8")
+            self.assertIn("android_include", meson_result)
+            self.assertIn("language: ['c', 'cpp']", meson_result)
+            second = patch_sdk_project(root, "libntrsystem", "nitrosystem_args")
+            self.assertFalse(any("expose shared SDL2 headers" in item for item in second))
+            self.assertEqual(1, meson_result.count("android_include"))
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:

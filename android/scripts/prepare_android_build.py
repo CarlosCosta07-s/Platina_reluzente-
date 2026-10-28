@@ -213,6 +213,19 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
         )
         text = text[:match.end()] + addition + text[match.end():]
         changes.append(name + ": add Android AArch64 SDK flags")
+    # All NitroSDK subprojects include the shared thread header which references
+    # SDL2/SDL_thread.h. Provide the staged SDL headers to each subproject;
+    # the simulator-only include path does not propagate across Meson projects.
+    include_marker = "add_project_arguments('-I' + (meson.current_source_dir() / '../libntr/libraries/sim/android_include'), language: ['c', 'cpp'])"
+    if include_marker not in text:
+        android_block = (
+            "\n\nif (build_target == 'android')\n"
+            "    " + include_marker + "\n"
+            "endif\n"
+        )
+        text += android_block
+        changes.append(name + ": expose shared SDL2 headers to Android compile")
+
     path.write_text(text, encoding="utf-8")
 
     # Other NitroSDK subprojects contain their own static libraries. They are
