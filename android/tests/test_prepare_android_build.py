@@ -90,6 +90,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g3_CommandProcessor.cpp", paths)
             self.assertIn("subprojects/libntr/libraries/sim/src/sim_g2.cpp", paths)
             self.assertIn("subprojects/libntr/include/nitro/types.h", paths)
+            self.assertIn("subprojects/libntr/include/nitro/os/common/thread.h", paths)
             self.assertIn("subprojects/libntr/include/nitro/mb/mb_fake_child.h", paths)
             self.assertIn("subprojects/libntr/include/nitro/wm/common/wm.h", paths)
             self.assertIn("subprojects/libntr/libraries/card/include/card_rom.h", paths)
@@ -161,6 +162,13 @@ endif
                 encoding="utf-8")
             types_dir = root / "include" / "nitro"
             types_dir.mkdir(parents=True)
+            thread_dir = types_dir / "os" / "common"
+            thread_dir.mkdir(parents=True)
+            thread_path = thread_dir / "thread.h"
+            thread_path.write_text(
+                "#ifdef SDK_PORT\n#include <SDL2/SDL_thread.h>\n#endif\n",
+                encoding="utf-8",
+            )
             (types_dir / "types.h").write_text(
                 "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
                 "typedef unsigned int u32;\n#else\ntypedef unsigned long u32;\n#endif\n"
@@ -328,6 +336,12 @@ libsim = library('sim',
             self.assertIn("cache_buf[CARD_ROM_PAGE_SIZE] ATTRIBUTE_ALIGN(32)", rom_header)
             include_arg = "add_project_arguments('-I' + join_paths(meson.current_source_dir(), 'libraries/sim/android_include')"
             self.assertIn(include_arg, libntr_meson)
+            thread_result = thread_path.read_text(encoding="utf-8")
+            self.assertIn(
+                "#if defined(SDK_BUILD_ANDROID)\n#include <SDL_thread.h>\n#else\n#include <SDL2/SDL_thread.h>\n#endif",
+                thread_result,
+            )
+            self.assertIn("libntr: use directly staged SDL_thread.h on Android", changes)
             self.assertLess(libntr_meson.index(include_arg), libntr_meson.index("if (build_target == 'nx')"))
             self.assertNotIn("project('libntr', 'c', 'cpp', 'nasm'", libntr_meson)
             self.assertIn("add_languages('nasm', required: true)", libntr_meson)

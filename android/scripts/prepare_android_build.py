@@ -451,6 +451,30 @@ def patch_libntr(root: Path) -> list[str]:
         if changed:
             changes.append("libntr: expose staged SDL2/ENet headers before target declarations")
 
+    # Android's SDL headers are staged both as SDL2/SDL_thread.h (for legacy
+    # call sites) and as SDL_thread.h (for the shared Nitro thread header).
+    # Select the direct include only on Android; desktop behavior is unchanged.
+    thread_header_path = root / "include" / "nitro" / "os" / "common" / "thread.h"
+    thread_header = thread_header_path.read_text(encoding="utf-8")
+    old_sdl_thread_include = "#ifdef SDK_PORT\n#include <SDL2/SDL_thread.h>\n#endif"
+    new_sdl_thread_include = (
+        "#ifdef SDK_PORT\n"
+        "#if defined(SDK_BUILD_ANDROID)\n"
+        "#include <SDL_thread.h>\n"
+        "#else\n"
+        "#include <SDL2/SDL_thread.h>\n"
+        "#endif\n"
+        "#endif"
+    )
+    if new_sdl_thread_include not in thread_header:
+        thread_header, thread_changed = replace_once(
+            thread_header, old_sdl_thread_include, new_sdl_thread_include,
+            "libntr Android SDL thread header",
+        )
+        if thread_changed:
+            changes.append("libntr: use directly staged SDL_thread.h on Android")
+    thread_header_path.write_text(thread_header, encoding="utf-8")
+
     # NitroSDK's public typedefs must remain fixed-width on LP64 hosts.
     # Upstream classifies u32/s32 by Linux/NX, which makes unsigned long
     # 64-bit on Android AArch64. Add Android to the 32-bit typedef branches,
@@ -987,7 +1011,10 @@ def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     target = root / "libraries/sim/android_include"
     if target.exists():
         shutil.rmtree(target)
-    (target / "SDL2").mkdir(parents=True)
+    target.mkdir(parents=True)
+    # Keep both SDL2/SDL_thread.h and SDL_thread.h available to legacy and
+    # common Nitro headers that use different include spellings.
+    shutil.copytree(sdl_inc, target, dirs_exist_ok=True)
     shutil.copytree(sdl_inc, target / "SDL2", dirs_exist_ok=True)
     shutil.copytree(enet_inc, target / "enet")
 
@@ -1062,6 +1089,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "subprojects/libntr/meson.options",
         "subprojects/libntr/meson.build",
         "subprojects/libntr/include/nitro/types.h",
+        "subprojects/libntr/include/nitro/os/common/thread.h",
         "subprojects/libntr/include/nitro/mb/mb_fake_child.h",
         "subprojects/libntr/include/nitro/wm/common/wm.h",
         "subprojects/libntr/libraries/card/include/card_rom.h",
