@@ -101,7 +101,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=24 \
             -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$RUNNER_TEMP/sdl2-lib" \
-            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF
           cmake --build "$build" --target SDL2 --parallel 2
           test -s "$RUNNER_TEMP/sdl2-lib/libSDL2.so"
@@ -156,8 +156,8 @@ jobs:
           b_staticpic = true
           c_args = ['-fPIC']
           cpp_args = ['-fPIC', '-Wno-register']
-          c_link_args = ['-Wl,-z,max-page-size=16384']
-          cpp_link_args = ['-Wl,-z,max-page-size=16384']
+          c_link_args = ['-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384']
+          cpp_link_args = ['-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384']
           EOF
           meson setup "$RUNNER_TEMP/build_android" "$NATIVE_SOURCE" \
             --cross-file "$RUNNER_TEMP/android-arm64.ini" \
@@ -184,8 +184,10 @@ jobs:
           grep -q 'AArch64' "$RUNNER_TEMP/libmain-elf-header.txt"
           # Every packaged ELF must be compatible with Android's 16 KB page-size
           # devices; catch a dependency accidentally linked with 4 KB LOAD segments.
-          check_16k_load_segments() {
-            local so="$1" alignments alignment
+          check_16k_elf_alignment() {
+            local so="$1" alignments alignment relro_row
+            local relro_type relro_offset relro_vaddr relro_paddr relro_filesz relro_memsz relro_flags relro_align
+            local relro_end
             alignments="$(llvm-readelf -lW "$so" | awk '$1 == "LOAD" { print $NF }')"
             if [[ -z "$alignments" ]]; then
               echo "No PT_LOAD segments found in $so" >&2
@@ -197,10 +199,22 @@ jobs:
                 return 1
               fi
             done <<< "$alignments"
+
+            relro_row="$(llvm-readelf -lW "$so" | awk '$1 == "GNU_RELRO" { print $1, $2, $3, $4, $5, $6, $7, $8 }')"
+            if [[ -z "$relro_row" ]]; then
+              echo "No GNU_RELRO segment found in $so" >&2
+              return 1
+            fi
+            read -r relro_type relro_offset relro_vaddr relro_paddr relro_filesz relro_memsz relro_flags relro_align <<< "$relro_row"
+            relro_end=$((relro_vaddr + relro_memsz))
+            if (( relro_end % 16384 != 0 )); then
+              echo "GNU_RELRO end is not 16 KB aligned in $so (vaddr=$relro_vaddr, memsz=$relro_memsz)" >&2
+              return 1
+            fi
           }
-          check_16k_load_segments "$lib"
-          check_16k_load_segments "$SDL2_ANDROID_LIBDIR/libSDL2.so"
-          check_16k_load_segments "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
+          check_16k_elf_alignment "$lib"
+          check_16k_elf_alignment "$SDL2_ANDROID_LIBDIR/libSDL2.so"
+          check_16k_elf_alignment "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
           # SDLActivity resolves SDL_main from libmain.so; fail before APK packaging
           # if the Android-specific entrypoint was not exported by the native linker.
           llvm-nm -D --defined-only "$lib" | grep -Eq '[[:space:]]SDL_main([[:space:]]|$)'
