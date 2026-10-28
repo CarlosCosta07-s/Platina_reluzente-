@@ -46,7 +46,6 @@ class AndroidMesonPatchTests(unittest.TestCase):
                 "SDL_stdinc.h", "SDL_system.h", "SDL_thread.h", "SDL_version.h",
             ):
                 (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
-                (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
             (enet_include / "enet.h").write_text("/* fixture */\n", encoding="utf-8")
 
             stage_headers(root, sdl, enet)
@@ -70,7 +69,6 @@ class AndroidMesonPatchTests(unittest.TestCase):
                 "SDL.h", "SDL_config.h", "SDL_main.h", "SDL_revision.h",
                 "SDL_stdinc.h", "SDL_system.h", "SDL_version.h",
             ):
-                (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
                 (sdl_include / name).write_text("/* fixture */\n", encoding="utf-8")
             (enet_include / "enet.h").write_text("/* fixture */\n", encoding="utf-8")
 
