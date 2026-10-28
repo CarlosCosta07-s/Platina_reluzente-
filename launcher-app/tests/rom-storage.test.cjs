@@ -67,7 +67,7 @@ const common = {
   toBase64: (buffer) => Buffer.from(buffer).toString('base64')
 };
 
-test('replaces the ROM only after all chunks have been written', async () => {
+test('writes Base64 chunks as binary and replaces the ROM only after completion', async () => {
   const { persistRomAtomically } = await loadPersistence();
   const oldRom = Buffer.from('previous-valid-rom');
   const newRom = Buffer.from('new-rom-data-123');
