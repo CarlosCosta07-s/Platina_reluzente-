@@ -84,8 +84,31 @@ jobs:
         run: ./drun.sh make linux
       - name: Verify complete Linux runtime package
         run: python "$GITHUB_WORKSPACE/scripts/verify_native_package.py" --build-dir "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux" --package-dir "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux/pokeplatinum" --filesys-csv "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/platinum.us/filesys.csv"
+      - name: Locate generated Linux AppImage
+        id: linux_appimage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          build_root="$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux"
+          mapfile -t appimages < <(find "$build_root" -maxdepth 4 -type f -name 'pokeplatinum-x86_64.AppImage' -print)
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected exactly one pokeplatinum-x86_64.AppImage under $build_root; found ${#appimages[@]}." >&2
+            find "$build_root" -maxdepth 4 -type f -name '*.AppImage' -print || true
+            exit 1
+          fi
+          appimage="${appimages[0]}"
+          if [[ ! -x "$appimage" ]]; then
+            echo "Generated AppImage is not executable: $appimage" >&2
+            ls -l -- "$appimage" || true
+            exit 1
+          fi
+          printf 'path=%s\n' "$appimage" >> "$GITHUB_OUTPUT"
+          echo "AppImage found: $appimage"
+
       - name: Smoke-test Linux first-launch UI without a ROM
-        run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux/pokeplatinum/pokeplatinum-x86_64.AppImage" 15
+        env:
+          APPIMAGE_PATH: ${{ steps.linux_appimage.outputs.path }}
+        run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$APPIMAGE_PATH" 15
       - name: Audit Android graphics compatibility requirements
         run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Restore Meson dependency references

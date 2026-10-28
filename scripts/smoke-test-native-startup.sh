@@ -7,7 +7,7 @@ set -Eeuo pipefail
 # that may not recognize APPIMAGE_EXTRACT_AND_RUN.
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Uso: $0 /caminho/para/build_linux/pokeplatinum/pokeplatinum-x86_64.AppImage [segundos-ativos]" >&2
+  echo "Uso: $0 /caminho/para/pokeplatinum-x86_64.AppImage [segundos-ativos]" >&2
   exit 2
 fi
 
