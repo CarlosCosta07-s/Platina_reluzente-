@@ -11,15 +11,15 @@ O foco inicial é compilar e executar a base nativa, sem otimização prematura.
 - [x] Documentar o escopo legal, a política de assets e a estratégia de localização.
 - [x] Implementar um importador local com allowlist explícita de recursos NARC.
 - [x] Adicionar testes sintéticos do importador, do fixador de dependências e da auditoria gráfica.
-- [x] Confirmar compilação Linux x86-64 na CI em 28/10/2026 ([execução 40625184953](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40625184953)).
-- [ ] Confirmar compilação Windows x64 bem-sucedida na CI.
+- [x] Confirmar compilação Linux x86-64 e Windows x64 na CI em 28/10/2026 ([execução 40627263360](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40627263360)).
+- [x] Adicionar verificador local dos dados extraídos do runtime e dos sete NARC allowlisted.
 
 > O sucesso da compilação Linux prova que o alvo nativo é compilável pelo pipeline; não prova que o jogo inicia nem que seja jogável.
 
 ## Marco 1 — inicialização desktop reproduzível
 
 - [x] Build limpo Linux x86-64 na CI, sem artefatos de build preexistentes.
-- [ ] Build limpo Windows x64 na CI.
+- [x] Build limpo Windows x64 na CI.
 - [ ] Reproduzir as instruções numa máquina limpa.
 - [ ] Confirmar inicialização com uma cópia local válida da ROM USA Rev. 1.
 - [ ] Confirmar que logs e erros de carregamento identificam os problemas.

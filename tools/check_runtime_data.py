@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""Check local data extracted by the native port before launching the game.
+
+This tool checks only local runtime files. It never reads or copies a ROM,
+never downloads game data, and never uploads any files.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+try:
+    from import_localization import TARGET_FILES
+except ImportError:
+    from tools.import_localization import TARGET_FILES
+
+
+CORE_FILES = {
+    "header.bin": 0x4000,
+    "arm9.bin": 1,
+    "arm7.bin": 1,
+    "arm9ovt.bin": 1,
+    "arm7ovt.bin": 1,
+    "banner.bin": 1,
+    "fnt.bin": 8,
+    "fat.bin": 8,
+    "rsasig.bin": 1,
+}
+EXECUTABLE_CANDIDATES = ("main", "main.exe", "pokeplatinum", "pokeplatinum.exe")
+OVERLAY_PATTERNS = {
+    "overlay9": re.compile(r"^overlay9_\d+\.bin$"),
+    "overlay7": re.compile(r"^overlay7_\d+\.bin$"),
+}
+
+
+class RuntimeDataError(ValueError):
+    """Raised if the selected directory does not look like an extracted runtime."""
+
+
+def _validate_narc(path: Path) -> tuple[bool, str]:
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        return False, f"não foi possível ler: {exc}"
+    if len(raw) < 16:
+        return False, "arquivo menor que o cabeçalho NARC"
+    if raw[:8] != b"NARC\xfe\xff\x00\x01":
+        return False, "assinatura/versão/endian NARC inválidos"
+
+    declared_size = int.from_bytes(raw[8:12], "little")
+    header_size = int.from_bytes(raw[12:14], "little")
+    chunk_count = int.from_bytes(raw[14:16], "little")
+    if declared_size != len(raw):
+        return False, f"tamanho real {len(raw)} difere do tamanho NARC declarado {declared_size}"
+    if header_size != 16:
+        return False, f"tamanho do cabeçalho NARC inválido: {header_size}"
+    if chunk_count < 1 or chunk_count > 32:
+        return False, f"contagem de blocos inválida: {chunk_count}"
+
+    cursor = 16
+    identifiers: set[bytes] = set()
+    for _ in range(chunk_count):
+        if cursor + 8 > declared_size:
+            return False, "lista de blocos truncada"
+        block_id = raw[cursor:cursor + 4]
+        block_size = int.from_bytes(raw[cursor + 4:cursor + 8], "little")
+        if block_id not in (b"BTAF", b"BTNF", b"GMIF") or block_id in identifiers:
+            return False, f"bloco inválido/duplicado: {block_id!r}"
+        if block_size < 8 or cursor + block_size > declared_size:
+            return False, f"tamanho inválido no bloco {block_id!r}"
+        identifiers.add(block_id)
+        cursor += block_size
+
+    if not {b"BTAF", b"BTNF", b"GMIF"}.issubset(identifiers):
+        return False, "faltam blocos essenciais BTAF/BTNF/GMIF"
+    return True, "NARC válido"
+
+
+def inspect_runtime_directory(
+    runtime_dir: str | Path,
+    *,
+    require_localized_resources: bool = False,
+) -> dict[str, object]:
+    root = Path(runtime_dir).expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        raise RuntimeDataError(f"diretório de runtime não encontrado: {root}")
+
+    missing: list[str] = []
+    invalid: list[dict[str, str]] = []
+    checked: list[dict[str, object]] = []
+
+    executable = next(
+        (name for name in EXECUTABLE_CANDIDATES if (root / name).is_file()),
+        None,
+    )
+    if executable is None:
+        missing.append("executável nativo (esperado main/main.exe no diretório indicado)")
+    else:
+        checked.append({"path": executable, "status": "present"})
+
+    for name, minimum_size in CORE_FILES.items():
+        path = root / name
+        if not path.is_file():
+            missing.append(name)
+            continue
+        size = path.stat().st_size
+        if size < minimum_size:
+            invalid.append({
+                "path": name,
+                "problem": f"tamanho {size} menor que o mínimo {minimum_size}",
+            })
+        else:
+            checked.append({"path": name, "status": "present", "size_bytes": size})
+
+    for directory, pattern in OVERLAY_PATTERNS.items():
+        overlay_dir = root / directory
+        if not overlay_dir.is_dir():
+            missing.append(f"{directory}/")
+            continue
+        overlays = sorted(
+            path for path in overlay_dir.iterdir()
+            if path.is_file() and pattern.fullmatch(path.name)
+        )
+        if not overlays:
+            missing.append(f"{directory}/overlay*_*.bin")
+            continue
+        checked.append({
+            "path": f"{directory}/",
+            "status": "present",
+            "overlay_count": len(overlays),
+        })
+        for overlay in overlays:
+            if overlay.stat().st_size == 0:
+                invalid.append({"path": overlay.relative_to(root).as_posix(), "problem": "overlay vazio"})
+
+    localization_report: list[dict[str, str | int]] = []
+    if require_localized_resources:
+        for relative in TARGET_FILES:
+            path = root.joinpath(*relative.parts)
+            if not path.is_file():
+                missing.append(relative.as_posix())
+                continue
+            valid, message = _validate_narc(path)
+            if not valid:
+                invalid.append({"path": relative.as_posix(), "problem": message})
+            else:
+                localization_report.append({
+                    "path": relative.as_posix(),
+                    "size_bytes": path.stat().st_size,
+                })
+
+    ready = not missing and not invalid
+    return {
+        "runtime_directory": str(root),
+        "ready_for_launch_attempt": ready,
+        "executable": executable,
+        "missing": missing,
+        "invalid": invalid,
+        "checked": checked,
+        "localized_resources_required": require_localized_resources,
+        "localized_resources_valid": localization_report,
+        "notes": (
+            "A aprovação só confirma arquivos locais e estruturas básicas; ela não prova "
+            "que o aplicativo inicia, renderiza corretamente ou é jogável."
+        ),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Verifica recursos locais do runtime do porte sem ler ou enviar uma ROM."
+    )
+    parser.add_argument(
+        "--runtime-dir",
+        required=True,
+        help="Diretório de trabalho do executável nativo, por exemplo build_linux ou build_win64.",
+    )
+    parser.add_argument(
+        "--require-localized-resources",
+        action="store_true",
+        help="Também exige e valida os sete NARC localizados permitidos.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Imprime um relatório JSON para diagnósticos.",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        report = inspect_runtime_directory(
+            args.runtime_dir,
+            require_localized_resources=args.require_localized_resources,
+        )
+    except (OSError, RuntimeDataError) as exc:
+        print(f"Erro de validação do runtime: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        status = "PRONTO PARA TENTAR INICIAR" if report["ready_for_launch_attempt"] else "DADOS INCOMPLETOS"
+        print(f"{status}: {report['runtime_directory']}")
+        print(f"Executável: {report['executable'] or 'ausente'}")
+        if report["missing"]:
+            print("Ausentes:")
+            for item in report["missing"]:
+                print(f"  - {item}")
+        if report["invalid"]:
+            print("Inválidos:")
+            for item in report["invalid"]:
+                print(f"  - {item['path']}: {item['problem']}")
+        if report["localized_resources_required"]:
+            print(
+                f"NARC localizados válidos: {len(report['localized_resources_valid'])}/"
+                f"{len(TARGET_FILES)}"
+            )
+        print(report["notes"])
+    return 0 if report["ready_for_launch_attempt"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

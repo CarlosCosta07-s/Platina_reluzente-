@@ -7,8 +7,7 @@ O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em 
 ## Estado real do projeto
 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
-- **Linux x86-64:** a compilação nativa passou no GitHub Actions em 28 de outubro de 2026, na execução [40625184953](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40625184953). Isso valida a compilação do alvo, não a inicialização nem a jogabilidade.
-- **Windows x64:** a compilação ainda não foi confirmada como concluída com sucesso na última verificação. A CI precisa terminar o job para podermos marcar esse alvo como aprovado.
+- **Linux x86-64 e Windows x64:** ambos os alvos passaram na execução [40627263360 do GitHub Actions](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40627263360), em 28 de outubro de 2026. Isso valida a compilação dos dois alvos, não a inicialização nem a jogabilidade.
 - **Android:** ainda não implementado nem validado. A auditoria encontrou um pedido de OpenGL 4.2 core, shaders GLSL 420 core e operações que precisam de adaptação para OpenGL ES. A primeira hipótese é SDL2 + OpenGL ES 3.2; isso continua sendo trabalho futuro.
 - **Versão original:** o ponto de referência inicial é Pokémon Platinum USA Rev. 1, identificado no upstream por SHA-1 0862ec35b24de5c7e2dcb88c9eea0873110d755c.
 - **Português brasileiro:** a variante PT-BR fornecida difere em dez entradas FAT em relação à ROM USA. O importador agora permite sete recursos NARC localizados, mas a execução do jogo com esses dados ainda precisa ser validada.
@@ -73,12 +72,12 @@ Após compilar e iniciar o porte uma vez para preparar os dados locais, feche o 
 
     python3 tools/import_localization.py \
       --rom "/caminho/local/PK Plat [PT-BR].nds" \
-      --destination "vendor/pokeplatinum-native/build_linux/pokeplatinum" \
+      --destination "vendor/pokeplatinum-native/build_linux" \
       --force
 
-Em Windows, substitua o destino pelo diretório de recursos correspondente ao build build_win64. A ferramenta modifica apenas os sete arquivos allowlisted no diretório de destino; não altera a ROM de origem nem faz upload. Ela valida a estrutura NARC e só recupera o tamanho declarado no NARC quando o intervalo adicional não se sobrepõe a outro arquivo FAT.
+Em Windows, use o diretório de trabalho do executável em build_win64. O extrator upstream usa o diretório de trabalho atual; por isso, execute o jogo a partir de build_linux ou build_win64, e não de outra pasta. A ferramenta modifica apenas os sete arquivos allowlisted no diretório de destino; não altera a ROM de origem nem faz upload. Ela valida a estrutura NARC e só recupera o tamanho declarado no NARC quando o intervalo adicional não se sobrepõe a outro arquivo FAT.
 
-A importação desses recursos ainda não prova que todas as telas e eventos funcionam em PT-BR. Confirme fontes, acentos, menus, diálogos, batalhas e salvamento dentro do jogo antes de considerar essa variante compatível. Veja a [documentação de localização](docs/LOCALIZATION.md).
+Depois da importação, confira os arquivos locais com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux --require-localized-resources`. A validação confirma a presença e a estrutura básica dos arquivos, mas não inicia o jogo. A importação desses recursos ainda não prova que todas as telas e eventos funcionam em PT-BR. Confirme fontes, acentos, menus, diálogos, batalhas e salvamento dentro do jogo antes de considerar essa variante compatível. Veja a [documentação de localização](docs/LOCALIZATION.md).
 
 Execute os testes automatizados sem precisar de ROM:
 
