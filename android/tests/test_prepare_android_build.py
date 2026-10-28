@@ -124,6 +124,11 @@ libsim = library('sim',
                 "libcard = library('card', pic: build_target == 'nx', sources: [])\\n",
                 encoding="utf-8",
             )
+            (root / "libraries/os").mkdir(parents=True)
+            (root / "libraries/os/meson.build").write_text(
+                "libos = library('os',\n    pic: false,\n    sources: [])\n",
+                encoding="utf-8",
+            )
             (root / "libraries/sim/src").mkdir(parents=True)
             (root / "libraries/sim/src/sim_main.cpp").write_text(
                 "#define SDL_MAIN_HANDLED\nint main() { return 0; }\n", encoding="utf-8")
@@ -138,6 +143,8 @@ libsim = library('sim',
             self.assertIn("or build_target == 'android'", sim)
             card = (root / "libraries/card/meson.build").read_text(encoding="utf-8")
             self.assertIn("pic: build_target == 'nx' or build_target == 'android'", card)
+            os_library = (root / "libraries/os/meson.build").read_text(encoding="utf-8")
+            self.assertIn("pic: build_target == 'android',", os_library)
             libntr_meson = (root / "meson.build").read_text(encoding="utf-8")
             self.assertIn("SDK_BUILD_ANDROID", libntr_meson)
             self.assertNotIn("project('libntr', 'c', 'cpp', 'nasm'", libntr_meson)

@@ -390,6 +390,14 @@ def patch_libntr(root: Path) -> list[str]:
         updated = content
         for old, new in pic_predicates:
             updated = updated.replace(old, new)
+        # Some NitroSDK Meson targets hardcode PIC off instead of using the
+        # platform predicate. Enable PIC only for Android in those targets;
+        # leave ARM/desktop/NX behavior otherwise unchanged.
+        updated = re.sub(
+            r"(?m)^([ \t]*)pic:[ \t]*false,[ \t]*$",
+            r"\1pic: build_target == 'android',",
+            updated,
+        )
         if updated != content:
             meson_path.write_text(updated, encoding="utf-8")
             changes.append(
