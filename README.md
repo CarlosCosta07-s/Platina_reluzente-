@@ -9,8 +9,11 @@ O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
 - **Linux x86-64 e Windows x64:** ambos os alvos passaram na execução [40647214112 do GitHub Actions](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40647214112), em 28 de outubro de 2026. Os testes automatizados também passaram e cada pacote foi validado contra os 340 caminhos do manifesto upstream, incluindo recursos de animação. Isso valida compilação e integridade do pacote, não a inicialização nem a jogabilidade.
 - **Android:** ainda não implementado nem validado. A auditoria encontrou um pedido de OpenGL 4.2 core, shaders GLSL 420 core e operações que precisam de adaptação para OpenGL ES. A primeira hipótese é SDL2 + OpenGL ES 3.2; isso continua sendo trabalho futuro.
+- **Inicialização desktop:** a execução 40681292929 confirmou compilação e integridade do pacote Linux, mas falhou no smoke test porque o script copiava o binário para outra pasta e a aplicação não encontrava `libSDL2-2.0.so.0`. O script foi corrigido para executar o ELF original por caminho absoluto em um diretório de trabalho temporário. A nova CI deve confirmar a correção antes de considerarmos a inicialização validada.
 - **Versão original:** o ponto de referência inicial é Pokémon Platinum USA Rev. 1, identificado no upstream por SHA-1 0862ec35b24de5c7e2dcb88c9eea0873110d755c.
 - **Português brasileiro:** a variante PT-BR fornecida difere em dez entradas FAT em relação à ROM USA. O importador agora permite sete recursos NARC localizados, mas a execução do jogo com esses dados ainda precisa ser validada.
+
+**Próximo objetivo de execução:** provar que o binário desktop consegue abrir com uma cópia local válida da ROM USA Rev. 1 e chegar à tela inicial; depois validar uma sequência mínima de gameplay e salvamento. A adaptação Android não deve atrasar esse primeiro marco de jogo realmente carregado.
 
 Não anunciamos o porte como concluído, jogável do início ao fim ou compatível com Android antes de termos compilação e testes reproduzíveis.
 
