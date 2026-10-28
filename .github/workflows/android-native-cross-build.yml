@@ -176,6 +176,58 @@ jobs:
           file "$lib"
           llvm-readelf -h "$lib" | tee "$RUNNER_TEMP/libmain-elf-header.txt"
           grep -q 'AArch64' "$RUNNER_TEMP/libmain-elf-header.txt"
+          # SDLActivity resolves SDL_main from libmain.so; fail before APK packaging
+          # if the Android-specific entrypoint was not exported by the native linker.
+          llvm-nm -D --defined-only "$lib" | grep -Eq '[[:space:]]SDL_main
+          cp "$lib" android-native-artifact/
+          cp "$SDL2_ANDROID_LIBDIR/libSDL2.so" android-native-artifact/
+          cp "$ENET_ANDROID_LIBDIR/libenet.a" android-native-artifact/
+          cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" android-native-artifact/
+          mkdir -p android-native-artifact/sdl-java
+          cp -a "$SDL_SOURCE/android-project/app/src/main/java/org/libsdl/app/." android-native-artifact/sdl-java/
+          cp "$RUNNER_TEMP/android-build-preparation.json" android-native-artifact/
+          cp "$RUNNER_TEMP/android-gles-report.json" android-native-artifact/
+      - name: Build Android runtime data bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          build="$RUNNER_TEMP/build_android"
+          touch "$build/.android-target"
+          # The upstream asset-copy target expects a file named "main";
+          # the Android product itself is the shared library libmain.so.
+          cp "$build/libmain.so" "$build/main"
+          # This target builds the same resource tree used by desktop, then
+          # the Android guard prevents host AppImage/linuxdeploy packaging.
+          meson compile -C "$build" --verbose
+          runtime="$build/pokeplatinum"
+          test -d "$runtime"
+          test -s "$runtime/header.bin"
+          test -s "$runtime/firmware.bin"
+          mkdir -p android-native-artifact/runtime-data
+          cp -a "$runtime/." android-native-artifact/runtime-data/
+          rm -f android-native-artifact/runtime-data/main
+          printf '%s\n' "$GITHUB_SHA" > android-native-artifact/runtime-data/build-version.txt
+          test -s android-native-artifact/runtime-data/build-version.txt
+      - name: Write summary
+        if: always()
+        run: |
+          {
+            echo "## Android native ARM64 cross-build"
+            echo
+            echo "Expected ABI: arm64-v8a; minimum Android API: 24."
+            echo "This job publishes the native libraries, SDLActivity Java sources and runtime-data bundle used to build the single integrated Android APK."
+            echo "The launcher packaging workflow combines these assets after Windows, Linux and Android builds pass on the same commit."
+            echo "Gameplay, touch, audio and saves still require real-device testing."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ARM64 native cross-build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platina-reluzente-android-arm64-native-libs
+          path: android-native-artifact/
+          if-no-files-found: error
+          retention-days: 14
+
           mkdir -p android-native-artifact
           cp "$lib" android-native-artifact/
           cp "$SDL2_ANDROID_LIBDIR/libSDL2.so" android-native-artifact/
