@@ -20,24 +20,30 @@ function memoryFilesystem(initialFiles = {}, behavior = {}) {
   let failAppend = Boolean(behavior.failAppend);
   let failInstallRename = Boolean(behavior.failInstallRename);
 
+  const writeOptions = [];
+  const appendOptions = [];
   return {
     files,
+    writeOptions,
+    appendOptions,
     async stat({ path }) {
       const value = files.get(path);
       if (!value) throw new Error('ENOENT: ' + path);
       return { size: value.length };
     },
-    async writeFile({ path, data }) {
-      files.set(path, Buffer.from(data, 'base64'));
+    async writeFile(options) {
+      writeOptions.push(options);
+      files.set(options.path, Buffer.from(options.data, 'base64'));
     },
-    async appendFile({ path, data }) {
+    async appendFile(options) {
+      appendOptions.push(options);
       if (failAppend) {
         failAppend = false;
         throw new Error('simulated interrupted write');
       }
-      const previous = files.get(path);
-      if (!previous) throw new Error('ENOENT: ' + path);
-      files.set(path, Buffer.concat([previous, Buffer.from(data, 'base64')]));
+      const previous = files.get(options.path);
+      if (!previous) throw new Error('ENOENT: ' + options.path);
+      files.set(options.path, Buffer.concat([previous, Buffer.from(options.data, 'base64')]));
     },
     async rename({ from, to }) {
       if (failInstallRename && from === 'roms/current.nds.importing' && to === 'roms/current.nds') {
@@ -57,7 +63,6 @@ function memoryFilesystem(initialFiles = {}, behavior = {}) {
 
 const common = {
   directory: 'DATA',
-  encoding: 'BASE64',
   chunkSize: 4,
   toBase64: (buffer) => Buffer.from(buffer).toString('base64')
 };
@@ -75,6 +80,10 @@ test('replaces the ROM only after all chunks have been written', async () => {
   assert.deepEqual(filesystem.files.get('roms/current.nds'), newRom);
   assert.equal(result.path, 'roms/current.nds');
   assert.equal(result.size, newRom.length);
+  assert.ok(filesystem.writeOptions.length > 0);
+  assert.ok(filesystem.appendOptions.length > 0);
+  assert.equal(filesystem.writeOptions.every((options) => !('encoding' in options)), true);
+  assert.equal(filesystem.appendOptions.every((options) => !('encoding' in options)), true);
   assert.equal(filesystem.files.has('roms/current.nds.importing'), false);
   assert.equal(filesystem.files.has('roms/current.nds.previous'), false);
 });
