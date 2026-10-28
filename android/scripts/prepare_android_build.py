@@ -837,26 +837,17 @@ def patch_android_wifi_socket_headers(root: Path) -> list[str]:
 
 
 def patch_android_dwc_auth_headers(root: Path) -> list[str]:
-    """Use errno on Android and count the DS UTF-16 username without host wchar_t."""
-    path = root / "libraries" / "auth" / "src" / "dwc_auth.c"
-    if not path.is_file():
-        raise PatchError(f"Android DWC authentication source is missing: {path}")
+    """Patch DWC errno headers and treat the game's text buffers as UTF-16 on Android."""
+    auth_root = root / "libraries" / "auth" / "src"
+    auth_path = auth_root / "dwc_auth.c"
+    cal_path = auth_root / "dwc_cal.c"
+    nastime_path = auth_root / "dwc_nastime.c"
+    netcheck_path = auth_root / "dwc_netcheck.c"
+    paths = (auth_path, cal_path, nastime_path, netcheck_path)
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise PatchError("Android DWC sources missing: " + ", ".join(missing))
 
-    original = path.read_text(encoding="utf-8")
-    old_include_block = (
-        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
-        "#include <errno.h>\n"
-        "#include <wchar.h>\n"
-        "#endif"
-    )
-    new_include_block = (
-        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)\n"
-        "#include <errno.h>\n"
-        "#if !defined(SDK_BUILD_ANDROID)\n"
-        "#include <wchar.h>\n"
-        "#endif\n"
-        "#endif"
-    )
     helper_block = (
         "#ifdef SDK_BUILD_ANDROID\n"
         "static unsigned long DWCi_Auth_UTF16Length(const unsigned short *text)\n"
@@ -871,51 +862,109 @@ def patch_android_dwc_auth_headers(root: Path) -> list[str]:
         "}\n"
         "#endif"
     )
-    marker = "#endif\n\n#ifndef SDK_BUILD_ARM"
-    if original.count(helper_block) == 1 and original.count(new_include_block) == 1:
-        if original.count("DWCi_Auth_UTF16Length(param->ingamesn)") == 2:
-            return []
-        raise PatchError(f"{path}: Android UTF-16 helper exists but call-site conversion is incomplete.")
-
-    if original.count(old_include_block) != 1 or new_include_block in original:
-        raise PatchError(f"{path}: expected one recognized DWC errno/wchar include block.")
-
-    updated = original.replace(old_include_block, new_include_block, 1)
-    if updated.count(marker) != 1:
-        raise PatchError(f"{path}: cannot place Android UTF-16 helper safely.")
-    updated = updated.replace(
-        marker,
-        "#endif\n\n" + helper_block + "\n\n#ifndef SDK_BUILD_ARM",
-        1,
+    errno_wchar_original = (
+        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+        "#include <errno.h>\n"
+        "#include <wchar.h>\n"
+        "#endif"
     )
-
-    replacements = (
-        (
-            "      sVar1 = wcslen((wchar_t *)param->ingamesn);",
-            "      #ifdef SDK_BUILD_ANDROID\n"
-            "      sVar1 = DWCi_Auth_UTF16Length(param->ingamesn);\n"
-            "      #else\n"
-            "      sVar1 = wcslen((wchar_t *)param->ingamesn);\n"
-            "      #endif",
-        ),
-        (
-            "        sVar1 = wcslen((wchar_t*)param->ingamesn);",
-            "        #ifdef SDK_BUILD_ANDROID\n"
-            "        sVar1 = DWCi_Auth_UTF16Length(param->ingamesn);\n"
-            "        #else\n"
-            "        sVar1 = wcslen((wchar_t*)param->ingamesn);\n"
-            "        #endif",
-        ),
+    errno_wchar_android = (
+        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)\n"
+        "#include <errno.h>\n"
+        "#if !defined(SDK_BUILD_ANDROID)\n"
+        "#include <wchar.h>\n"
+        "#endif\n"
+        "#endif"
     )
-    for before, after in replacements:
-        if updated.count(before) != 1:
-            raise PatchError(f"{path}: expected exactly one ingamesn length call to adapt.")
-        updated = updated.replace(before, after, 1)
+    changed: list[str] = []
 
-    if updated.count(helper_block) != 1 or updated.count("DWCi_Auth_UTF16Length(param->ingamesn)") != 2:
-        raise PatchError(f"{path}: Android DWC UTF-16 patch validation failed.")
-    path.write_text(updated, encoding="utf-8")
-    return ["libntrdwc: use Android errno and 16-bit ingamesn length compatibility"]
+    # dwc_auth.c: errno on Android, but no host wchar_t header; its ingamesn
+    # field is an unsigned-short UTF-16 buffer in the DS SDK contract.
+    auth = auth_path.read_text(encoding="utf-8")
+    if errno_wchar_android not in auth or helper_block not in auth:
+        if auth.count(errno_wchar_original) != 1 or errno_wchar_android in auth:
+            raise PatchError(f"{auth_path}: expected one recognized DWC errno/wchar include block.")
+        auth = auth.replace(errno_wchar_original, errno_wchar_android, 1)
+        marker = "#endif\n\n#ifndef SDK_BUILD_ARM"
+        if auth.count(marker) != 1:
+            raise PatchError(f"{auth_path}: cannot place Android UTF-16 helper safely.")
+        auth = auth.replace(marker, "#endif\n\n" + helper_block + "\n\n#ifndef SDK_BUILD_ARM", 1)
+        replacements = (
+            (
+                "      sVar1 = wcslen((wchar_t *)param->ingamesn);",
+                "      #ifdef SDK_BUILD_ANDROID\n"
+                "      sVar1 = DWCi_Auth_UTF16Length(param->ingamesn);\n"
+                "      #else\n"
+                "      sVar1 = wcslen((wchar_t *)param->ingamesn);\n"
+                "      #endif",
+            ),
+            (
+                "        sVar1 = wcslen((wchar_t*)param->ingamesn);",
+                "        #ifdef SDK_BUILD_ANDROID\n"
+                "        sVar1 = DWCi_Auth_UTF16Length(param->ingamesn);\n"
+                "        #else\n"
+                "        sVar1 = wcslen((wchar_t*)param->ingamesn);\n"
+                "        #endif",
+            ),
+        )
+        for before, after in replacements:
+            if auth.count(before) != 1:
+                raise PatchError(f"{auth_path}: expected exactly one ingamesn length call to adapt.")
+            auth = auth.replace(before, after, 1)
+        if auth.count(helper_block) != 1 or auth.count("DWCi_Auth_UTF16Length(param->ingamesn)") != 2:
+            raise PatchError(f"{auth_path}: Android UTF-16 patch validation failed.")
+        auth_path.write_text(auth, encoding="utf-8")
+        changed.append("libntrdwc: use Android errno and 16-bit ingamesn length compatibility")
+    elif auth.count("DWCi_Auth_UTF16Length(param->ingamesn)") != 2:
+        raise PatchError(f"{auth_path}: existing Android helper patch is incomplete.")
+
+    # dwc_cal.c: keep wchar.h for desktop Linux only and count the title/NAS
+    # data using 16-bit code units in the Android build.
+    cal = cal_path.read_text(encoding="utf-8")
+    cal_include_original = "#ifdef SDK_BUILD_LINUX\n#include <wchar.h>\n#endif"
+    cal_include_android = "#if defined(SDK_BUILD_LINUX) && !defined(SDK_BUILD_ANDROID)\n#include <wchar.h>\n#endif"
+    cal_call = "                          sVar1 = wcslen((wchar_t *)(param_2 + 0x7e));"
+    cal_android_call = (
+        "                          #ifdef SDK_BUILD_ANDROID\n"
+        "                          sVar1 = DWCi_Auth_UTF16Length((const unsigned short *)(param_2 + 0x7e));\n"
+        "                          #else\n"
+        "                          sVar1 = wcslen((wchar_t *)(param_2 + 0x7e));\n"
+        "                          #endif"
+    )
+    if helper_block not in cal or cal_include_android not in cal:
+        if cal.count(cal_include_original) != 1 or cal_include_android in cal:
+            raise PatchError(f"{cal_path}: expected one recognized Linux wchar.h include block.")
+        cal = cal.replace(cal_include_original, cal_include_android + "\n\n" + helper_block, 1)
+        if cal.count(cal_call) != 1:
+            raise PatchError(f"{cal_path}: expected exactly one calendar UTF-16 length call.")
+        cal = cal.replace(cal_call, cal_android_call, 1)
+        cal_path.write_text(cal, encoding="utf-8")
+        changed.append("libntrdwc: use UTF-16 length compatibility for calendar data")
+    elif cal.count("DWCi_Auth_UTF16Length((const unsigned short *)(param_2 + 0x7e))") != 1:
+        raise PatchError(f"{cal_path}: existing Android calendar helper patch is incomplete.")
+
+    # dwc_nastime.c uses errno and also includes wchar.h for Linux/NX. Split
+    # those includes so Android gets errno without redefining wchar_t.
+    nastime = nastime_path.read_text(encoding="utf-8")
+    if errno_wchar_android not in nastime:
+        if nastime.count(errno_wchar_original) != 1:
+            raise PatchError(f"{nastime_path}: expected one recognized errno/wchar include block.")
+        nastime = nastime.replace(errno_wchar_original, errno_wchar_android, 1)
+        nastime_path.write_text(nastime, encoding="utf-8")
+        changed.append("libntrdwc: expose errno and hide wchar.h for Android NAS time")
+
+    # dwc_netcheck.c uses errno but does not need wchar.h.
+    netcheck = netcheck_path.read_text(encoding="utf-8")
+    netcheck_original = "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n#include <errno.h>\n#endif"
+    netcheck_android = "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)\n#include <errno.h>\n#endif"
+    if netcheck_android not in netcheck:
+        if netcheck.count(netcheck_original) != 1:
+            raise PatchError(f"{netcheck_path}: expected one recognized errno include block.")
+        netcheck = netcheck.replace(netcheck_original, netcheck_android, 1)
+        netcheck_path.write_text(netcheck, encoding="utf-8")
+        changed.append("libntrdwc: include errno for Android network checks")
+
+    return changed
 def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     sdl_inc, enet_inc = sdl / "include", enet / "include" / "enet"
     if not sdl_inc.is_dir() or not enet_inc.is_dir():
@@ -1034,7 +1083,12 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         if name == "libntrwifi":
             rels.append("subprojects/libntrwifi/libraries/cps/src/network.c")
         if name == "libntrdwc":
-            rels.append("subprojects/libntrdwc/libraries/auth/src/dwc_auth.c")
+            rels.extend([
+                "subprojects/libntrdwc/libraries/auth/src/dwc_auth.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_cal.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_nastime.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_netcheck.c",
+            ])
         # patch_sdk_project modifies PIC settings in these nested libraries.
         rels.extend(
             path.relative_to(staged).as_posix()

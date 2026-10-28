@@ -370,14 +370,17 @@ libsim = library('sim',
     def test_android_dwc_auth_source_includes_errno_and_wchar_headers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "libraries" / "auth" / "src" / "dwc_auth.c"
-            source.parent.mkdir(parents=True)
-            source.write_text(
+            auth = root / "libraries" / "auth" / "src" / "dwc_auth.c"
+            cal = root / "libraries" / "auth" / "src" / "dwc_cal.c"
+            nastime = root / "libraries" / "auth" / "src" / "dwc_nastime.c"
+            netcheck = root / "libraries" / "auth" / "src" / "dwc_netcheck.c"
+            for path in (auth, cal, nastime, netcheck):
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+            auth.write_text(
                 "#include <nitro.h>\n"
                 "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
-                "#include <errno.h>\n"
-                "#include <wchar.h>\n"
-                "#endif\n\n"
+                "#include <errno.h>\n#include <wchar.h>\n#endif\n\n"
                 "#ifndef SDK_BUILD_ARM\n"
                 "void fixture(void) {\n"
                 "      sVar1 = wcslen((wchar_t *)param->ingamesn);\n"
@@ -385,23 +388,59 @@ libsim = library('sim',
                 "}\n",
                 encoding="utf-8",
             )
+            cal.write_text(
+                "#include <nitro.h>\n"
+                "#ifdef SDK_BUILD_LINUX\n#include <wchar.h>\n#endif\n\n"
+                "void DWC_Auth_GetCalInfoFromNVRAM(char *aBuf) {}\n"
+                "void fixture(void) {\n"
+                "                          sVar1 = wcslen((wchar_t *)(param_2 + 0x7e));\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            nastime.write_text(
+                "#include <nitro.h>\n"
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+                "#include <errno.h>\n#include <wchar.h>\n#endif\n",
+                encoding="utf-8",
+            )
+            netcheck.write_text(
+                "#include <nitro.h>\n"
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+                "#include <errno.h>\n#endif\n",
+                encoding="utf-8",
+            )
 
             changes = patch_android_dwc_auth_headers(root)
             self.assertEqual(
-                ["libntrdwc: use Android errno and 16-bit ingamesn length compatibility"],
+                [
+                    "libntrdwc: use Android errno and 16-bit ingamesn length compatibility",
+                    "libntrdwc: use UTF-16 length compatibility for calendar data",
+                    "libntrdwc: expose errno and hide wchar.h for Android NAS time",
+                    "libntrdwc: include errno for Android network checks",
+                ],
                 changes,
             )
-            updated = source.read_text(encoding="utf-8")
-            self.assertIn(
-                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)",
-                updated,
-            )
-            self.assertIn("#include <errno.h>", updated)
-            self.assertIn("#if !defined(SDK_BUILD_ANDROID)\n#include <wchar.h>\n#endif", updated)
-            self.assertIn("static unsigned long DWCi_Auth_UTF16Length(const unsigned short *text)", updated)
-            self.assertEqual(2, updated.count("DWCi_Auth_UTF16Length(param->ingamesn)"))
-            self.assertIn("sVar1 = wcslen((wchar_t *)param->ingamesn);", updated)
-            self.assertIn("sVar1 = wcslen((wchar_t*)param->ingamesn);", updated)
+
+            auth_text = auth.read_text(encoding="utf-8")
+            self.assertIn("#include <errno.h>", auth_text)
+            self.assertIn("#if !defined(SDK_BUILD_ANDROID)\n#include <wchar.h>\n#endif", auth_text)
+            self.assertEqual(2, auth_text.count("DWCi_Auth_UTF16Length(param->ingamesn)"))
+            self.assertIn("sVar1 = wcslen((wchar_t *)param->ingamesn);", auth_text)
+            self.assertIn("sVar1 = wcslen((wchar_t*)param->ingamesn);", auth_text)
+
+            cal_text = cal.read_text(encoding="utf-8")
+            self.assertIn("#if defined(SDK_BUILD_LINUX) && !defined(SDK_BUILD_ANDROID)", cal_text)
+            self.assertIn("DWCi_Auth_UTF16Length((const unsigned short *)(param_2 + 0x7e))", cal_text)
+            self.assertIn("sVar1 = wcslen((wchar_t *)(param_2 + 0x7e));", cal_text)
+
+            nastime_text = nastime.read_text(encoding="utf-8")
+            self.assertIn("#if !defined(SDK_BUILD_ANDROID)\n#include <wchar.h>\n#endif", nastime_text)
+            self.assertIn("#include <errno.h>", nastime_text)
+
+            netcheck_text = netcheck.read_text(encoding="utf-8")
+            self.assertIn("#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)", netcheck_text)
+            self.assertIn("#include <errno.h>", netcheck_text)
+
             self.assertEqual([], patch_android_dwc_auth_headers(root))
 
 
@@ -495,6 +534,9 @@ libsim = library('sim',
                 "subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h",
                 "subprojects/libntrwifi/libraries/cps/src/network.c",
                 "subprojects/libntrdwc/libraries/auth/src/dwc_auth.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_cal.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_nastime.c",
+                "subprojects/libntrdwc/libraries/auth/src/dwc_netcheck.c",
             ):
                 target = staged / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -510,6 +552,9 @@ libsim = library('sim',
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h", paths)
             self.assertIn("subprojects/libntrwifi/libraries/cps/src/network.c", paths)
             self.assertIn("subprojects/libntrdwc/libraries/auth/src/dwc_auth.c", paths)
+            self.assertIn("subprojects/libntrdwc/libraries/auth/src/dwc_cal.c", paths)
+            self.assertIn("subprojects/libntrdwc/libraries/auth/src/dwc_nastime.c", paths)
+            self.assertIn("subprojects/libntrdwc/libraries/auth/src/dwc_netcheck.c", paths)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:
