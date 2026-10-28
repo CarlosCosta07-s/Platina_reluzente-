@@ -343,8 +343,9 @@ def patch_libntr(root: Path) -> list[str]:
             if changed:
                 changes.append("libntr simulator: link Android system libraries by linker flag")
             break
-    elif new_system_lookup not in sim:
-        raise PatchError("Android system library lookup: expected target-library lookup marker missing")
+    else:
+        if new_system_lookup not in sim:
+            raise PatchError("Android system library lookup: expected target-library lookup marker missing")
     new_include_marker = "include_directories: [nitrosdk_includes, libsim_includes] + libsim_android_includes,"
     if new_include_marker not in sim:
         sim, changed = replace_once(
