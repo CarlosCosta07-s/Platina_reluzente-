@@ -155,11 +155,15 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertTrue(changes)
             self.assertEqual([], second)
 
-    def test_android_ppwlobby_uses_c99_flags_for_c_sources(self):
+    def test_android_ppwlobby_uses_separate_c_and_cpp_flags(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             meson = root / "lib" / "ppwlobby" / "meson.build"
-            meson.parent.mkdir(parents=True)
+            ilobby = root / "lib" / "ppwlobby" / "libraries" / "ilobby" / "meson.build"
+            lobby = root / "lib" / "ppwlobby" / "libraries" / "ppwlobby" / "meson.build"
+            for path in (meson, ilobby, lobby):
+                path.parent.mkdir(parents=True, exist_ok=True)
+
             meson.write_text(
                 """ppwlobby_c_args = []
 
@@ -177,23 +181,38 @@ endif
 """,
                 encoding="utf-8",
             )
+            ilobby.write_text(
+                "lib = static_library('ilobby',\\n"
+                "    c_args: ppwlobby_c_args,\\n"
+                "    cpp_args: cpp_args + ppwlobby_c_args,\\n"
+                ")\\n",
+                encoding="utf-8",
+            )
+            lobby.write_text(
+                "lib = static_library('lobby',\\n"
+                "    c_args: ppwlobby_c_args,\\n"
+                "    cpp_args: [cpp_args, ppwlobby_c_args],\\n"
+                ")\\n",
+                encoding="utf-8",
+            )
 
             changes = patch_android_ppwlobby_c_args(root)
             result = meson.read_text(encoding="utf-8")
+            ilobby_result = ilobby.read_text(encoding="utf-8")
+            lobby_result = lobby.read_text(encoding="utf-8")
 
             self.assertEqual(
-                ["parent PPW lobby: use C99 flags for Android C sources"],
+                [
+                    "parent PPW lobby: use C99 flags for Android C sources",
+                    "parent PPW lobby: keep C++03 flags on C++ sources only",
+                ],
                 changes,
             )
-            self.assertIn(
-                "elif(build_target == 'android')\n"
-                "    # These are C sources; C++ flags make Clang reject the Android build.\n"
-                "    ppwlobby_c_args = [\n"
-                "        '-std=c99'\n"
-                "    ]\n",
-                result,
-            )
-            self.assertIn("'-std=c++03'", result)  # Keep the existing desktop configuration unchanged.
+            self.assertIn("ppwlobby_c_args = ['-std=c99']", result)
+            self.assertIn("ppwlobby_cpp_args = ['-fpermissive', '-std=c++03']", result)
+            self.assertIn("'-std=c++03'", result)  # Existing desktop C++ configuration remains intact.
+            self.assertIn("cpp_args: cpp_args + ppwlobby_cpp_args,", ilobby_result)
+            self.assertIn("cpp_args: [cpp_args, ppwlobby_cpp_args],", lobby_result)
             self.assertEqual([], patch_android_ppwlobby_c_args(root))
 
 
