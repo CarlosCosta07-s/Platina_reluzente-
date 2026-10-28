@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check local data extracted by the native port before launching the game.
+"""Check local runtime data and optionally verify the supported PT-BR resource set.
 
 This tool checks only local runtime files. It never reads or copies a ROM,
 never downloads game data, and never uploads any files.
@@ -7,6 +7,7 @@ never downloads game data, and never uploads any files.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -33,6 +34,20 @@ EXECUTABLE_CANDIDATES = ("main", "main.exe", "pokeplatinum", "pokeplatinum.exe")
 OVERLAY_PATTERNS = {
     "overlay9": re.compile(r"^overlay9_\d+\.bin$"),
     "overlay7": re.compile(r"^overlay7_\d+\.bin$"),
+}
+
+# SHA-256 of each allowlisted resource extracted from the exact PT-BR ROM
+# supplied during project development. These are metadata only, not game data.
+# Change the manifest only after reviewing and documenting a new supported
+# localization build.
+PTBR_RESOURCE_SHA256 = {
+    "battle/graphic/pl_b_plist_gra.narc": "bec3dbd9fd6493ec5c41e3907e6834ed548a0ba07d5243b2fc41b806f2c58cca",
+    "data/slot.narc": "72fdd57fa2768e51880d13152d3877865bf574cd50436e056f3879eb734bbf41",
+    "demo/title/op_demo.narc": "ac6ba2bc74088fe27fdf37fdf27cf003d4453c423726cc913f5178c0b265ec52",
+    "graphic/pl_bag_gra.narc": "0335b99b6341d5f4ec5ad077edb82424341346a79216601ca95230424d230cac",
+    "graphic/pl_plist_gra.narc": "ba7a1847c39dfc5972c4c0282dd2eacc67a0dfed38852dc8dff8b948ed21249b",
+    "graphic/pl_pst_gra.narc": "ab73a6b8984ace09419a2bb06efefa4419fc5a21c4c784224eaf7d2e623d2ab1",
+    "msgdata/pl_msg.narc": "a7206407d80ca5cff28ceeee9008beef72efa9ab4a3bbe9fafcbbbad9a8e0f77",
 }
 
 
@@ -139,18 +154,40 @@ def inspect_runtime_directory(
     localization_report: list[dict[str, str | int]] = []
     if require_localized_resources:
         for relative in TARGET_FILES:
+            relative_name = relative.as_posix()
             path = root.joinpath(*relative.parts)
+            expected_hash = PTBR_RESOURCE_SHA256.get(relative_name)
             if not path.is_file():
-                missing.append(relative.as_posix())
+                missing.append(relative_name)
                 continue
+
             valid, message = _validate_narc(path)
             if not valid:
-                invalid.append({"path": relative.as_posix(), "problem": message})
-            else:
-                localization_report.append({
-                    "path": relative.as_posix(),
-                    "size_bytes": path.stat().st_size,
+                invalid.append({"path": relative_name, "problem": message})
+                continue
+
+            actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            if expected_hash is None:
+                invalid.append({
+                    "path": relative_name,
+                    "problem": "não existe SHA-256 de referência para esta versão PT-BR",
                 })
+                continue
+            if actual_hash != expected_hash:
+                invalid.append({
+                    "path": relative_name,
+                    "problem": (
+                        "NARC válido, mas o SHA-256 não corresponde à versão PT-BR aprovada "
+                        f"(esperado {expected_hash}, recebido {actual_hash})"
+                    ),
+                })
+                continue
+            localization_report.append({
+                "path": relative_name,
+                "size_bytes": path.stat().st_size,
+                "sha256": actual_hash,
+                "status": "ptbr_sha256_match",
+            })
 
     ready = not missing and not invalid
     return {
@@ -163,8 +200,9 @@ def inspect_runtime_directory(
         "localized_resources_required": require_localized_resources,
         "localized_resources_valid": localization_report,
         "notes": (
-            "A aprovação só confirma arquivos locais e estruturas básicas; ela não prova "
-            "que o aplicativo inicia, renderiza corretamente ou é jogável."
+            "A aprovação confirma arquivos locais, estruturas NARC básicas e, quando solicitado, "
+            "correspondência SHA-256 com a variante PT-BR de referência. Não prova que o jogo "
+            "inicia, renderiza corretamente ou é jogável."
         ),
     }
 
@@ -181,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-localized-resources",
         action="store_true",
-        help="Também exige e valida os sete NARC localizados permitidos.",
+        help="Também exige NARC válidos e SHA-256 correspondente à variante PT-BR de referência.",
     )
     parser.add_argument(
         "--json",
@@ -215,8 +253,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  - {item['path']}: {item['problem']}")
         if report["localized_resources_required"]:
             print(
-                f"NARC localizados válidos: {len(report['localized_resources_valid'])}/"
-                f"{len(TARGET_FILES)}"
+                f"NARC da variante PT-BR confirmados por hash: "
+                f"{len(report['localized_resources_valid'])}/{len(TARGET_FILES)}"
             )
         print(report["notes"])
     return 0 if report["ready_for_launch_attempt"] else 1

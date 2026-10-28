@@ -60,11 +60,11 @@ Linux:
 
 Windows: use o diretório de trabalho do executável em build_win64. O extrator upstream grava os arquivos no diretório de trabalho atual, então inicie o executável a partir de build_linux/build_win64 antes de importar os arquivos.
 
-A opção --force é necessária porque os recursos originais normalmente já existem no diretório de destino. Depois da importação, verifique o diretório com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux --require-localized-resources` (em Windows, substitua pelo caminho build_win64). Se a ferramenta recusar uma ROM, caminho ou estrutura, não ignore o erro; investigue a diferença antes de tentar outra extração.
+A opção --force é necessária porque os recursos originais normalmente já existem no diretório de destino. Depois da importação, verifique o diretório com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux --require-localized-resources` (em Windows, substitua pelo caminho build_win64). O verificador compara os sete hashes SHA-256 com a variante PT-BR exata que foi usada como referência durante o desenvolvimento; não basta que um arquivo tenha um cabeçalho NARC válido. Se a ferramenta recusar uma ROM, caminho ou estrutura, não ignore o erro; investigue a diferença antes de tentar outra extração.
 
 ## O que ainda precisa ser validado
 
-A extração segura comprova somente que os sete arquivos NARC podem ser copiados. Não comprova que a versão PT-BR executa corretamente. Testes necessários:
+A extração segura comprova somente que os sete arquivos NARC podem ser copiados. O verificador local compara seus hashes com a variante PT-BR de referência para detectar arquivos incorretos ou versões diferentes. Isso não comprova que a versão PT-BR executa corretamente. Testes necessários:
 
 1. inicialização e jogo com a ROM USA Rev. 1 original;
 2. substituição local dos sete arquivos NARC allowlisted;

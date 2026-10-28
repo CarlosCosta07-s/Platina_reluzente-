@@ -305,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rom", required=True, help="Caminho local para o arquivo .nds do próprio usuário.")
     parser.add_argument(
         "--destination", required=True,
-        help="Diretório raiz de saída; os arquivos msgdata/... serão criados abaixo dele."
+        help="Diretório de trabalho do executável nativo; os caminhos originais da ROM serão criados abaixo dele."
     )
     parser.add_argument("--force", action="store_true", help="Permite substituir arquivos de destino existentes.")
     args = parser.parse_args(argv)

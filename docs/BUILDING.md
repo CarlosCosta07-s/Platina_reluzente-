@@ -59,7 +59,7 @@ Depois que o porte extrair os dados, feche o jogo e valide o diretório local:
 
     python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux
 
-Para exigir também os sete NARC PT-BR após a importação:
+Para exigir também os sete NARC da versão PT-BR de referência após a importação (estrutura NARC e SHA-256 correspondentes):
 
     python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux --require-localized-resources
 
