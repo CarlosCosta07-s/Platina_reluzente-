@@ -3,7 +3,8 @@ set -Eeuo pipefail
 
 # Check that the native desktop package can initialize its first-launch UI on Linux.
 # It runs in a temporary working directory without a ROM or extracted game data.
-# For AppImages, ask the runtime to extract and run instead of requiring FUSE.
+# Use the runtime's explicit extract-and-run option for older AppImage runtimes
+# that may not recognize APPIMAGE_EXTRACT_AND_RUN.
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
   echo "Uso: $0 /caminho/para/build_linux/pokeplatinum/pokeplatinum.AppImage [segundos-ativos]" >&2
@@ -52,7 +53,7 @@ status=0
       active_seconds="$2"
 
       executable_path="$3"
-      APPIMAGE_EXTRACT_AND_RUN=1 "$executable_path" >"$logfile" 2>&1 &
+      "$executable_path" --appimage-extract-and-run >"$logfile" 2>&1 &
       app_pid=$!
       cleanup_app() {
         if kill -0 "$app_pid" 2>/dev/null; then
