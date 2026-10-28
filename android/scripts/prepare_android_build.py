@@ -182,6 +182,25 @@ def patch_libntr(root: Path) -> list[str]:
 
     path = root / "meson.build"
     text = path.read_text(encoding="utf-8")
+
+    # libntr itself also declares NASM as a required Meson language. As with
+    # the parent project, keep it for desktop and skip detection on Android.
+    text, changed = replace_once(
+        text, "project('libntr', 'c', 'cpp', 'nasm',",
+        "project('libntr', 'c', 'cpp',", "libntr optional NASM language")
+    if changed:
+        changes.append("libntr: make NASM desktop-only")
+    libntr_target_line = "build_target = get_option('build_target')\n"
+    libntr_target_block = (
+        libntr_target_line + "if (build_target != 'android')\n"
+        "    add_languages('nasm', required: true)\n"
+        "endif\n"
+    )
+    text, changed = replace_once(text, libntr_target_line, libntr_target_block,
+                                 "libntr conditional NASM detection")
+    if changed:
+        changes.append("libntr: skip unsupported NASM detection on Android")
+
     if "if (build_target == 'android')\n    nitrosdk_args +=" not in text:
         text, changed = replace_once(
             text, "if (build_target == 'nx')\n    nitrosdk_args += [",
