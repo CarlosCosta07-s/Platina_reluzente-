@@ -37,9 +37,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cp -- "$binary" "$workdir/main"
-chmod u+x "$workdir/main"
-
 echo "Testando inicialização pré-ROM: janela visível + ${duration}s de processo ativo."
 echo "Diretório temporário vazio: $workdir"
 echo "Nenhuma ROM nem recurso do jogo será copiado para o teste."
@@ -54,7 +51,8 @@ status=0
       logfile="$1"
       active_seconds="$2"
 
-      ./main >"$logfile" 2>&1 &
+      executable_path="$3"
+      "$executable_path" >"$logfile" 2>&1 &
       app_pid=$!
       cleanup_app() {
         if kill -0 "$app_pid" 2>/dev/null; then
@@ -97,7 +95,7 @@ status=0
       fi
       echo "PASS: janela criada e processo permaneceu ativo."
       echo "Isso confirma apenas a inicialização pré-ROM; não comprova carregamento ou gameplay."
-    ' smoke-test "$app_log" "$duration"
+    ' smoke-test "$app_log" "$duration" "$binary"
 ) >"$logfile" 2>&1 || status=$?
 
 if [[ -s "$logfile" ]]; then
