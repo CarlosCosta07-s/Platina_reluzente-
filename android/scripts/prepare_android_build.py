@@ -370,14 +370,31 @@ def patch_libntr(root: Path) -> list[str]:
         )
         if changed:
             changes.append("libntr simulator: append Android-specific include paths")
-    sim, pic_changes = re.subn(
-        r"pic:\s*build_target\s*==\s*'nx'(?!\s+or\s+build_target\s*==\s*'android')",
-        "pic: build_target == 'nx' or build_target == 'android'",
-        sim, count=1
-    )
-    if pic_changes:
-        changes.append("libntr simulator: enable PIC for Android")
     sim_path.write_text(sim, encoding="utf-8")
+
+    # The Android target links the NitroSDK libraries into one shared object.
+    # Upstream normally enables PIC only for NX; broaden only that exact
+    # platform predicate while leaving all desktop/handheld targets unchanged.
+    pic_predicates = (
+        (
+            "pic: build_target == 'nx',",
+            "pic: build_target == 'nx' or build_target == 'android',",
+        ),
+        (
+            "pic: (build_target == 'nx'),",
+            "pic: (build_target == 'nx' or build_target == 'android'),",
+        ),
+    )
+    for meson_path in sorted((root / "libraries").rglob("meson.build")):
+        content = meson_path.read_text(encoding="utf-8")
+        updated = content
+        for old, new in pic_predicates:
+            updated = updated.replace(old, new)
+        if updated != content:
+            meson_path.write_text(updated, encoding="utf-8")
+            changes.append(
+                "libntr: enable Android PIC in " + meson_path.relative_to(root).as_posix()
+            )
 
     main_path = root / "libraries/sim/src/sim_main.cpp"
     main, changed = replace_once(
