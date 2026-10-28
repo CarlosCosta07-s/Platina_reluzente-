@@ -9,7 +9,8 @@ from scripts.prepare_native_runtime import (
     prepare_native_runtime,
 )
 
-UPSTREAM_HEADER = r'''#include <SDL2/SDL.h>
+UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
+#include <SDL2/SDL.h>
 
 int main(int argc, char *argv[]) {
 #ifdef SDK_BUILD_NX
@@ -52,6 +53,11 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(1, content.count('const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();'))
             self.assertIn('chdir(androidRuntimeDirectory.c_str())', content)
             self.assertIn('#include <SDL2/SDL_system.h>', content)
+            self.assertIn(
+                "#if !defined(SDK_BUILD_ANDROID)\\n#define SDL_MAIN_HANDLED\\n#endif",
+                content,
+            )
+            self.assertEqual(1, content.count("SDL_MAIN_HANDLED"))
             self.assertIn(r"importedRomPath[0] != '\0'", content)
             self.assertIn(r'fprintf(stderr, "Unable to enter Android runtime directory: %s\n",', content)
             self.assertIn('fopen("header.bin", "rb")', content)
@@ -63,7 +69,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             root = Path(tmp)
             source = self.make_source(
                 root,
-                '#include <SDL2/SDL.h>\n\nint main(int argc, char *argv[]) {\n'
+                '#define SDL_MAIN_HANDLED\n#include <SDL2/SDL.h>\n\nint main(int argc, char *argv[]) {\n'
                 + LEGACY_PATCHED_HEADER_LOAD
                 + '\n}\n',
             )
