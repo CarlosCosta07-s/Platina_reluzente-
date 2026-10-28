@@ -1,5 +1,6 @@
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { registerPlugin } from '@capacitor/core';
+import { persistRomAtomically } from './rom-storage.js';
 
 const NativeGame = registerPlugin('PlatinaGame');
 
@@ -53,21 +54,13 @@ const NativeGame = registerPlugin('PlatinaGame');
   }
   async function importAndroidRom(file) {
     await validateRom(file);
-    const destination = 'roms/current.nds';
-    try { await Filesystem.deleteFile({ path: destination, directory: Directory.Data }); } catch {}
-    const chunkSize = 1024 * 1024;
-    const firstChunk = file.slice(0, Math.min(chunkSize, file.size));
-    await Filesystem.writeFile({
-      path: destination, data: toBase64(await firstChunk.arrayBuffer()),
-      directory: Directory.Data, encoding: Encoding.BASE64, recursive: true
+    const { path: destination } = await persistRomAtomically({
+      filesystem: Filesystem,
+      directory: Directory.Data,
+      encoding: Encoding.BASE64,
+      file,
+      toBase64
     });
-    for (let offset = chunkSize; offset < file.size; offset += chunkSize) {
-      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-      await Filesystem.appendFile({
-        path: destination, data: toBase64(await chunk.arrayBuffer()),
-        directory: Directory.Data, encoding: Encoding.BASE64
-      });
-    }
     state.romName = file.name; state.romSize = file.size; state.romImported = true;
     localStorage.setItem('platinaRom', JSON.stringify({ name: file.name, size: file.size, storedPath: destination }));
     renderRom();
