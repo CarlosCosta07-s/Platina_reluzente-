@@ -1167,6 +1167,17 @@ def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     sdl_inc, enet_inc = sdl / "include", enet / "include" / "enet"
     if not sdl_inc.is_dir() or not enet_inc.is_dir():
         raise PatchError("SDL2/ENet source headers missing")
+
+    # Catch incomplete SDK checkouts before Meson starts compiling thousands of
+    # translation units. These headers are directly required by the Android
+    # platform/thread and SDL entrypoint patches.
+    required_sdl_headers = ("SDL.h", "SDL_main.h", "SDL_system.h", "SDL_thread.h")
+    missing_sdl_headers = [name for name in required_sdl_headers if not (sdl_inc / name).is_file()]
+    if missing_sdl_headers:
+        raise PatchError("Required SDL2 headers missing: " + ", ".join(missing_sdl_headers))
+    if not (enet_inc / "enet.h").is_file():
+        raise PatchError("Required ENet header missing: " + str(enet_inc / "enet.h"))
+
     target = root / "libraries/sim/android_include"
     if target.exists():
         shutil.rmtree(target)
