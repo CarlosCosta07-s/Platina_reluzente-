@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -235,6 +236,39 @@ libsim = library('sim',
                 "u8 * vramTex = (u8*)(getTextureVramBank() + s_texImageParam.textureOffset);\n"
                 "u8 * vramPltt = (u8*)(getTexPlttVramBank() + s_texPlttBase);\n",
                 encoding="utf-8")
+            # The desktop workflow may already have converted the header.bin
+            # reader to PLATINA_IMPORTED_ROM before Android prepares sources.
+            with tempfile.TemporaryDirectory() as desktop_tmp:
+                desktop_root = Path(desktop_tmp)
+                shutil.copytree(root, desktop_root, dirs_exist_ok=True)
+                desktop_main_path = desktop_root / "libraries/sim/src/sim_main.cpp"
+                desktop_main = desktop_main_path.read_text(encoding="utf-8")
+                old_rom_line = '  romFile = fopen("header.bin", "r");'
+                desktop_rom_block = (
+                    '  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");\n'
+                    "  if (importedRomPath != NULL && importedRomPath[0] != 0) {\n"
+                    '    romFile = fopen(importedRomPath, "rb");\n'
+                    "  }\n"
+                    "  if (romFile == NULL) {\n"
+                    '    romFile = fopen("header.bin", "rb");\n'
+                    "  }"
+                )
+                self.assertEqual(1, desktop_main.count(old_rom_line))
+                desktop_main_path.write_text(
+                    desktop_main.replace(old_rom_line, desktop_rom_block, 1),
+                    encoding="utf-8",
+                )
+                patch_libntr(desktop_root)
+                patched_desktop = desktop_main_path.read_text(encoding="utf-8")
+                self.assertIn("SDL_AndroidGetInternalStoragePath", patched_desktop)
+                self.assertIn("roms/current.nds", patched_desktop)
+                self.assertEqual(1, patched_desktop.count("std::string androidRomPath;"))
+                patch_libntr(desktop_root)
+                self.assertEqual(
+                    1,
+                    desktop_main_path.read_text(encoding="utf-8").count("std::string androidRomPath;"),
+                )
+
             patch_libntr(root)
             command_processor = (root / "libraries/sim/src/sim_g3_CommandProcessor.cpp").read_text(encoding="utf-8")
             self.assertIn("paramPtr = (u8 *)cmdBlockPtr + 4;", command_processor)

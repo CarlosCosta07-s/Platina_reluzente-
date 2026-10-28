@@ -647,21 +647,46 @@ def patch_libntr(root: Path) -> list[str]:
         changes.append("libntr simulator: use the extracted runtime directory on Android")
 
     rom_old = 'romFile = fopen("header.bin", "r");'
-    rom_new = """const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
-#ifdef SDK_BUILD_ANDROID
-  const char *romStoragePath = SDL_AndroidGetInternalStoragePath();
-  std::string androidRomPath;
-  if ((!importedRomPath || *importedRomPath == '\\\\0') && romStoragePath != NULL) {
-    androidRomPath = std::string(romStoragePath) + "/roms/current.nds";
-    importedRomPath = androidRomPath.c_str();
-  }
-#endif
-  romFile = fopen((importedRomPath && *importedRomPath != '\\\\0') ? importedRomPath : "header.bin", "rb");"""
-    sim_source, rom_changed = replace_once(
-        sim_source, rom_old, rom_new, "Imported ROM header"
+    desktop_rom_marker = 'const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");'
+    android_rom_fallback = (
+        "#ifdef SDK_BUILD_ANDROID\n"
+        "  const char *romStoragePath = SDL_AndroidGetInternalStoragePath();\n"
+        "  std::string androidRomPath;\n"
+        "  if ((importedRomPath == NULL || importedRomPath[0] == 0) && romStoragePath != NULL) {\n"
+        "    androidRomPath = std::string(romStoragePath) + \"/roms/current.nds\";\n"
+        "    importedRomPath = androidRomPath.c_str();\n"
+        "  }\n"
+        "#endif"
     )
+    if rom_old in sim_source:
+        rom_new = (
+            desktop_rom_marker + "\n"
+            + android_rom_fallback + "\n"
+            + '  romFile = fopen((importedRomPath != NULL && importedRomPath[0] != 0) ? importedRomPath : "header.bin", "rb");'
+        )
+        sim_source, rom_changed = replace_once(
+            sim_source, rom_old, rom_new, "Imported ROM header"
+        )
+    elif desktop_rom_marker in sim_source:
+        # The desktop build preparation may already have installed the same
+        # environment-variable handoff. Extend that reader for Android instead
+        # of requiring the original header.bin line to still exist.
+        if android_rom_fallback in sim_source:
+            rom_changed = False
+        else:
+            sim_source, rom_changed = replace_once(
+                sim_source,
+                desktop_rom_marker,
+                desktop_rom_marker + "\n" + android_rom_fallback,
+                "Android fallback for a prepatched desktop ROM reader",
+            )
+    else:
+        raise PatchError(
+            "Imported ROM header: neither the original nor desktop-patched ROM reader was found"
+        )
     if rom_changed:
         changes.append("libntr simulator: read the imported ROM header on PC and Android")
+
     main_path.write_text(sim_source, encoding="utf-8")
 
     # Clang used by the Android NDK rejects arithmetic on void*. Preserve
