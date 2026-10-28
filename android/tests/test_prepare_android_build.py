@@ -67,20 +67,24 @@ endif
                 encoding="utf-8")
             (root / "libraries/sim").mkdir(parents=True)
             (root / "libraries/sim/meson.build").write_text(
-                "libsim_includes = include_directories('include')\n"
-                "sdl2_lib = library('SDL2')\nenet_lib = library('enet')\n"
-                "if(build_target == 'linux' or build_target == 'win64')\n"
-                "sdl2_lib = meson.get_compiler('c').find_library('SDL2')\nendif\n"
-                "sdl2_dep = declare_dependency(dependencies: [sdl2_lib])\n"
-                "if(build_target == 'linux' or build_target == 'win64')\n"
-                "enet_lib = meson.get_compiler('c').find_library('enet')\nendif\n"
-                "enet_dep = declare_dependency(dependencies: [enet_lib])\n"
-                "libsim_dependencies = [sdl2_dep, enet_dep]\n"
-                "libsim = library('sim',\n"
-                "    include_directories: [nitrosdk_includes, libsim_includes],\n"
-                "    pic: build_target == 'nx',\n"
-                "    dependencies: []\n"
-                ")\n",
+                """libsim_includes = include_directories('include')
+sdl2_lib = library('SDL2')
+enet_lib = library('enet')
+if(build_target == 'linux' or build_target == 'win64')
+sdl2_lib = meson.get_compiler('c').find_library('SDL2')
+endif
+sdl2_dep = declare_dependency(dependencies: [sdl2_lib])
+if(build_target == 'linux' or build_target == 'win64')
+enet_lib = meson.get_compiler('c').find_library('enet')
+endif
+enet_dep = declare_dependency(dependencies: [enet_lib])
+libsim_dependencies = [sdl2_dep, enet_dep]
+libsim = library('sim',
+    include_directories: [nitrosdk_includes, libsim_includes],
+    pic: build_target == 'nx',
+    dependencies: []
+)
+""",
                 encoding="utf-8")
             (root / "libraries/sim/src").mkdir(parents=True)
             (root / "libraries/sim/src/sim_main.cpp").write_text(
