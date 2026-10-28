@@ -7,13 +7,12 @@
 export async function persistRomAtomically({
   filesystem,
   directory,
-  encoding,
   file,
   toBase64,
   chunkSize = 1024 * 1024,
 }) {
-  if (!filesystem || !directory || !encoding || !file || typeof toBase64 !== 'function') {
-    throw new TypeError('Filesystem, directory, encoding, file and toBase64 are required.');
+  if (!filesystem || !directory || !file || typeof toBase64 !== 'function') {
+    throw new TypeError('Filesystem, directory, file and toBase64 are required.');
   }
   if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) {
     throw new TypeError('chunkSize must be a positive safe integer.');
@@ -54,7 +53,6 @@ export async function persistRomAtomically({
       path: staging,
       data: toBase64(await firstChunk.arrayBuffer()),
       directory,
-      encoding,
       recursive: true,
     });
 
@@ -64,7 +62,6 @@ export async function persistRomAtomically({
         path: staging,
         data: toBase64(await chunk.arrayBuffer()),
         directory,
-        encoding,
       });
     }
 
