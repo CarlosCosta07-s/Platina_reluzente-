@@ -44,6 +44,13 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(mainActivity, /registerPlugin\(PlatinaGamePlugin\.class\)/);
     assert.match(plugin, /startActivity\(intent\)/);
     assert.match(plugin, /roms\/current\.nds/);
+    assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
+    assert.match(plugin, /!destination\.exists\(\) && previous\.exists\(\) && !previous\.renameTo\(destination\)/);
+    assert.ok(
+      plugin.indexOf('!destination.exists() && previous.exists()')
+        < plugin.indexOf('if (destination.exists() && previous.exists()) deleteRecursively(previous)'),
+      'the previous runtime must be recovered before stale backups are deleted',
+    );
     assert.match(manifest, /android:name="org\.libsdl\.app\.SDLActivity"/);
     assert.match(manifest, /android:exported="false"/);
     assert.match(manifest, /0x00030002/);
