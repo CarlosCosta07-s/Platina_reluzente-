@@ -30,6 +30,10 @@ CORE_FILES = {
     "fat.bin": 8,
     "rsasig.bin": 1,
 }
+REQUIRED_RUNTIME_ARCHIVES = (
+    "wazaeffect/we.arc",
+    "battle/skill/waza_seq.narc",
+)
 EXECUTABLE_CANDIDATES = ("main", "main.exe", "pokeplatinum", "pokeplatinum.exe")
 OVERLAY_PATTERNS = {
     "overlay9": re.compile(r"^overlay9_\d+\.bin$"),
@@ -151,6 +155,23 @@ def inspect_runtime_directory(
             if overlay.stat().st_size == 0:
                 invalid.append({"path": overlay.relative_to(root).as_posix(), "problem": "overlay vazio"})
 
+    # These archives are essential to battle/move-animation behavior. The upstream
+    # Windows CI once skipped their generation, which let a broken package pass.
+    for relative_name in REQUIRED_RUNTIME_ARCHIVES:
+        path = root / relative_name
+        if not path.is_file():
+            missing.append(relative_name)
+            continue
+        valid, message = _validate_narc(path)
+        if not valid:
+            invalid.append({"path": relative_name, "problem": message})
+        else:
+            checked.append({
+                "path": relative_name,
+                "status": "present_and_valid_narc",
+                "size_bytes": path.stat().st_size,
+            })
+
     localization_report: list[dict[str, str | int]] = []
     if require_localized_resources:
         for relative in TARGET_FILES:
@@ -214,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--runtime-dir",
         required=True,
-        help="Diretório de trabalho do executável nativo, por exemplo build_linux ou build_win64.",
+        help="Diretório de runtime do executável nativo, por exemplo build_linux/pokeplatinum ou build_win64/pokeplatinum.",
     )
     parser.add_argument(
         "--require-localized-resources",

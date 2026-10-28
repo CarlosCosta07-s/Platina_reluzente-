@@ -19,7 +19,8 @@ O foco inicial é compilar e executar a base nativa, sem otimização prematura.
 ## Marco 1 — inicialização desktop reproduzível
 
 - [x] Build limpo Linux x86-64 na CI, sem artefatos de build preexistentes.
-- [x] Build limpo Windows x64 na CI.
+- [x] Compilar o executável Windows x64 na CI.
+- [ ] Confirmar que o pacote Windows contém os arquivos de animação obrigatórios `wazaeffect/we.arc` e `battle/skill/waza_seq.narc`.
 - [ ] Reproduzir as instruções numa máquina limpa.
 - [ ] Confirmar inicialização com uma cópia local válida da ROM USA Rev. 1.
 - [ ] Confirmar que logs e erros de carregamento identificam os problemas.

@@ -53,15 +53,15 @@ A auditoria Android depende de a configuração do build já ter baixado o subpr
 
 ## Teste com uma cópia local
 
-Uma compilação bem-sucedida não prova que o jogo inicia. O extrator nativo grava os arquivos no diretório de trabalho atual. Execute `main`/`main.exe` a partir de `build_linux` ou `build_win64`, selecione a sua cópia original USA Rev. 1 e confirme inicialização, tela inicial, áudio, entrada e criação dos arquivos de dados.
+Uma compilação bem-sucedida não prova que o jogo inicia. O extrator nativo grava os arquivos no diretório de trabalho atual. Execute `main`/`main.exe` a partir de `build_linux/pokeplatinum` ou `build_win64/pokeplatinum`, selecione a sua cópia original USA Rev. 1 e confirme inicialização, tela inicial, áudio, entrada e criação dos arquivos de dados.
 
 Depois que o porte extrair os dados, feche o jogo e valide o diretório local:
 
-    python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux
+    python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum
 
 Para exigir também os sete NARC da versão PT-BR de referência após a importação (estrutura NARC e SHA-256 correspondentes):
 
-    python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux --require-localized-resources
+    python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum --require-localized-resources
 
 O verificador apenas confirma a presença e a estrutura básica dos arquivos; não inicia o jogo nem comprova que ele é jogável. Depois disso, use o importador para substituir localmente os sete recursos NARC allowlisted.
 

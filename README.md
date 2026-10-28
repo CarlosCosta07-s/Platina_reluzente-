@@ -72,12 +72,12 @@ Após compilar e iniciar o porte uma vez para preparar os dados locais, feche o 
 
     python3 tools/import_localization.py \
       --rom "/caminho/local/PK Plat [PT-BR].nds" \
-      --destination "vendor/pokeplatinum-native/build_linux" \
+      --destination "vendor/pokeplatinum-native/build_linux/pokeplatinum" \
       --force
 
-Em Windows, use o diretório de trabalho do executável em build_win64. O extrator upstream usa o diretório de trabalho atual; por isso, execute o jogo a partir de build_linux ou build_win64, e não de outra pasta. A ferramenta modifica apenas os sete arquivos allowlisted no diretório de destino; não altera a ROM de origem nem faz upload. Ela valida a estrutura NARC e só recupera o tamanho declarado no NARC quando o intervalo adicional não se sobrepõe a outro arquivo FAT.
+Em Windows, use o diretório de trabalho do executável em build_win64/pokeplatinum. O extrator upstream usa o diretório de trabalho atual; execute o jogo a partir de build_linux/pokeplatinum ou build_win64/pokeplatinum, e não de outra pasta. A ferramenta modifica apenas os sete arquivos allowlisted no diretório de destino; não altera a ROM de origem nem faz upload. Ela valida a estrutura NARC e só recupera o tamanho declarado no NARC quando o intervalo adicional não se sobrepõe a outro arquivo FAT.
 
-Depois da importação, confira os arquivos locais com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux --require-localized-resources`. Além de validar a estrutura NARC, essa opção compara SHA-256 com a versão PT-BR específica usada como referência; um NARC estruturalmente válido, mas de outra versão, não será aceito. A validação não inicia o jogo. A importação desses recursos ainda não prova que todas as telas e eventos funcionam em PT-BR. Confirme fontes, acentos, menus, diálogos, batalhas e salvamento dentro do jogo antes de considerar essa variante compatível. Veja a [documentação de localização](docs/LOCALIZATION.md).
+Depois da importação, confira os arquivos locais com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum --require-localized-resources`. Além de validar a estrutura NARC, essa opção compara SHA-256 com a versão PT-BR específica usada como referência; um NARC estruturalmente válido, mas de outra versão, não será aceito. A validação não inicia o jogo. A importação desses recursos ainda não prova que todas as telas e eventos funcionam em PT-BR. Confirme fontes, acentos, menus, diálogos, batalhas e salvamento dentro do jogo antes de considerar essa variante compatível. Veja a [documentação de localização](docs/LOCALIZATION.md).
 
 Execute os testes automatizados sem precisar de ROM:
 

@@ -34,6 +34,10 @@ def _runtime(root: Path, *, include_all_narc: bool = True) -> Path:
     (root / "overlay7").mkdir()
     (root / "overlay9" / "overlay9_1.bin").write_bytes(b"ov9")
     (root / "overlay7" / "overlay7_1.bin").write_bytes(b"ov7")
+    for relative_name in checker.REQUIRED_RUNTIME_ARCHIVES:
+        target = root / relative_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(_narc())
     if include_all_narc:
         for relative in TARGET_FILES:
             target = root.joinpath(*relative.parts)
@@ -74,6 +78,23 @@ class RuntimeDataCheckTests(unittest.TestCase):
                 report = checker.inspect_runtime_directory(root, require_localized_resources=True)
             self.assertFalse(report["ready_for_launch_attempt"])
             self.assertTrue(any("SHA-256" in item["problem"] for item in report["invalid"]))
+
+    def test_missing_battle_animation_archive_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _runtime(Path(tmp) / "runtime")
+            target = root / "wazaeffect/we.arc"
+            target.unlink()
+            report = checker.inspect_runtime_directory(root)
+            self.assertFalse(report["ready_for_launch_attempt"])
+            self.assertIn("wazaeffect/we.arc", report["missing"])
+
+    def test_invalid_battle_animation_archive_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _runtime(Path(tmp) / "runtime")
+            (root / "battle/skill/waza_seq.narc").write_bytes(b"not a NARC")
+            report = checker.inspect_runtime_directory(root)
+            self.assertFalse(report["ready_for_launch_attempt"])
+            self.assertTrue(any(item["path"] == "battle/skill/waza_seq.narc" for item in report["invalid"]))
 
     def test_missing_runtime_core_file_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
