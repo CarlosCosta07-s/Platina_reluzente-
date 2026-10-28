@@ -49,6 +49,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('std::string(androidInternalStoragePath) + "/pokeplatinum"', content)
             self.assertIn('chdir(androidRuntimeDirectory.c_str())', content)
             self.assertIn('#include <SDL2/SDL_system.h>', content)
+            self.assertIn(r"importedRomPath[0] != '\0'", content)
+            self.assertIn(r'fprintf(stderr, "Unable to enter Android runtime directory: %s\n",', content)
             self.assertIn('fopen("header.bin", "rb")', content)
             self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
             self.assertFalse(prepare_native_runtime(root))
@@ -58,7 +60,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             root = Path(tmp)
             source = self.make_source(
                 root,
-                '#include <SDL2/SDL.h>\\n\\nint main(int argc, char *argv[]) {\\n'
+                '#include <SDL2/SDL.h>\n\nint main(int argc, char *argv[]) {\n'
                 + LEGACY_PATCHED_HEADER_LOAD
                 + '\\n}\\n',
             )

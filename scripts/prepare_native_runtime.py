@@ -21,7 +21,7 @@ LEGACY_PATCHED_HEADER_LOAD = r'''  // Prefer the ROM selected in the launcher fo
   // Use the packaged header.bin as a safe fallback for direct/manual launches.
   const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
   FILE *romFile = NULL;
-  if (importedRomPath != NULL && importedRomPath[0] != '\\0') {
+  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
     romFile = fopen(importedRomPath, "rb");
   }
   if (romFile == NULL) {
@@ -45,7 +45,7 @@ ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
     std::string androidRuntimeDirectory =
         std::string(androidInternalStoragePath) + "/pokeplatinum";
     if (chdir(androidRuntimeDirectory.c_str()) != 0) {
-      fprintf(stderr, "Unable to enter Android runtime directory: %s\\n",
+      fprintf(stderr, "Unable to enter Android runtime directory: %s\n",
               androidRuntimeDirectory.c_str());
     }
   }
@@ -64,7 +64,7 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
   }
 #else
   const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
-  if (importedRomPath != NULL && importedRomPath[0] != '\\0') {
+  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
     romFile = fopen(importedRomPath, "rb");
   }
 #endif
