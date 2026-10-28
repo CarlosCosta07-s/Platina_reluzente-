@@ -153,7 +153,7 @@ jobs:
           retention-days: 14
 
   android:
-    name: Android ROM importer and native game APKs for the same commit
+    name: One Android APK with ROM importer and bundled native runtime
     needs: [verify-platform-builds, launcher-source-checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -195,32 +195,40 @@ jobs:
       - name: Sync Capacitor Filesystem plugin
         working-directory: launcher-app
         run: npx cap sync android
-      - name: Build ROM importer APK
-        working-directory: launcher-app/android
-        run: |
-          chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug
-      - name: Stage ROM importer APK
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p launcher-app/dist
-          cp launcher-app/android/app/build/outputs/apk/debug/app-debug.apk launcher-app/dist/Platina-Reluzente-Android-ROM-Importer.apk
-          test -s launcher-app/dist/Platina-Reluzente-Android-ROM-Importer.apk
-      - name: Download native Android game APK from matching build
+      - name: Download native Android runtime and game data from matching build
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ needs.verify-platform-builds.outputs.android_run_id }}
-          name: platina-reluzente-android-arm64-experimental-apk
+          name: platina-reluzente-android-arm64-native-libs
           path: launcher-app/dist/native-game
-      - name: Upload Android package set
+      - name: Integrate SDL runtime into the ROM launcher
+        working-directory: launcher-app
+        run: node scripts/integrate-android-runtime.cjs --project android --runtime-artifact dist/native-game
+      - name: Build the single integrated Android APK
+        working-directory: launcher-app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace assembleDebug
+      - name: Verify the combined APK includes runtime, assets and ROM importer
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          apk=launcher-app/android/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          zipinfo -1 "$apk" | grep -Fx 'lib/arm64-v8a/libmain.so'
+          zipinfo -1 "$apk" | grep -Fx 'lib/arm64-v8a/libSDL2.so'
+          zipinfo -1 "$apk" | grep -Fx 'lib/arm64-v8a/libc++_shared.so'
+          zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/header.bin'
+          zipinfo -1 "$apk" | grep -Fx 'assets/pokeplatinum/firmware.bin'
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+          mkdir -p launcher-app/dist
+          cp "$apk" launcher-app/dist/Platina-Reluzente-Android-arm64-complete.apk
+      - name: Upload the single integrated Android APK
         uses: actions/upload-artifact@v4
         with:
           name: platina-reluzente-android-arm64-complete
-          path: |
-            launcher-app/dist/Platina-Reluzente-Android-ROM-Importer.apk
-            launcher-app/dist/native-game/Platina-Reluzente-Android-arm64-experimental.apk
+          path: launcher-app/dist/Platina-Reluzente-Android-arm64-complete.apk
           if-no-files-found: error
           retention-days: 14

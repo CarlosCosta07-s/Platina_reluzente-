@@ -2,12 +2,14 @@
 
 Launcher multiplataforma para o porte nativo comunitário de Pokémon Platinum.
 
-## Uso no PC
+## Windows e Linux
 
-O launcher desktop inclui o executável nativo e os recursos no próprio pacote. Abra o launcher, importe sua ROM \`.nds\` e use **Iniciar jogo**; não é necessário selecionar um executável separado. A ROM é validada e copiada para o armazenamento privado do aplicativo.
+O pacote desktop completo inclui o executável nativo e os recursos do jogo. Abra o launcher, importe sua ROM \`.nds\` e use **Iniciar jogo**. Não é necessário localizar ou selecionar um executável separado. A ROM é validada e guardada no armazenamento privado; o motor nativo usa o caminho importado para ler o cabeçalho.
 
-## Uso no Android
+## Android
 
-O APK importador salva a ROM \`.nds\` no armazenamento privado do aplicativo e valida seu cabeçalho. A ponte de execução do motor SDL/NDK a partir da interface Capacitor ainda está em desenvolvimento, então o APK importador não deve ser tratado como uma versão jogável completa. O APK experimental nativo é distribuído no mesmo conjunto de artefatos quando a compilação Android passa.
+O APK integrado reúne a interface, o importador de ROM, o runtime nativo ARM64, SDL2 e os recursos do jogo. Importe sua ROM \`.nds\`; ao tocar em **Iniciar jogo**, o aplicativo valida a ROM, prepara os recursos no armazenamento privado e abre a atividade SDL incluída no mesmo APK. Não é necessário instalar um segundo APK nem selecionar um executável.
 
-O pacote completo é gerado apenas quando Windows, Linux e Android passam no mesmo commit. Os artefatos de CI expiram após 14 dias. A ROM permanece local; use somente arquivos que você tenha direito de utilizar.
+O empacotamento combinado só é liberado quando Windows, Linux e Android passam no mesmo commit. O runtime Android exige ARM64 e Android API 24 ou superior. A compilação do APK não substitui o teste em dispositivo real: execução gráfica, toque, áudio e salvamentos ainda precisam de validação em aparelho.
+
+A ROM permanece local e não é incluída nos artefatos. Use apenas arquivos que você tenha direito de utilizar. Os artefatos de CI expiram após 14 dias.

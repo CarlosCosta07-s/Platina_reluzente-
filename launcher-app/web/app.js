@@ -1,4 +1,7 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { registerPlugin } from '@capacitor/core';
+
+const NativeGame = registerPlugin('PlatinaGame');
 
 'use strict';
 (function () {
@@ -29,8 +32,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
   function renderPrimaryAction() {
     if (state.importing) { launchLabel.textContent = 'Importando ROM…'; launchButton.disabled = true; }
     else if (!state.romImported) { launchLabel.textContent = 'Importar ROM'; launchButton.disabled = false; }
-    else if (state.isAndroid) { launchLabel.textContent = 'Motor Android em integração'; launchButton.disabled = true; }
-    else if (!state.runtimeAvailable) { launchLabel.textContent = 'Executável ausente do pacote'; launchButton.disabled = true; }
+    else if (!state.runtimeAvailable) { launchLabel.textContent = 'Motor nativo indisponível'; launchButton.disabled = true; }
     else { launchLabel.textContent = 'Iniciar jogo'; launchButton.disabled = false; }
   }
   function detectAndroid() {
@@ -51,14 +53,25 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
   }
   async function importAndroidRom(file) {
     await validateRom(file);
+    const destination = 'roms/current.nds';
+    try { await Filesystem.deleteFile({ path: destination, directory: Directory.Data }); } catch {}
+    const chunkSize = 1024 * 1024;
+    const firstChunk = file.slice(0, Math.min(chunkSize, file.size));
     await Filesystem.writeFile({
-      path: 'roms/current.nds', data: toBase64(await file.arrayBuffer()),
+      path: destination, data: toBase64(await firstChunk.arrayBuffer()),
       directory: Directory.Data, recursive: true
     });
+    for (let offset = chunkSize; offset < file.size; offset += chunkSize) {
+      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+      await Filesystem.appendFile({
+        path: destination, data: toBase64(await chunk.arrayBuffer()),
+        directory: Directory.Data
+      });
+    }
     state.romName = file.name; state.romSize = file.size; state.romImported = true;
-    localStorage.setItem('platinaRom', JSON.stringify({ name: file.name, size: file.size, storedPath: 'roms/current.nds' }));
+    localStorage.setItem('platinaRom', JSON.stringify({ name: file.name, size: file.size, storedPath: destination }));
     renderRom();
-    setStatus('ROM validada e salva no armazenamento privado. A execução do motor Android ainda está em integração.');
+    setStatus('ROM validada e guardada no armazenamento privado. Toque em Iniciar jogo para abrir o motor nativo.');
   }
   async function chooseRom() {
     if (state.isAndroid || !window.platina) { romPicker.click(); return; }
@@ -76,15 +89,17 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
   }
   async function launchGame() {
     if (!state.romImported) { await chooseRom(); return; }
-    if (state.isAndroid) {
-      setStatus('A ROM está importada. A ponte de execução do motor nativo ainda não está integrada a este launcher.', true);
+    if (!state.runtimeAvailable) {
+      setStatus('O pacote não contém todos os componentes do motor nativo.', true);
       return;
     }
     launchButton.disabled = true;
-    setStatus('Iniciando o executável nativo incluído no pacote…');
+    setStatus(state.isAndroid ? 'Preparando os recursos e iniciando o jogo…' : 'Iniciando o executável nativo incluído no pacote…');
     try {
-      const result = await window.platina.launchGame();
-      setStatus(result.message, !result.ok);
+      const result = state.isAndroid
+        ? await NativeGame.launchGame()
+        : await window.platina.launchGame();
+      setStatus(result.message || 'O motor nativo foi iniciado.', !result.ok);
     } catch (error) { setStatus('Falha ao iniciar o jogo: ' + error.message, true); }
     finally { renderPrimaryAction(); }
   }
@@ -102,7 +117,9 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
     }
     state.isAndroid = detectAndroid();
     if (state.isAndroid) {
-      platformLabel.textContent = 'Android · ARM64';
+      platformLabel.textContent = 'Android · ARM64 nativo';
+      const runtime = await NativeGame.getRuntimeStatus().catch(() => ({ available: false }));
+      state.runtimeAvailable = Boolean(runtime && runtime.available);
       try {
         const saved = JSON.parse(localStorage.getItem('platinaRom') || 'null');
         if (saved) {
@@ -111,7 +128,11 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
         }
       } catch { localStorage.removeItem('platinaRom'); }
       renderRom(); renderPrimaryAction();
-      setStatus(state.romImported ? 'ROM salva localmente. O motor Android ainda está em integração.' : 'Importe sua ROM .nds; ela será salva no armazenamento privado.');
+      if (!state.runtimeAvailable) {
+        setStatus('Este APK não contém o runtime Android ARM64 completo. Instale o pacote integrado mais recente.', true);
+      } else {
+        setStatus(state.romImported ? 'ROM importada. O motor nativo está incluído neste APK.' : 'Importe sua ROM .nds; o motor nativo já vem incluído.');
+      }
       return;
     }
     platformLabel.textContent = 'Web de teste';
