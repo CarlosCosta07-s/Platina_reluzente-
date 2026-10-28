@@ -256,13 +256,20 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
     # the simulator-only include path does not propagate across Meson projects.
     include_marker = "add_project_arguments('-I' + (meson.current_source_dir() / '../libntr/libraries/sim/android_include'), language: ['c', 'cpp'])"
     if include_marker not in text:
+        # Meson requires add_project_arguments() before any build target in
+        # the subproject. Place the platform include directly after the
+        # build_target option, not at EOF after static libraries are declared.
+        target_line = "build_target = get_option('build_target')\n"
+        if text.count(target_line) != 1:
+            raise PatchError(name + ": build_target declaration missing/duplicated")
         android_block = (
-            "\n\nif (build_target == 'android')\n"
-            "    " + include_marker + "\n"
-            "endif\n"
+            target_line
+            + "\nif (build_target == 'android')\n"
+            + "    " + include_marker + "\n"
+            + "endif\n"
         )
-        text += android_block
-        changes.append(name + ": expose shared SDL2 headers to Android compile")
+        text = text.replace(target_line, android_block, 1)
+        changes.append(name + ": expose shared SDL2 headers before Android targets")
 
     path.write_text(text, encoding="utf-8")
 

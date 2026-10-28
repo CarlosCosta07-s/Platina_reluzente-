@@ -304,6 +304,10 @@ libsim = library('sim',
             meson_result = (root / "meson.build").read_text(encoding="utf-8")
             self.assertIn("android_include", meson_result)
             self.assertIn("language: ['c', 'cpp']", meson_result)
+            self.assertLess(
+                meson_result.index("add_project_arguments('-I'"),
+                meson_result.index("nitrosystem_args +="),
+            )
             second = patch_sdk_project(root, "libntrsystem", "nitrosystem_args")
             self.assertFalse(any("expose shared SDL2 headers" in item for item in second))
             self.assertEqual(1, meson_result.count("android_include"))
