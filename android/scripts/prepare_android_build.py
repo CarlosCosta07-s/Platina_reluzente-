@@ -340,6 +340,29 @@ def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
         if len(undef_pattern.findall(prefix)) > 1:
             raise PatchError(f"{path}: duplicate inline-linkage macro cleanup markers")
 
+        # A correctly normalized header must be a true no-op on repeat runs.
+        # This also avoids rewriting files unnecessarily during local iteration.
+        existing_declarations = list(patched_declaration_pattern.finditer(prefix))
+        existing_undefs = list(undef_pattern.finditer(prefix))
+        if (
+            prefix.count(macro_block) == 1
+            and len(existing_undefs) == 1
+            and not declaration_pattern.search(prefix)
+            and existing_declarations
+        ):
+            macro_position = prefix.index(macro_block)
+            include_positions = [
+                match.start()
+                for match in re.finditer(r"(?m)^[ \t]*#include\b", prefix)
+            ]
+            last_include_position = max(include_positions, default=-1)
+            if (
+                macro_position > last_include_position
+                and macro_position < existing_declarations[0].start()
+                and existing_undefs[0].start() > existing_declarations[-1].start()
+            ):
+                continue
+
         # Normalize both a clean upstream header and a header left by the older
         # patch. In sbc.h, kernel.h is included before its declarations; defining
         # this shared macro immediately after config.h lets kernel.h undefine it
