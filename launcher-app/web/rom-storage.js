@@ -49,6 +49,8 @@ export async function persistRomAtomically({
   try {
     const firstChunkSize = Math.min(chunkSize, file.size);
     const firstChunk = file.slice(0, firstChunkSize);
+    // Capacitor interprets Base64 strings as binary only when encoding is omitted.
+    // Its Encoding enum is for text encodings, not a BASE64 value.
     await filesystem.writeFile({
       path: staging,
       data: toBase64(await firstChunk.arrayBuffer()),
