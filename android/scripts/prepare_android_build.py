@@ -246,12 +246,12 @@ def patch_libntr(root: Path) -> list[str]:
 
     sim_path = root / "libraries/sim/meson.build"
     sim = sim_path.read_text(encoding="utf-8")
-    placeholder_libraries = "sdl2_lib = library('SDL2')\\nenet_lib = library('enet')\\n"
+    placeholder_libraries = "sdl2_lib = library('SDL2')\nenet_lib = library('enet')\n"
     guarded_libraries = (
-        "if (build_target == 'arm')\\n"
-        "    sdl2_lib = library('SDL2')\\n"
-        "    enet_lib = library('enet')\\n"
-        "endif\\n"
+        "if (build_target == 'arm')\n"
+        "    sdl2_lib = library('SDL2')\n"
+        "    enet_lib = library('enet')\n"
+        "endif\n"
     )
     if guarded_libraries not in sim:
         sim, changed = replace_once(
