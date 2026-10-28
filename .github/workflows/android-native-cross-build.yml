@@ -1,0 +1,180 @@
+name: Android native ARM64 cross-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-native-cross-build.yml"
+      - "scripts/pin_native_dependencies.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64-shared-library:
+    name: Cross-compile libmain.so for arm64-v8a
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install host build tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends git cmake ninja-build build-essential python3-pip pkg-config
+          python -m pip install --user meson==1.12.0 ninja
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root=/usr/local/lib/android/sdk
+          if [[ -n "$ANDROID_HOME" ]]; then sdk_root="$ANDROID_HOME"; fi
+          sdkmanager_path="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -n "$sdkmanager_path"
+          set +o pipefail
+          yes | "$sdkmanager_path" --licenses
+          set -o pipefail
+          "$sdkmanager_path" "platforms;android-35" "ndk;27.2.12479018"
+          echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk_root/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "$sdk_root/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
+      - name: Fetch pinned source revisions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root="$RUNNER_TEMP/pokeplatinum"
+          sdl="$RUNNER_TEMP/SDL"
+          enet="$RUNNER_TEMP/enet"
+          git init "$root"
+          git -C "$root" remote add origin https://github.com/cybervisi0n/pokeplatinum.git
+          git -C "$root" fetch --depth=1 origin 35067868f64f23d25d17ac3e536cfdd9a7f40523
+          git -C "$root" checkout --detach FETCH_HEAD
+          test "$(git -C "$root" rev-parse HEAD)" = "35067868f64f23d25d17ac3e536cfdd9a7f40523"
+          git init "$sdl"
+          git -C "$sdl" remote add origin https://github.com/libsdl-org/SDL.git
+          git -C "$sdl" fetch --depth=1 origin fa24d868ac2f8fd558e4e914c9863411245db8fd
+          git -C "$sdl" checkout --detach FETCH_HEAD
+          test "$(git -C "$sdl" rev-parse HEAD)" = "fa24d868ac2f8fd558e4e914c9863411245db8fd"
+          git init "$enet"
+          git -C "$enet" remote add origin https://github.com/lsalzman/enet.git
+          git -C "$enet" fetch --depth=1 origin 2662c0de09e36f2a2030ccc2c528a3e4c9e8138a
+          git -C "$enet" checkout --detach FETCH_HEAD
+          test "$(git -C "$enet" rev-parse HEAD)" = "2662c0de09e36f2a2030ccc2c528a3e4c9e8138a"
+          echo "NATIVE_SOURCE=$root" >> "$GITHUB_ENV"
+          echo "SDL_SOURCE=$sdl" >> "$GITHUB_ENV"
+          echo "ENET_SOURCE=$enet" >> "$GITHUB_ENV"
+      - name: Pin Meson dependencies and download source subprojects
+        run: |
+          set -Eeuo pipefail
+          python scripts/pin_native_dependencies.py "$NATIVE_SOURCE"
+          meson subprojects download --sourcedir "$NATIVE_SOURCE"
+      - name: Build SDL2 shared library
+        run: |
+          set -Eeuo pipefail
+          build="$RUNNER_TEMP/sdl2-build"
+          mkdir -p "$RUNNER_TEMP/sdl2-lib"
+          cmake -S "$SDL_SOURCE" -B "$build" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=24 \
+            -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$RUNNER_TEMP/sdl2-lib" \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF
+          cmake --build "$build" --target SDL2 --parallel 2
+          test -s "$RUNNER_TEMP/sdl2-lib/libSDL2.so"
+          echo "SDL2_ANDROID_LIBDIR=$RUNNER_TEMP/sdl2-lib" >> "$GITHUB_ENV"
+      - name: Build ENet static library
+        run: |
+          set -Eeuo pipefail
+          build="$RUNNER_TEMP/enet-build"
+          mkdir -p "$RUNNER_TEMP/enet-lib"
+          cmake -S "$ENET_SOURCE" -B "$build" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=24 \
+            -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY="$RUNNER_TEMP/enet-lib"
+          cmake --build "$build" --target enet --parallel 2
+          test -s "$RUNNER_TEMP/enet-lib/libenet.a"
+          echo "ENET_ANDROID_LIBDIR=$RUNNER_TEMP/enet-lib" >> "$GITHUB_ENV"
+      - name: Prepare Android Meson target and GLES renderer
+        run: |
+          set -Eeuo pipefail
+          python android/scripts/prepare_android_build.py \
+            --source-root "$NATIVE_SOURCE" \
+            --sdl-source "$SDL_SOURCE" \
+            --enet-source "$ENET_SOURCE" \
+            --json | tee "$RUNNER_TEMP/android-build-preparation.json"
+          python android/scripts/prepare_android_graphics.py \
+            --source-root "$NATIVE_SOURCE/subprojects/libntr" \
+            --shader-output "$RUNNER_TEMP/android-gles-shaders" \
+            --json | tee "$RUNNER_TEMP/android-gles-report.json"
+      - name: Configure NDK cross-build
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          toolchain="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          cat > "$RUNNER_TEMP/android-arm64.ini" <<EOF
+          [binaries]
+          c = '$toolchain/bin/aarch64-linux-android24-clang'
+          cpp = '$toolchain/bin/aarch64-linux-android24-clang++'
+          ar = '$toolchain/bin/llvm-ar'
+          strip = '$toolchain/bin/llvm-strip'
+
+          [host_machine]
+          system = 'android'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
+
+          [properties]
+          sys_root = '$toolchain/sysroot'
+          needs_exe_wrapper = true
+
+          [built-in options]
+          c_args = ['-fPIC']
+          cpp_args = ['-fPIC']
+          c_link_args = ['-Wl,-z,max-page-size=16384']
+          cpp_link_args = ['-Wl,-z,max-page-size=16384']
+          EOF
+          meson setup "$RUNNER_TEMP/build_android" "$NATIVE_SOURCE" \
+            --cross-file "$RUNNER_TEMP/android-arm64.ini" \
+            -Dbuild_target=android \
+            -Dlibntr:android_sdl2_libdir="$SDL2_ANDROID_LIBDIR" \
+            -Dlibntr:android_enet_libdir="$ENET_ANDROID_LIBDIR"
+      - name: Compile native game library
+        run: |
+          set -Eeuo pipefail
+          meson compile -C "$RUNNER_TEMP/build_android" main --verbose
+          lib="$RUNNER_TEMP/build_android/libmain.so"
+          test -s "$lib"
+          file "$lib"
+          llvm-readelf -h "$lib" | tee "$RUNNER_TEMP/libmain-elf-header.txt"
+          grep -q 'AArch64' "$RUNNER_TEMP/libmain-elf-header.txt"
+          mkdir -p android-native-artifact
+          cp "$lib" android-native-artifact/
+          cp "$SDL2_ANDROID_LIBDIR/libSDL2.so" android-native-artifact/
+          cp "$ENET_ANDROID_LIBDIR/libenet.a" android-native-artifact/
+          cp "$RUNNER_TEMP/android-build-preparation.json" android-native-artifact/
+          cp "$RUNNER_TEMP/android-gles-report.json" android-native-artifact/
+      - name: Write summary
+        if: always()
+        run: |
+          {
+            echo "## Android native ARM64 cross-build"
+            echo
+            echo "Expected ABI: arm64-v8a; minimum Android API: 24."
+            echo "This job builds native shared libraries only. It does not produce a playable APK or include ROM/game assets."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ARM64 native cross-build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platina-reluzente-android-arm64-native-libs
+          path: android-native-artifact/
+          if-no-files-found: error
+          retention-days: 14
