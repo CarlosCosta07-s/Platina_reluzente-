@@ -45,15 +45,16 @@ echo "Nenhuma ROM nem recurso do jogo será copiado para o teste."
 status=0
 (
   cd "$workdir"
-  SDL_AUDIODRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 \
+  SMOKE_TEST_LOGFILE="$app_log" SMOKE_TEST_DURATION="$duration" SMOKE_TEST_BINARY="$binary" \
+    SDL_AUDIODRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 \
     xvfb-run -a timeout --signal=TERM --kill-after=3s "$((duration + 20))s" \
     bash -c '
       set -Eeuo pipefail
-      logfile="$1"
-      active_seconds="$2"
-
-      executable_path="$3"
-      "$executable_path" --appimage-extract-and-run >"$logfile" 2>&1 &
+      logfile="${SMOKE_TEST_LOGFILE:?SMOKE_TEST_LOGFILE is required}"
+      active_seconds="${SMOKE_TEST_DURATION:?SMOKE_TEST_DURATION is required}"
+      executable_path="${SMOKE_TEST_BINARY:?SMOKE_TEST_BINARY is required}"
+      echo "Launching AppImage: $executable_path"
+      APPIMAGE_EXTRACT_AND_RUN=1 "$executable_path" --appimage-extract-and-run >"$logfile" 2>&1 &
       app_pid=$!
       cleanup_app() {
         if kill -0 "$app_pid" 2>/dev/null; then
@@ -96,7 +97,7 @@ status=0
       fi
       echo "PASS: janela criada e processo permaneceu ativo."
       echo "Isso confirma apenas a inicialização pré-ROM; não comprova carregamento ou gameplay."
-    ' smoke-test "$app_log" "$duration" "$binary"
+    '
 ) >"$logfile" 2>&1 || status=$?
 
 if [[ -s "$logfile" ]]; then
