@@ -74,8 +74,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             legacy_content = UPSTREAM_HEADER.replace(
-                "int main(int argc, char *argv[]) {\\n",
-                "int main(int argc, char *argv[]) {\\n" + LEGACY_ANDROID_MAIN_INIT + "\\n",
+                "int main(int argc, char *argv[]) {\n",
+                "int main(int argc, char *argv[]) {\n" + LEGACY_ANDROID_MAIN_INIT + "\n",
                 1,
             )
             source = self.make_source(root, legacy_content)
