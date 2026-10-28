@@ -129,3 +129,26 @@ test('recovers a backup left by an earlier interrupted replacement', async () =>
   assert.deepEqual(filesystem.files.get('roms/current.nds'), newRom);
   assert.equal(filesystem.files.has('roms/current.nds.previous'), false);
 });
+
+
+test('does not replace the previous ROM when staged size validation fails', async () => {
+  const { persistRomAtomically } = await loadPersistence();
+  const oldRom = Buffer.from('previous-valid-rom');
+  const filesystem = memoryFilesystem({ 'roms/current.nds': oldRom });
+  const originalStat = filesystem.stat.bind(filesystem);
+  filesystem.stat = async (options) => {
+    const result = await originalStat(options);
+    return options.path === 'roms/current.nds.importing'
+      ? { ...result, size: result.size - 1 }
+      : result;
+  };
+
+  await assert.rejects(
+    persistRomAtomically({ ...common, filesystem, file: makeFile('new-rom-data') }),
+    /importação da ROM ficou incompleta/
+  );
+
+  assert.deepEqual(filesystem.files.get('roms/current.nds'), oldRom);
+  assert.equal(filesystem.files.has('roms/current.nds.importing'), false);
+  assert.equal(filesystem.files.has('roms/current.nds.previous'), false);
+});
