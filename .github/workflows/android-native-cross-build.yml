@@ -89,6 +89,7 @@ jobs:
           set -Eeuo pipefail
           python scripts/pin_native_dependencies.py "$NATIVE_SOURCE"
           meson subprojects download --sourcedir "$NATIVE_SOURCE"
+          python scripts/prepare_native_runtime.py "$NATIVE_SOURCE"
       - name: Build SDL2 shared library
         run: |
           set -Eeuo pipefail

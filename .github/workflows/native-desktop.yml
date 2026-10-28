@@ -40,11 +40,12 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py tools/tests/test_verify_native_package.py android/scripts/prepare_android_build.py android/scripts/prepare_android_graphics.py android/tests/test_prepare_android_build.py
+        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py tools/tests/test_prepare_native_runtime.py android/scripts/prepare_android_build.py android/scripts/prepare_android_graphics.py android/tests/test_prepare_android_build.py
 
       - name: Run unit tests
         run: |
           python -m unittest discover -s tools/tests -v
+          python -m unittest tools.tests.test_prepare_native_runtime -v
           python -m unittest android.tests.test_prepare_android_build -v
 
       - name: Validate native Linux smoke-test shell syntax
@@ -90,6 +91,14 @@ jobs:
       - name: Install build toolchain
         working-directory: vendor/pokeplatinum-native
         run: ./drun.sh make skrew
+      - name: Prepare Meson subprojects and ROM-header handoff
+        working-directory: vendor/pokeplatinum-native
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./drun.sh make meson
+          python3 subprojects/meson-1.12.0/meson.py subprojects download --sourcedir "$PWD"
+          python3 "$GITHUB_WORKSPACE/scripts/prepare_native_runtime.py" "$PWD"
       - name: Compile native Linux target
         working-directory: vendor/pokeplatinum-native
         run: ./drun.sh make linux
@@ -185,6 +194,16 @@ jobs:
         working-directory: vendor/pokeplatinum-native
         run: .\Install_MSys2.ps1
         shell: powershell
+      - name: Prepare Meson subprojects and ROM-header handoff
+        working-directory: vendor/pokeplatinum-native
+        shell: pwsh
+        run: |
+          .\Launch_MSys2.ps1 "make meson"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\Launch_MSys2.ps1 "python subprojects/meson-1.12.0/meson.py subprojects download --sourcedir ."
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python (Join-Path $env:GITHUB_WORKSPACE "scripts/prepare_native_runtime.py") (Get-Location).Path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile native Windows target
         working-directory: vendor/pokeplatinum-native
         run: .\Launch_MSys2.ps1 "GITHUB_ACTIONS= make win64"
