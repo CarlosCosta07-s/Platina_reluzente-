@@ -35,6 +35,15 @@ def _revision(path: Path) -> str:
 
 
 class PinNativeDependenciesTests(unittest.TestCase):
+    def test_libvct_is_pinned_to_the_verified_upstream_revision(self) -> None:
+        self.assertEqual(
+            PINNED_DEPENDENCIES["libvct.wrap"],
+            (
+                "https://github.com/cybervisi0n/libvct.git",
+                "a34ad47fc0d7d964483c287759b704b3b1f3b967",
+            ),
+        )
+
     def test_pins_all_moving_wrap_revisions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = _make_native_root(Path(tmp))
