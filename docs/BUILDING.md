@@ -56,7 +56,7 @@ A auditoria Android depende de a configuração do build já ter baixado o subpr
 ### Verificação do pacote gerado
 ### Teste pré-ROM da interface no Linux
 
-Na CI, o teste abaixo abre o executável num display X11 virtual com OpenGL por software, num diretório temporário vazio, e exige que o processo permaneça ativo por 15 segundos:
+Na CI, o teste abaixo abre o executável num display X11 virtual com OpenGL por software, num diretório temporário vazio, e exige que uma janela visível `libntr Application` seja criada e que o processo permaneça ativo por 15 segundos:
 
     bash scripts/smoke-test-native-startup.sh vendor/pokeplatinum-native/build_linux/pokeplatinum/main 15
 
