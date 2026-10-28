@@ -1,4 +1,4 @@
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { registerPlugin } from '@capacitor/core';
 
 const NativeGame = registerPlugin('PlatinaGame');
@@ -59,13 +59,13 @@ const NativeGame = registerPlugin('PlatinaGame');
     const firstChunk = file.slice(0, Math.min(chunkSize, file.size));
     await Filesystem.writeFile({
       path: destination, data: toBase64(await firstChunk.arrayBuffer()),
-      directory: Directory.Data, recursive: true
+      directory: Directory.Data, encoding: Encoding.BASE64, recursive: true
     });
     for (let offset = chunkSize; offset < file.size; offset += chunkSize) {
       const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
       await Filesystem.appendFile({
         path: destination, data: toBase64(await chunk.arrayBuffer()),
-        directory: Directory.Data
+        directory: Directory.Data, encoding: Encoding.BASE64
       });
     }
     state.romName = file.name; state.romSize = file.size; state.romImported = true;
