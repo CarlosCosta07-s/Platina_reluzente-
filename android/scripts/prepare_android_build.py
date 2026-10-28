@@ -149,12 +149,16 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
     text = path.read_text(encoding="utf-8")
     if dwc:
         for arg in ("c_args", "nitrodwc_args"):
-            if "build_target == 'arm' or build_target == 'android'" not in text:
-                pattern = re.compile(
+            new_pattern = re.compile(
+                r"(?m)^if\s*\(\s*build_target\s*==\s*'arm'\s+or\s+build_target\s*==\s*'android'\s*\)\s*\n"
+                r"([ \t]*add_project_arguments\(\s*" + re.escape(arg) + r"\s*,)"
+            )
+            if not new_pattern.search(text):
+                old_pattern = re.compile(
                     r"(?m)^if\s*\(\s*build_target\s*==\s*'arm'\s*\)\s*\n"
                     r"([ \t]*add_project_arguments\(\s*" + re.escape(arg) + r"\s*,)"
                 )
-                text, count = pattern.subn(
+                text, count = old_pattern.subn(
                     "if (build_target == 'arm' or build_target == 'android')\n\\1",
                     text, count=1
                 )
@@ -267,7 +271,13 @@ def patch_libntr(root: Path) -> list[str]:
         sim, changed = replace_once(sim, marker, replacement, "libntr Android platform libraries")
         if changed:
             changes.append("libntr simulator: link GLES and Android platform libraries")
-    sim = sim.replace("pic: build_target == 'nx',", "pic: build_target == 'nx' or build_target == 'android',", 1)
+    sim, pic_changes = re.subn(
+        r"pic:\s*build_target\s*==\s*'nx'(?!\s+or\s+build_target\s*==\s*'android')",
+        "pic: build_target == 'nx' or build_target == 'android'",
+        sim, count=1
+    )
+    if pic_changes:
+        changes.append("libntr simulator: enable PIC for Android")
     sim_path.write_text(sim, encoding="utf-8")
 
     main_path = root / "libraries/sim/src/sim_main.cpp"
