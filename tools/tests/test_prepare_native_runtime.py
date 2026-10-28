@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 
 from scripts.prepare_native_runtime import (
+    ANDROID_MAIN_INIT,
+    LEGACY_ANDROID_MAIN_INIT,
     LEGACY_PATCHED_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
     RuntimePreparationError,
@@ -67,6 +69,25 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('fopen("header.bin", "rb")', content)
             self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
             self.assertFalse(prepare_native_runtime(root))
+
+    def test_upgrades_legacy_android_runtime_path_patch_without_duplicate_chdir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy_content = UPSTREAM_HEADER.replace(
+                "int main(int argc, char *argv[]) {\\n",
+                "int main(int argc, char *argv[]) {\\n" + LEGACY_ANDROID_MAIN_INIT + "\\n",
+                1,
+            )
+            source = self.make_source(root, legacy_content)
+
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertEqual(1, content.count(ANDROID_MAIN_INIT))
+            self.assertNotIn(LEGACY_ANDROID_MAIN_INIT, content)
+            self.assertIn('perror("Changing to the game runtime directory");', content)
+            self.assertEqual(1, content.count("const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();"))
+            self.assertFalse(prepare_native_runtime(root))
+
 
     def test_upgrades_the_previous_desktop_only_rom_handoff_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
