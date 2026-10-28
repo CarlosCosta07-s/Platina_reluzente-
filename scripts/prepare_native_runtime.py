@@ -48,7 +48,7 @@ ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
   // Fail early with a clear diagnostic if the native runtime cannot be entered.
   const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();
   if (androidRuntimeStoragePath == NULL || *androidRuntimeStoragePath == '\0') {
-    fprintf(stderr, "Android internal storage path is unavailable\\n");
+    fprintf(stderr, "Android internal storage path is unavailable\n");
     return 1;
   }
   std::string androidRuntimeDirectory =
