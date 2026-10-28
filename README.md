@@ -30,7 +30,7 @@ A rota escolhida é:
 
 A camada de compatibilidade recria serviços e chamadas gráficas que o jogo espera, mas **não executa uma CPU de DS emulada nem interpreta o código ARM do jogo durante a partida**: o código recompilado é compilado pelo toolchain do sistema-alvo.
 
-Veja a [arquitetura](docs/PORTING_ARCHITECTURE.md), o [roteiro](docs/ROADMAP.md), a [estratégia PT-BR](docs/LOCALIZATION.md) e o [aviso legal](docs/LEGAL.md).
+Veja o [guia de compilação](docs/BUILDING.md), a [arquitetura](docs/PORTING_ARCHITECTURE.md), o [roteiro](docs/ROADMAP.md), a [estratégia PT-BR](docs/LOCALIZATION.md) e o [aviso legal](docs/LEGAL.md).
 
 ## Código de referência e compilação
 
