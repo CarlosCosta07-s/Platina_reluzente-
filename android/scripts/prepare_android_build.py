@@ -339,9 +339,9 @@ def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
             updated_prefix = updated_prefix.replace(
                 config_marker, config_marker + "\n\n" + macro_block, 1
             )
-            decl_pattern = re.compile(r"(?m)^([ \\t]*)NNS_G3D_INLINE(?=[ \\t])")
+            decl_pattern = re.compile(r"(?m)^([ \t]*)NNS_G3D_INLINE(?=[ \t])")
             updated_prefix, count = decl_pattern.subn(
-                r"\\1NNS_G3D_INLINE_DECL", updated_prefix
+                r"\1NNS_G3D_INLINE_DECL", updated_prefix
             )
             if count == 0:
                 raise PatchError(f"{path}: no NNS_G3D_INLINE declarations were found before {inline_header}")
@@ -349,7 +349,7 @@ def patch_sdk_g3d_inline_linkage(root: Path) -> list[str]:
         else:
             if "NNS_G3D_INLINE_DECL static NNS_G3D_INLINE" not in updated_prefix:
                 raise PatchError(f"{path}: unexpected existing inline-linkage macro")
-            if re.search(r"(?m)^([ \\t]*)NNS_G3D_INLINE(?=[ \\t])", updated_prefix):
+            if re.search(r"(?m)^([ \t]*)NNS_G3D_INLINE(?=[ \t])", updated_prefix):
                 raise PatchError(f"{path}: some inline declarations were not converted")
             if updated_prefix.count("#undef NNS_G3D_INLINE_DECL") != 1:
                 raise PatchError(f"{path}: inline-linkage macro cleanup marker is missing or duplicated")

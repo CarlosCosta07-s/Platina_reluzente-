@@ -389,7 +389,7 @@ libsim = library('sim',
             self.assertEqual(2, len(first))
             for name, inline_header in (("kernel.h", "kernel_inline.h"), ("sbc.h", "sbc_inline.h")):
                 content = (g3d / name).read_text(encoding="utf-8")
-                self.assertIn("#if defined(SDK_PORT)\\n#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE", content)
+                self.assertIn("#if defined(SDK_PORT)\n#define NNS_G3D_INLINE_DECL static NNS_G3D_INLINE", content)
                 self.assertIn("NNS_G3D_INLINE_DECL", content)
                 self.assertIn("#undef NNS_G3D_INLINE_DECL", content)
                 self.assertLess(content.index("#undef NNS_G3D_INLINE_DECL"), content.index(f"#include <nnsys/g3d/{inline_header}>"))
