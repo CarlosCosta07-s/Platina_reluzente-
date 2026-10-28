@@ -221,6 +221,46 @@ def patch_libvct(root: Path) -> list[str]:
     return ["libvct: expose staged SDL2 headers to Android compilation"]
 
 
+def patch_android_ppwlobby_c_args(root: Path) -> list[str]:
+    """Use a C language standard for PPW lobby .c sources on Android."""
+    path = root / "lib" / "ppwlobby" / "meson.build"
+    if not path.is_file():
+        raise PatchError(f"PPW lobby Meson source is missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    old_block = (
+        "else\n"
+        "    ppwlobby_c_args = [\n"
+        "        '-fpermissive',\n"
+        "        '-std=c++03'\n"
+        "    ]\n"
+        "endif"
+    )
+    android_block = (
+        "elif(build_target == 'android')\n"
+        "    # These are C sources; C++ flags make Clang reject the Android build.\n"
+        "    ppwlobby_c_args = [\n"
+        "        '-std=c99'\n"
+        "    ]\n"
+        "else\n"
+        "    ppwlobby_c_args = [\n"
+        "        '-fpermissive',\n"
+        "        '-std=c++03'\n"
+        "    ]\n"
+        "endif"
+    )
+
+    if android_block in original:
+        if original.count(android_block) != 1:
+            raise PatchError("PPW lobby C flags: duplicated Android branch")
+        return []
+    if original.count(old_block) != 1:
+        raise PatchError("PPW lobby C flags: expected exactly one non-ARM fallback block")
+
+    path.write_text(original.replace(old_block, android_block, 1), encoding="utf-8")
+    return ["parent PPW lobby: use C99 flags for Android C sources"]
+
+
 def patch_ppwlobby_pic(root: Path) -> list[str]:
     """Enable PIC for PPW lobby static libraries when they enter Android libmain.so."""
     lobby_root = root / "lib" / "ppwlobby"
@@ -1060,6 +1100,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
                 libntr / "meson.options", libntr / "meson.build"]
     required.extend(root / "subprojects" / name / "meson.options" for name in sdk_projects)
     required.append(root / "subprojects" / "libvct" / "meson.build")
+    required.append(root / "lib" / "ppwlobby" / "meson.build")
     missing = [str(p) for p in required if not p.is_file()]
     if missing:
         raise PatchError("Missing Meson source files: " + ", ".join(missing))
@@ -1077,6 +1118,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         stage_android_copy_script(root, staged)
         changes = patch_root(staged)
         changes.extend(patch_ppwlobby_pic(staged))
+        changes.extend(patch_android_ppwlobby_c_args(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         changes.extend(patch_libvct(staged / "subprojects/libvct"))
         for name, (arg_name, dwc) in sdk_projects.items():
