@@ -76,7 +76,11 @@ endif
                 "enet_lib = meson.get_compiler('c').find_library('enet')\nendif\n"
                 "enet_dep = declare_dependency(dependencies: [enet_lib])\n"
                 "libsim_dependencies = [sdl2_dep, enet_dep]\n"
-                "libsim = library('sim', pic: build_target == 'nx', dependencies: [])\n",
+                "libsim = library('sim',\n"
+                "    include_directories: [nitrosdk_includes, libsim_includes],\n"
+                "    pic: build_target == 'nx',\n"
+                "    dependencies: []\n"
+                ")\n",
                 encoding="utf-8")
             (root / "libraries/sim/src").mkdir(parents=True)
             (root / "libraries/sim/src/sim_main.cpp").write_text(

@@ -246,6 +246,20 @@ def patch_libntr(root: Path) -> list[str]:
 
     sim_path = root / "libraries/sim/meson.build"
     sim = sim_path.read_text(encoding="utf-8")
+    placeholder_libraries = "sdl2_lib = library('SDL2')\\nenet_lib = library('enet')\\n"
+    guarded_libraries = (
+        "if (build_target == 'arm')\\n"
+        "    sdl2_lib = library('SDL2')\\n"
+        "    enet_lib = library('enet')\\n"
+        "endif\\n"
+    )
+    if guarded_libraries not in sim:
+        sim, changed = replace_once(
+            sim, placeholder_libraries, guarded_libraries,
+            "libntr simulator empty SDL2/ENet placeholders"
+        )
+        if changed:
+            changes.append("libntr simulator: create empty SDL2/ENet placeholders only for ARM target")
     if "dirs: get_option('android_sdl2_libdir')" not in sim:
         marker = "sdl2_lib = meson.get_compiler('c').find_library('SDL2')\n"
         if sim.count(marker) != 1:
@@ -259,11 +273,11 @@ def patch_libntr(root: Path) -> list[str]:
         sim = sim.replace(marker, marker + "elif(build_target == 'android')\nenet_lib = meson.get_compiler('c').find_library('enet', dirs: get_option('android_enet_libdir'))\n", 1)
         changes.append("libntr simulator: use NDK ENet")
 
-    if "include_directories('android_include')" not in sim:
+    if "libsim_android_includes" not in sim:
         marker = "libsim_dependencies = [sdl2_dep, enet_dep]"
         replacement = (
-            marker + "\n\nif(build_target == 'android')\n"
-            "    libsim_includes += include_directories('android_include')\n"
+            marker + "\n\nlibsim_android_includes = []\n\nif(build_target == 'android')\n"
+            "    libsim_android_includes += [include_directories('android_include')]\n"
             "    foreach system_library : ['android', 'log', 'EGL', 'GLESv3']\n"
             "        libsim_dependencies += meson.get_compiler('c').find_library(system_library)\n"
             "    endforeach\nendif"
@@ -271,6 +285,16 @@ def patch_libntr(root: Path) -> list[str]:
         sim, changed = replace_once(sim, marker, replacement, "libntr Android platform libraries")
         if changed:
             changes.append("libntr simulator: link GLES and Android platform libraries")
+    new_include_marker = "include_directories: [nitrosdk_includes, libsim_includes] + libsim_android_includes,"
+    if new_include_marker not in sim:
+        sim, changed = replace_once(
+            sim,
+            "include_directories: [nitrosdk_includes, libsim_includes],",
+            new_include_marker,
+            "libntr Android include paths"
+        )
+        if changed:
+            changes.append("libntr simulator: append Android-specific include paths")
     sim, pic_changes = re.subn(
         r"pic:\s*build_target\s*==\s*'nx'(?!\s+or\s+build_target\s*==\s*'android')",
         "pic: build_target == 'nx' or build_target == 'android'",
