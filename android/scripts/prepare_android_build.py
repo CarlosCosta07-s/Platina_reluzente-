@@ -13,6 +13,7 @@ from pathlib import Path
 
 PARENT_SHA = "35067868f64f23d25d17ac3e536cfdd9a7f40523"
 LIBNTR_SHA = "1555d911ac80c0190ac1c321f99f1323de8b3c09"
+LIBVCT_SHA = "a34ad47fc0d7d964483c287759b704b3b1f3b967"
 OLD_CHOICE = "choices: ['arm', 'win64', 'linux', 'nx']"
 NEW_CHOICE = "choices: ['arm', 'win64', 'linux', 'nx', 'android']"
 
@@ -1328,6 +1329,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
     libntr = root / "subprojects/libntr"
     check_pin(root, PARENT_SHA, "pokeplatinum")
     check_pin(libntr, LIBNTR_SHA, "libntr")
+    check_pin(root / "subprojects/libvct", LIBVCT_SHA, "libvct")
     sdk_projects = {
         "libntrsystem": ("nitrosystem_args", False),
         "libntrwifi": ("nitrowifi_args", False),
