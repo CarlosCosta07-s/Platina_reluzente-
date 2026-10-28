@@ -45,6 +45,11 @@ class AndroidMesonPatchTests(unittest.TestCase):
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
             self.assertIn("subprojects/libntr/libraries/camera/src/meson.build", paths)
+            sdk_fnd = staged / "subprojects" / "libntrsystem" / "libraries" / "fnd" / "meson.build"
+            sdk_fnd.parent.mkdir(parents=True)
+            sdk_fnd.write_text("pic: build_target == 'android',\n", encoding="utf-8")
+            paths = android_patch_copy_paths(staged, {"libntrsystem": ("nitrosystem_args", False)})
+            self.assertIn("subprojects/libntrsystem/libraries/fnd/meson.build", paths)
             self.assertEqual(len(paths), len(set(paths)))
 
     def test_root_adds_android_shared_target_idempotently(self):
@@ -149,6 +154,33 @@ libsim = library('sim',
             self.assertIn("SDK_BUILD_ANDROID", libntr_meson)
             self.assertNotIn("project('libntr', 'c', 'cpp', 'nasm'", libntr_meson)
             self.assertIn("add_languages('nasm', required: true)", libntr_meson)
+
+    def test_sdk_project_patches_pic_in_nested_libraries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "meson.options").write_text(
+                "option('build_target', type: 'combo', choices: ['arm', 'win64', 'linux', 'nx'], value: 'arm')\n",
+                encoding="utf-8",
+            )
+            (root / "meson.build").write_text(
+                "if (build_target == 'linux')\n"
+                "nitrosystem_args += [\n '-DSDK_BUILD_LINUX'\n]\nendif\n",
+                encoding="utf-8",
+            )
+            fnd = root / "libraries" / "fnd"
+            fnd.mkdir(parents=True)
+            fnd_file = fnd / "meson.build"
+            fnd_file.write_text(
+                "libnnsfnd = library('nnsfnd',\n"
+                "    pic: build_target == 'nx',\n"
+                "    sources: [])\n",
+                encoding="utf-8",
+            )
+
+            patch_sdk_project(root, "libntrsystem", "nitrosystem_args")
+
+            result = fnd_file.read_text(encoding="utf-8")
+            self.assertIn("pic: build_target == 'nx' or build_target == 'android'", result)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:

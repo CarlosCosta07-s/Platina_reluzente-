@@ -214,6 +214,37 @@ def patch_sdk_project(root: Path, name: str, args_name: str, dwc: bool = False) 
         text = text[:match.end()] + addition + text[match.end():]
         changes.append(name + ": add Android AArch64 SDK flags")
     path.write_text(text, encoding="utf-8")
+
+    # Other NitroSDK subprojects contain their own static libraries. They are
+    # linked into libmain.so too, so their PIC policy must follow Android as
+    # well, not just the libntr subproject.
+    library_root = root / "libraries"
+    if library_root.is_dir():
+        pic_predicates = (
+            (
+                "pic: build_target == 'nx',",
+                "pic: build_target == 'nx' or build_target == 'android',",
+            ),
+            (
+                "pic: (build_target == 'nx'),",
+                "pic: (build_target == 'nx' or build_target == 'android'),",
+            ),
+        )
+        for meson_path in sorted(library_root.rglob("meson.build")):
+            original = meson_path.read_text(encoding="utf-8")
+            updated = original
+            for old, new in pic_predicates:
+                updated = updated.replace(old, new)
+            updated = re.sub(
+                r"(?m)^([ \t]*)pic:[ \t]*false,[ \t]*$",
+                r"\1pic: build_target == 'android',",
+                updated,
+            )
+            if updated != original:
+                meson_path.write_text(updated, encoding="utf-8")
+                changes.append(
+                    name + ": enable Android PIC in " + meson_path.relative_to(root).as_posix()
+                )
     return changes
 
 
@@ -501,7 +532,13 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         for path in sorted((staged / "lib" / "ppwlobby").rglob("meson.build"))
     )
     for name in sdk_projects:
+        sdk_root = staged / "subprojects" / name
         rels.extend([f"subprojects/{name}/meson.options", f"subprojects/{name}/meson.build"])
+        # patch_sdk_project modifies PIC settings in these nested libraries.
+        rels.extend(
+            path.relative_to(staged).as_posix()
+            for path in sorted(sdk_root.rglob("meson.build"))
+        )
     # The recursive Meson list can overlap with explicit staging paths.
     return list(dict.fromkeys(rels))
 
