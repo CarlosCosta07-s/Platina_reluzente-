@@ -1306,7 +1306,16 @@ def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     # Catch incomplete SDK checkouts before Meson starts compiling thousands of
     # translation units. These headers are directly required by the Android
     # platform/thread and SDL entrypoint patches.
-    required_sdl_headers = ("SDL.h", "SDL_main.h", "SDL_system.h", "SDL_thread.h")
+    required_sdl_headers = (
+        "SDL.h",
+        "SDL_config.h",
+        "SDL_main.h",
+        "SDL_revision.h",
+        "SDL_stdinc.h",
+        "SDL_system.h",
+        "SDL_thread.h",
+        "SDL_version.h",
+    )
     missing_sdl_headers = [name for name in required_sdl_headers if not (sdl_inc / name).is_file()]
     if missing_sdl_headers:
         raise PatchError("Required SDL2 headers missing: " + ", ".join(missing_sdl_headers))
