@@ -54,7 +54,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('chdir(androidRuntimeDirectory.c_str())', content)
             self.assertIn('#include <SDL2/SDL_system.h>', content)
             self.assertIn(
-                """#if !defined(SDK_BUILD_ANDROID)
+                """#ifndef SDK_BUILD_ANDROID
 #define SDL_MAIN_HANDLED
 #endif""",
                 content,
