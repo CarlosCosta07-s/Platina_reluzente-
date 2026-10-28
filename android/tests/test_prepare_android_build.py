@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
+from android.scripts.prepare_android_build import android_patch_copy_paths, patch_android_copy_script, patch_android_wifi_socket_headers, patch_libntr, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -97,7 +97,10 @@ class AndroidMesonPatchTests(unittest.TestCase):
             sdk_fnd = staged / "subprojects" / "libntrsystem" / "libraries" / "fnd" / "meson.build"
             sdk_fnd.parent.mkdir(parents=True)
             sdk_fnd.write_text("pic: build_target == 'android',\n", encoding="utf-8")
-            paths = android_patch_copy_paths(staged, {"libntrsystem": ("nitrosystem_args", False)})
+            paths = android_patch_copy_paths(staged, {
+                "libntrsystem": ("nitrosystem_args", False),
+                "libntrwifi": ("nitrowifi_args", False),
+            })
             self.assertIn("subprojects/libntrsystem/libraries/fnd/meson.build", paths)
             self.assertEqual(len(paths), len(set(paths)))
 
@@ -364,6 +367,35 @@ libsim = library('sim',
             self.assertEqual(1, meson_result.count("android_include"))
 
 
+    def test_android_wifi_network_source_includes_posix_socket_headers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "libraries" / "cps" / "src" / "network.c"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "#include <nitro.h>\n"
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)\n"
+                "#include <sys/socket.h>\n"
+                "#include <netinet/in.h>\n"
+                "#include <unistd.h>\n"
+                "#endif\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                ["libntrwifi: include POSIX socket headers for Android"],
+                patch_android_wifi_socket_headers(root),
+            )
+            updated = source.read_text(encoding="utf-8")
+            self.assertIn(
+                "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) || defined(SDK_BUILD_ANDROID)",
+                updated,
+            )
+            self.assertIn("#include <sys/socket.h>", updated)
+            self.assertIn("#include <netinet/in.h>", updated)
+            self.assertIn("#include <unistd.h>", updated)
+            self.assertEqual([], patch_android_wifi_socket_headers(root))
+
     def test_android_g3d_inline_declarations_match_static_sdk_port_definitions(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -423,6 +455,7 @@ libsim = library('sim',
                 "subprojects/libntrsystem/include/nnsys/g3d/sbc.h",
                 "subprojects/libntrsystem/include/nnsys/g3d/glbstate.h",
                 "subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h",
+                "subprojects/libntrwifi/libraries/cps/src/network.c",
             ):
                 target = staged / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -432,6 +465,7 @@ libsim = library('sim',
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/sbc.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/glbstate.h", paths)
             self.assertIn("subprojects/libntrsystem/include/nnsys/g3d/binres/res_struct_accessor.h", paths)
+            self.assertIn("subprojects/libntrwifi/libraries/cps/src/network.c", paths)
 
     def test_dwc_uses_cross_compiler_on_android(self):
         with tempfile.TemporaryDirectory() as tmp:

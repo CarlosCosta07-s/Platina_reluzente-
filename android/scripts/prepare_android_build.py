@@ -810,6 +810,30 @@ def patch_libntr(root: Path) -> list[str]:
     return changes
 
 
+
+def patch_android_wifi_socket_headers(root: Path) -> list[str]:
+    """Expose POSIX socket declarations to the Android target in libntrwifi."""
+    path = root / "libraries" / "cps" / "src" / "network.c"
+    if not path.is_file():
+        raise PatchError(f"Android Wi-Fi port source is missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    linux_condition = "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX)"
+    android_condition = (
+        "#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_NX) "
+        "|| defined(SDK_BUILD_ANDROID)"
+    )
+    if original.count(android_condition) == 1 and original.count(linux_condition) == 0:
+        return []
+    if original.count(linux_condition) != 1:
+        raise PatchError(
+            f"{path}: expected exactly one Linux/NX POSIX socket include condition"
+        )
+
+    updated = original.replace(linux_condition, android_condition, 1)
+    path.write_text(updated, encoding="utf-8")
+    return ["libntrwifi: include POSIX socket headers for Android"]
+
 def stage_headers(root: Path, sdl: Path, enet: Path) -> None:
     sdl_inc, enet_inc = sdl / "include", enet / "include" / "enet"
     if not sdl_inc.is_dir() or not enet_inc.is_dir():
@@ -859,6 +883,8 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
             changes.extend(patch_sdk_project(sdk_root, name, arg_name, dwc))
             if name == "libntrsystem":
                 changes.extend(patch_sdk_g3d_inline_linkage(sdk_root))
+            if name == "libntrwifi":
+                changes.extend(patch_android_wifi_socket_headers(sdk_root))
         stage_headers(staged / "subprojects/libntr", sdl, enet)
 
         rels = android_patch_copy_paths(staged, sdk_projects)
@@ -921,6 +947,8 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
                     (staged / "subprojects/libntrsystem/include/nnsys/g3d").rglob("*.h")
                 )
             )
+        if name == "libntrwifi":
+            rels.append("subprojects/libntrwifi/libraries/cps/src/network.c")
         # patch_sdk_project modifies PIC settings in these nested libraries.
         rels.extend(
             path.relative_to(staged).as_posix()
