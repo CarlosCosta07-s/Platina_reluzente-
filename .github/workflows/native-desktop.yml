@@ -28,9 +28,6 @@ jobs:
           python-version: "3.12"
       - name: Compile Python files
         run: python -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py
-      - name: Restore Meson dependency references
-        if: always()
-        run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" --restore "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
 
       - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
@@ -75,6 +72,10 @@ jobs:
         run: ./drun.sh make linux
       - name: Audit Android graphics compatibility requirements
         run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Restore Meson dependency references
+        if: always()
+        run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" --restore "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
+
 
   windows:
     name: Windows x64 compile
