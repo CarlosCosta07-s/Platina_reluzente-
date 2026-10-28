@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/import_localization.py scripts/pin-native-dependencies.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py
+        run: python -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py tools/tests/test_import_localization.py tools/tests/test_pin_native_dependencies.py
       - name: Run unit tests
         run: python -m unittest discover -s tools/tests -v
 
@@ -58,7 +58,7 @@ jobs:
           git -C "$native_dir" checkout --detach FETCH_HEAD
           test "$(git -C "$native_dir" rev-parse HEAD)" = "$NATIVE_SOURCE_COMMIT"
       - name: Pin Meson dependency commits
-        run: python "$GITHUB_WORKSPACE/scripts/pin-native-dependencies.py" "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
+        run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
       - name: Install runner utilities
         run: |
           sudo apt-get update
@@ -104,7 +104,7 @@ jobs:
       - name: Pin Meson dependency commits
         shell: pwsh
         run: |
-          python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin-native-dependencies.py") (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
+          python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin_native_dependencies.py") (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
       - name: Install MSYS2 build environment
         working-directory: vendor/pokeplatinum-native
         run: .\Install_MSys2.ps1

@@ -21,7 +21,7 @@ if (-not (Test-Path $launcher)) {
 Push-Location $nativeDir
 try {
     # Use Python from the installed MSYS2 environment, then build in the same shell.
-    & $launcher "python3 ../../scripts/pin-native-dependencies.py . && make $Target"
+    & $launcher "python3 ../../scripts/pin_native_dependencies.py . && make $Target"
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

@@ -30,5 +30,5 @@ if [[ -z "$python_bin" ]]; then
   printf 'Python 3 não foi encontrado no PATH; ele é necessário para fixar dependências de forma reproduzível.\n' >&2
   exit 127
 fi
-"$python_bin" "$repo_root/scripts/pin-native-dependencies.py" "$native_dir"
+"$python_bin" "$repo_root/scripts/pin_native_dependencies.py" "$native_dir"
 exec make -C "$native_dir" "$target"

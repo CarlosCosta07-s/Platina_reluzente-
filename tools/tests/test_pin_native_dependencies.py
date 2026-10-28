@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1].parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from pin_native_dependencies import (  # noqa: E402
     PINNED_DEPENDENCIES,
     PinningError,
