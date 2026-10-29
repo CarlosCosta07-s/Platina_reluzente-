@@ -1,79 +1,50 @@
 # Pokémon Black — contrato de integração com o launcher
 
-**Estado:** integração local implementada no launcher 0.2.0; validação de CI e teste manual com ROM ainda necessários. O runtime Eidos continua fornecido localmente e não é copiado para o pacote público. Este documento define o contrato para não reutilizar o runtime, a ROM, os dados ou os saves de Pokémon Platinum.
+**Estado em 29/10/2026:** o cartão de Black, a seleção de jogo e a importação local da ROM fazem parte da biblioteca única. A seleção externa de executáveis foi removida. O runtime ainda não é empacotado porque a licença de `aletheia/src/` não concede atualmente autorização clara para redistribuir o código reconstruído ou binários derivados; por isso o botão **Iniciar** permanece desativado.
 
-## Decisões obrigatórias
+## Princípios de integração
 
-1. **Runtime fornecido localmente pelo desenvolvedor/usuário.** Não incluir `eidos`, `eidos.exe`, SDL3.dll ou código derivado de Aletheia nos pacotes públicos do Platina Reluzente enquanto a situação de licença não autorizar essa distribuição. A tela deve explicar por que um runtime local é necessário.
-2. **Identidade própria do jogo.** O identificador interno é `pokemon-black`; não reutilizar `ORIGINAL_ROM_SHA1`, os caminhos `roms/current.nds`, `runtime/` ou qualquer estado de Platinum.
-3. **Validar a ROM antes de executar.** O alvo documentado no par de commits fixados é Pokémon Black USA/Europe NDSi Enhanced, SHA-1 `26ad0b9967aa279c4a266ee69f52b9b2332399a5`, tamanho `268435456` bytes. A validação deve comparar o hash SHA-1 integral da imagem importada, além de checar extensão, tamanho e leitura. O runtime Eidos também valida a imagem durante `--rom`; a verificação do launcher não substitui essa validação.
-4. **Não abrir dois seletores.** Depois de o launcher importar e validar a ROM, passe o caminho privado da cópia importada por `--rom`. O Eidos tem seu próprio fluxo de primeira execução, mas `--rom` permite que o runtime faça a extração sem pedir que o usuário selecione o mesmo arquivo de novo.
-5. **Dados e saves isolados.** Passe explicitamente `--data-root` para uma pasta de extração dedicada ao Black e defina `EIDOS_HOME` para a configuração do Eidos. Isso, sozinho, não isola os saves: a revisão fixada usa `APPDATA\eidos\saves` no Windows e `XDG_DATA_HOME/eidos/saves` no Linux. Ao iniciar o processo filho, defina `APPDATA` (Windows) ou `XDG_DATA_HOME` (Linux) para uma raiz privada do Black.
-6. **Não confundir `spawn` com prontidão.** Criar o processo só confirma que o sistema operacional conseguiu iniciá-lo. O estado “jogo iniciado” não deve afirmar que a tela de título apareceu sem um sinal de prontidão ou validação visual.
-7. **Logs sem dados protegidos.** Guardar stdout/stderr num log específico do Black. Logs de erro podem mostrar caminhos locais; revisar/redigir esses caminhos antes de compartilhar. Nunca anexar ROM, saves ou recursos extraídos ao relatório.
+1. **Um único aplicativo.** O usuário abre Platina Reluzente, escolhe Platinum ou Black na biblioteca e inicia o jogo pelo próprio launcher. Nenhum seletor de pastas deve pedir que ele encontre `eidos.exe` ou `eidos`, e nenhum executável secundário deve ser apresentado como outro aplicativo. A implementação interna pode usar um processo filho para o runtime nativo, mas somente o launcher é uma ação visível ao usuário.
+2. **Runtime interno do pacote.** A pasta de recurso reservada é `black-runtime/` no desenvolvimento e `process.resourcesPath/black-runtime` no pacote desktop. Depois de resolvida a situação de distribuição, o empacotamento poderá incluir ali o runtime de plataforma e as bibliotecas necessárias. Não copiar para essa pasta binários obtidos localmente enquanto não houver autorização jurídica.
+3. **Sem emulador ou interpretador ARM.** O alvo é o porte nativo baseado no código C reconstruído e na cadeia de build de Eidos/Aletheia. O módulo de jogo é compilado em código nativo via a ferramenta de build do upstream; não queremos executar uma CPU Nintendo DS emulada durante a partida.
+4. **Validar a ROM antes de usá-la.** O alvo fixado é Pokémon Black USA/Europe NDSi Enhanced, SHA-1 `26ad0b9967aa279c4a266ee69f52b9b2332399a5`, tamanho `268435456` bytes. O importador confere extensão, tamanho, cabeçalho e hash SHA-1 integral. A ROM permanece no dispositivo e não deve ser enviada para CI ou para o repositório.
+5. **Sem segundo seletor de ROM.** Ao iniciar, passe o caminho da cópia privada importada pelo argumento `--rom`; passe `--data-root` para a extração local. O fluxo inicial do runtime não deve voltar a pedir ao usuário para selecionar a mesma ROM.
+6. **Isolamento de dados.** ROM, extração, configuração, saves e logs de Black devem ficar separados de Platinum. Passe `EIDOS_HOME` à configuração e, para saves, use também `APPDATA` no Windows ou `XDG_DATA_HOME` no Linux apontando para raízes exclusivas de Black. Recuse `portable.txt`, pois o modo portátil do upstream pode contornar essa separação.
+7. **Falha segura e estado honesto.** Se o runtime interno estiver ausente, a UI explica que a integração está bloqueada e mantém Iniciar desabilitado. Uma ROM importada não significa que o jogo esteja iniciável. O início de processo não significa que a tela de título foi atingida.
 
-## Localização dos arquivos por sistema
+## Caminhos locais
 
-| Dado | Windows x64 | Linux x86-64 |
+| Dado | Windows | Linux |
 |---|---|---|
-| ROM privada importada | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\roms\current.nds` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/roms/current.nds` (ou `~/.local/share/platina-reluzente/pokemon-black/roms/current.nds`) |
-| Dados extraídos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\extract` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/extract` (ou `~/.local/share/platina-reluzente/pokemon-black/extract`) |
-| Home/config Eidos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\eidos-home` | `$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home` |
-| Saves Eidos (diretório privado do processo) | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\process-appdata\eidos\saves` | `$HOME/.local/share/platina-reluzente/pokemon-black/process-data/eidos/saves` |
-| Log do launcher | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\logs\native-startup.log` | `$XDG_STATE_HOME/platina-reluzente/pokemon-black/native-startup.log` ou pasta de logs dos dados locais |
+| ROM e metadados | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\roms` e `rom-import.json` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/roms` e `rom-import.json` |
+| Extração | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\extract` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/extract` |
+| Configuração Eidos | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\eidos-home` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/eidos-home` |
+| Saves do processo filho | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\process-appdata` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/process-data` |
+| Log de inicialização | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\logs\\native-startup.log` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/logs/native-startup.log` |
 
-Os caminhos acima são o contrato proposto para a integração futura, não uma afirmação de que o launcher já os cria. Resolver e normalizar os caminhos uma vez, validar permissões e diretórios antes de importar, e não escrever nada na raiz do repositório.
+Estes caminhos descrevem a implementação atual do helper `blackPaths()`. ROMs e recursos extraídos não devem ser escritos na raiz do repositório.
 
-## Descoberta do runtime local
+## Estrutura do runtime empacotado (quando autorizado)
 
-- O desenvolvedor seleciona a pasta que contém o executável host que ele compilou a partir das revisões fixadas. O executável esperado é `eidos.exe` no Windows e `eidos` no Linux, no diretório `build64/host` do build descrito em [POKEMON_BLACK_LOCAL_BUILD.md](POKEMON_BLACK_LOCAL_BUILD.md).
-- No Windows, verificar a presença de `SDL3.dll` junto ao executável, conforme a configuração host upstream. Não presumir que uma DLL ausente possa ser suprida pelo runtime de Platinum. Rejeitar também `portable.txt` ao lado do executável, porque o modo portátil do Eidos redireciona os saves para a pasta do próprio runtime e ignora o `APPDATA` isolado.
-- No Linux, verificar que o binário é executável e documentar as dependências dinâmicas requeridas pelo build local; não reutilizar AppImage, bibliotecas nem executáveis do porte de Platinum como substitutos.
-- Recusar um caminho que esteja ausente, seja diretório, seja link simbólico inesperado ou não contenha o executável correto da plataforma. Não adivinhar executáveis diferentes.
-- Persistir apenas o caminho selecionado e a identidade/versão do build local em metadados privados do launcher. Nunca copiar o binário Eidos automaticamente para dentro do pacote público.
+- Windows: `black-runtime/eidos.exe` e as DLLs necessárias (incluindo `SDL3.dll`, se fornecida pelo build selecionado).
+- Linux: `black-runtime/eidos` executável, junto das bibliotecas dinâmicas necessárias ou de uma estratégia de dependências documentada.
+- O runtime precisa ser compilado a partir dos commits upstream fixados e validado na CI para Windows x64 e Linux x86-64. Não substituir silenciosamente por executável, biblioteca ou recursos de Platinum.
+- O launcher deve chamar o runtime com argumentos como array, `shell: false`, diretório de trabalho explícito e log separado; caminhos com espaços precisam funcionar sem quoting manual.
 
-## Contrato de inicialização
+## Testes e critérios de aceite
 
-A chamada do processo segue este formato, após a validação da ROM e a criação dos diretórios privados:
+- [x] O importador valida a identidade integral da ROM e persiste a cópia local de forma recuperável.
+- [x] Os caminhos locais e metadados de Black não colidem com os de Platinum.
+- [x] A UI apresenta Platinum e Black na mesma biblioteca, com navegação entre os cartões.
+- [x] Não existe seletor de runtime externo no HTML, no preload nem nos handlers IPC.
+- [x] O pacote reserva o caminho interno `black-runtime` sem incluir executáveis não autorizados.
+- [ ] Resolver legalmente a distribuição do código derivado de Aletheia antes de incluir o runtime no pacote.
+- [ ] Depois da autorização, empacotar e verificar o runtime integrado para Windows/Linux.
+- [ ] Com uma ROM local compatível, validar extração, tela de título, controles, áudio, salvamento e retomada. A CI sem ROM não comprova gameplay.
 
-Windows (PowerShell):
-```powershell
-$env:EIDOS_HOME = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\eidos-home"
-$env:APPDATA = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\process-appdata"
-$eidosArgs = @(
-  "--rom", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\roms\current.nds"),
-  "--data-root", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\extract")
-)
-& "C:\caminho\do\build64\host\eidos.exe" @eidosArgs
-```
+## Referências
 
-Linux:
-```sh
-export EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home"
-export XDG_DATA_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/process-data"
-./build64/host/eidos \
-  --rom "$HOME/.local/share/platina-reluzente/pokemon-black/roms/current.nds" \
-  --data-root "$HOME/.local/share/platina-reluzente/pokemon-black/extract"
-```
-
-Na revisão Eidos fixada, `EIDOS_HOME` controla a configuração e a instalação padrão, mas o código de saves usa variáveis separadas (`sdk/plat_save.c`). No launcher Electron, crie e valide também as raízes `APPDATA`/`XDG_DATA_HOME` antes de `spawn(executable, args, { cwd, env, shell: false, stdio })`. Passe argumentos como array, defina `cwd` para uma pasta adequada ao runtime local e mantenha o log de Black separado. Um caminho de ROM com espaços deve funcionar sem aspas manuais dentro dos argumentos.
-
-## Estado da implementação e validação restante
-
-- [x] O launcher consegue selecionar e revalidar um runtime Eidos local, sem copiá-lo para o pacote público.
-- [x] O importador Black exige extensão NDS, cabeçalho legível, tamanho de 268435456 bytes e SHA-1 integral `26ad0b9967aa279c4a266ee69f52b9b2332399a5`; a importação usa a transação de armazenamento existente.
-- [x] ROM, configuração Eidos, extração, saves e logs usam caminhos separados dos dados de Platinum. Os saves do processo filho recebem `APPDATA` (Windows) ou `XDG_DATA_HOME` (Linux) isolados, além de `EIDOS_HOME`.
-- [x] A inicialização usa argumentos separados `--rom` e `--data-root`, sem abrir um segundo seletor de ROM; testes do launcher e do contrato passaram no workflow [Launcher source checks](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40908947910).
-- [x] Os testes upstream sem ROM e o build host Linux x86-64 passaram na execução [Pokémon Black native source validation](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40905769682).
-- [ ] O build host Windows x64 precisa concluir a execução atual e ser verificado.
-- [ ] Uma ROM local compatível deve chegar à tela de título, aceitar comandos e confirmar salvamento/retomada em teste manual documentado. Criar o processo não comprova jogabilidade.
-- [ ] A distribuição do código e dos binários derivados de Aletheia deve passar por revisão jurídica antes de qualquer artefato público.
-
-## Referências upstream fixadas
-
-- [Eidos — revisão `b79123f967980d1bb758161891205c03d606dec7`](https://github.com/Project-Holon/eidos/tree/b79123f967980d1bb758161891205c03d606dec7)
-- [Aletheia — revisão `6c2aae879f123bcbc028cf6a8b7f8df614402ac8`](https://github.com/Project-Holon/aletheia/tree/6c2aae879f123bcbc028cf6a8b7f8df614402ac8)
-- [Fluxo de primeira execução e `--rom`/`--data-root`](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/docs/installer.md)
-- [Camada de dados e `BW_DATA_ROOT`](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/docs/files.md)
-- [Guia de compilação local](POKEMON_BLACK_LOCAL_BUILD.md)
-- [Auditoria, pins e limite jurídico deste projeto](POKEMON_BLACK_PORT.md)
+- [Plano técnico](POKEMON_BLACK_PORT.md)
+- [Guia de build local](POKEMON_BLACK_LOCAL_BUILD.md)
+- [Aviso legal do Aletheia](https://github.com/Project-Holon/aletheia/blob/6c2aae879f123bcbc028cf6a8b7f8df614402ac8/LEGAL.md)
+- [Build e avisos do Eidos](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/LEGAL.md)
