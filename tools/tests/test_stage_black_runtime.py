@@ -9,6 +9,7 @@ from scripts.stage_black_runtime import (
     parse_objdump_imports,
     stage_black_runtime,
     _windows_dependencies,
+    _linux_dependencies,
 )
 
 
@@ -42,6 +43,79 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             ["SDL3.dll", "KERNEL32.dll"],
         )
 
+
+
+    def test_linux_dependency_scan_includes_transitive_non_system_libraries(self):
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "build" / "eidos"
+            executable.parent.mkdir()
+            executable.write_bytes(b"fake executable")
+            executable.chmod(0o755)
+            dependency_dir = root / "deps"
+            dependency_dir.mkdir()
+            sdl = dependency_dir / "libSDL3.so.0"
+            sdl.write_bytes(b"fake SDL")
+            helper = dependency_dir / "libcodec-helper.so.1"
+            helper.write_bytes(b"fake transitive dependency")
+
+            def fake_ldd(args, **kwargs):
+                image = Path(args[-1]).name
+                outputs = {
+                    "eidos": (
+                        f"libSDL3.so.0 => {sdl} (0x00007f0000000000)\\n"
+                    ),
+                    "libSDL3.so.0": (
+                        f"libcodec-helper.so.1 => {helper} (0x00007f0000000001)\\n"
+                        "/lib/x86_64-linux-gnu/libc.so.6 => "
+                        "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000002)\\n"
+                    ),
+                    "libcodec-helper.so.1": (
+                        "/lib/x86_64-linux-gnu/libc.so.6 => "
+                        "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000003)\\n"
+                    ),
+                }
+                if image not in outputs:
+                    raise AssertionError("Unexpected ELF inspected: " + image)
+                return SimpleNamespace(returncode=0, stdout=outputs[image], stderr="")
+
+            with patch("scripts.stage_black_runtime.shutil.which", return_value="/usr/bin/ldd"), patch(
+                "scripts.stage_black_runtime.subprocess.run", side_effect=fake_ldd
+            ):
+                dependencies = _linux_dependencies(executable, [dependency_dir])
+
+            self.assertEqual(set(dependencies), {"libSDL3.so.0", "libcodec-helper.so.1"})
+            self.assertEqual(dependencies["libSDL3.so.0"], sdl.resolve())
+            self.assertEqual(dependencies["libcodec-helper.so.1"], helper.resolve())
+
+    def test_linux_dependency_scan_fails_when_a_transitive_library_is_missing(self):
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "eidos"
+            executable.write_bytes(b"fake executable")
+            executable.chmod(0o755)
+            dependency_dir = root / "deps"
+            dependency_dir.mkdir()
+            sdl = dependency_dir / "libSDL3.so.0"
+            sdl.write_bytes(b"fake SDL")
+
+            def fake_ldd(args, **kwargs):
+                image = Path(args[-1]).name
+                if image == "eidos":
+                    output = f"libSDL3.so.0 => {sdl} (0x00007f0000000000)\\n"
+                else:
+                    output = "libcodec-helper.so.1 => not found\\n"
+                return SimpleNamespace(returncode=0, stdout=output, stderr="")
+
+            with patch("scripts.stage_black_runtime.shutil.which", return_value="/usr/bin/ldd"), patch(
+                "scripts.stage_black_runtime.subprocess.run", side_effect=fake_ldd
+            ):
+                with self.assertRaisesRegex(RuntimeStageError, "não resolvida"):
+                    _linux_dependencies(executable, [dependency_dir])
 
     def test_windows_dependency_closure_is_case_insensitive_across_dlls(self):
         from types import SimpleNamespace
