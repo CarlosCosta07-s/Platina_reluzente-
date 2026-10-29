@@ -18,6 +18,11 @@ async function removeIfPresent(filePath) {
   await fs.rm(filePath, { force: true });
 }
 
+async function cleanupBestEffort(paths) {
+  // Cleanup must never turn an already-committed ROM into a reported import failure.
+  await Promise.allSettled(paths.map((filePath) => removeIfPresent(filePath)));
+}
+
 function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -66,9 +71,8 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
   if (![hasRomBackup, hasMetadataBackup, hasRomStaging, hasMetadataStaging].some(Boolean)) return;
 
   if (hasRom && hasMetadata && await matchesMetadata(destinationPath, metadataPath)) {
-    await Promise.all([
-      removeIfPresent(romBackup), removeIfPresent(metadataBackup),
-      removeIfPresent(romStaging), removeIfPresent(metadataStaging)
+    await cleanupBestEffort([
+      romBackup, metadataBackup, romStaging, metadataStaging
     ]);
     return;
   }
@@ -78,7 +82,7 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
     await removeIfPresent(metadataPath);
     await fs.rename(romBackup, destinationPath);
     await fs.rename(metadataBackup, metadataPath);
-    await Promise.all([removeIfPresent(romStaging), removeIfPresent(metadataStaging)]);
+    await cleanupBestEffort([romStaging, metadataStaging]);
     return;
   }
 
@@ -97,7 +101,7 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
   // First import interrupted before either file had a committed metadata pair.
   if (!hasRomBackup && !hasMetadataBackup && !hasMetadata) {
     await removeIfPresent(destinationPath);
-    await Promise.all([removeIfPresent(romStaging), removeIfPresent(metadataStaging)]);
+    await cleanupBestEffort([romStaging, metadataStaging]);
     return;
   }
 
@@ -190,12 +194,13 @@ async function commitDesktopRom({ sourcePath, destinationPath, metadataPath, met
       throw installError;
     }
 
-    // The new ROM and its metadata are both committed. Backup cleanup is non-fatal.
-    await Promise.all([removeIfPresent(romBackup), removeIfPresent(metadataBackup)]);
+    // The new ROM and its metadata are both committed. Cleanup failures are non-fatal:
+    // recovery checks the pair's SHA-256 and can safely remove stale backups later.
+    await cleanupBestEffort([romBackup, metadataBackup]);
     return committedMetadata;
   } catch (error) {
     try {
-      await Promise.all([removeIfPresent(romStaging), removeIfPresent(metadataStaging)]);
+      await cleanupBestEffort([romStaging, metadataStaging]);
     } catch {
       // Keep the original import failure; recovery will handle any staged files.
     }
