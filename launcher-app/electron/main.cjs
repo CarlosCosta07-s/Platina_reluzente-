@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { launchNativeProcess, runNativePrepare, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec } = require('./runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec, createPreparedPlatinumLaunchSpec } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
@@ -394,7 +394,7 @@ ipcMain.handle('platina:launch-game', async () => {
     });
     if (!prepared.ok) return { ok: false, message: prepared.message, logPath };
     // Phase 2: only now start the real game process and its window.
-    const launched = await launchNativeProcess(launchSpec);
+    const launched = await launchNativeProcess(createPreparedPlatinumLaunchSpec(launchSpec));
     if (launched.ok) {
       const windows = BrowserWindow.getAllWindows();
       for (const window of windows) { if (!window.isDestroyed()) window.minimize(); }
