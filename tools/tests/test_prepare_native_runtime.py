@@ -433,6 +433,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         )
         self.assertIn('!collectOne("overlay7", "overlay7", false)', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("ARM7's static", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("ARM7 overlay-table data can legitimately be empty", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertNotIn('relativeName == "arm7ovt.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('relativeName == "arm9ovt.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('"arm7ovt.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("if (!hasOverlay9) return false;", ROM_PREFLIGHT_ENTRY_PATCHED)
 
     def test_desktop_first_launch_can_start_without_a_rom_header(self):
