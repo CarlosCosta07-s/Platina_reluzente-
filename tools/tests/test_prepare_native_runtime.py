@@ -189,19 +189,19 @@ void *SIM_RenderInit(void *arg) {
 
 void SIM_Render(void) {
   SDL_Event Event;
-  while (SDL_PollEvent(&Event)) {
-    if (Event.type == SDL_WINDOWEVENT) {
-      switch (Event.window.event) {
-      case SDL_WINDOWEVENT_CLOSE:
-        exit(0);
-        break;
+    while (SDL_PollEvent(&Event)) {
+      if (Event.type == SDL_WINDOWEVENT) {
+        switch (Event.window.event) {
+        case SDL_WINDOWEVENT_CLOSE:
+          exit(0);
+          break;
+        }
+      }
+      if (Event.type == SDL_KEYDOWN) {
+        int keyRead = Event.key.keysym.sym;
+        (void)keyRead;
       }
     }
-    if (Event.type == SDL_KEYDOWN) {
-      int keyRead = Event.key.keysym.sym;
-      (void)keyRead;
-    }
-  }
 }
 
 int main(int argc, char *argv[]) {
