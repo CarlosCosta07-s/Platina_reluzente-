@@ -1414,6 +1414,16 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         # The Android PIC patcher also updates static-library targets outside
         # the top-level Meson file; stage the project-owned lobby directory.
         shutil.copytree(root / "lib" / "ppwlobby", staged / "lib" / "ppwlobby")
+        # Clang's integrated assembler is case-sensitive for macro invocations.
+        # Stage the source include that defines trainer AI command macros, patch it,
+        # then copy the patched file back with the other isolated Android changes.
+        macro_rel = Path("asm/macros/aicmd.inc")
+        macro_source = root / macro_rel
+        if not macro_source.is_file():
+            raise PatchError(f"Trainer AI assembler macros are missing: {macro_source}")
+        macro_staged = staged / macro_rel
+        macro_staged.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(macro_source, macro_staged)
         stage_android_copy_script(root, staged)
         changes = patch_root(staged)
         changes.extend(patch_ppwlobby_pic(staged))
@@ -1458,6 +1468,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
     rels = [
         "meson.options",
         "meson.build",
+        "asm/macros/aicmd.inc",
         "subprojects/libntr/meson.options",
         "subprojects/libntr/meson.build",
         "subprojects/libvct/meson.build",
