@@ -215,6 +215,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
 
             self.assertIn("subprojects/libntr/libraries/card/meson.build", paths)
             self.assertIn("lib/ppwlobby/meson.build", paths)
+            self.assertIn("asm/macros/aicmd.inc", paths)
             self.assertIn("lib/ppwlobby/include/ilobby/class_ov66_02243B64_sub1.h", paths)
             self.assertIn("lib/ppwlobby/include/ilobby/dwci_lobbydata.h", paths)
             self.assertIn("lib/ppwlobby/include/ilobby/dwci_lobbybase.h", paths)
