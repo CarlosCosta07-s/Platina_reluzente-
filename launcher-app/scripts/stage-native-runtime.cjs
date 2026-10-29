@@ -232,16 +232,16 @@ function loadExtractedPathManifest(manifestPath) {
   if (stat.isSymbolicLink() || !stat.isFile()) {
     throw new Error('O manifesto de caminhos precisa ser um arquivo regular, sem link simbólico.');
   }
-  const contents = fs.readFileSync(manifestPath, 'utf8').replace(/^\\uFEFF/, '');
-  if (!contents.startsWith('PLATINA_DATA_PATHS_V1\\n')) {
+  const contents = fs.readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, '');
+  if (!contents.startsWith('PLATINA_DATA_PATHS_V1\n')) {
     if (path.basename(manifestPath).toLowerCase().endsWith('.csv')) {
       return createExtractedPathManifest(manifestPath);
     }
     throw new Error('O manifesto local de caminhos possui um cabeçalho inválido.');
   }
 
-  const normalized = contents.replace(/\\r\\n/g, '\\n');
-  const lines = normalized.split('\\n');
+  const normalized = contents.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
   if (lines[0] !== 'PLATINA_DATA_PATHS_V1' || !/^[0-9]+$/.test(lines[1] || '')) {
     throw new Error('Cabeçalho/contagem inválidos no manifesto de caminhos.');
   }
@@ -276,7 +276,7 @@ function loadExtractedPathManifest(manifestPath) {
       throw new Error('Manifesto de caminhos não contém recurso essencial: ' + required);
     }
   }
-  return 'PLATINA_DATA_PATHS_V1\\n' + expectedCount + '\\n' + paths.join('\\n') + '\\n';
+  return 'PLATINA_DATA_PATHS_V1\n' + expectedCount + '\n' + paths.join('\n') + '\n';
 }
 
 function hashFile(filePath) {
