@@ -117,14 +117,14 @@ $eidosArgs = @(
 & ".\build64\host\eidos.exe" @eidosArgs
 ```
 
-Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Esses comandos são para teste local com um runtime que você compilou. O launcher agora permite selecionar esse build local, importar a ROM e solicitar a inicialização, mas o runtime continua fora do pacote público. O início do processo não comprova que a tela de título apareceu; isso ainda precisa de teste manual. Não há pacote Black redistribuível aprovado.
+Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Estes comandos são somente para testes locais de desenvolvimento com um runtime compilado por você; eles não fazem parte do fluxo normal do usuário. O launcher unificado não permite escolher esse executável externo: ele reserva um recurso interno para Black e mantém a ação Iniciar bloqueada enquanto o runtime não puder ser distribuído legalmente. O início de um processo local não comprova que a tela de título apareceu. Não há pacote Black redistribuível aprovado.
 ## 6. Validação mínima antes de pensar na integração
 
 1. Execute os testes `ctest --test-dir build --output-on-failure` para a configuração de testes que você construiu, quando aplicável.
 2. Execute o binário local com os dados extraídos da própria ROM compatível.
 3. Confirme tela de título, entrada, começo de jogo, primeira batalha, menu de campo, gravação e retomada de save.
 4. Registre versão/commit, sistema operacional, comando de execução e erros. Não compartilhe ROM, saves, dados extraídos ou binários derivados publicamente.
-5. Só depois dos resultados reproduzíveis devemos planejar integração ao launcher; por enquanto, o cartão de Black permanece informativo e sem ação de importar/iniciar.
+5. A integração da interface à biblioteca única já existe: é possível selecionar o cartão de Black e importar a ROM para armazenamento local isolado. A ação Iniciar só poderá ser habilitada depois de autorização de distribuição e inclusão do runtime como recurso interno do pacote.
 
 ## Referências
 
