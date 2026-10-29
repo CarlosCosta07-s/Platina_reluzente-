@@ -97,9 +97,12 @@ def _linux_dependencies(executable: Path, dependency_dirs: list[Path]) -> dict[s
     search_dirs = [str(path) for path in dependency_dirs]
     inherited = env.get("LD_LIBRARY_PATH", "")
     if inherited:
-        search_dirs.append(inherited)
+        # An empty loader-path component means the current working directory.
+        # Drop empty entries before invoking ldd so a developer's environment
+        # cannot silently introduce the build directory into native resolution.
+        search_dirs.extend(entry for entry in inherited.split(os.pathsep) if entry)
     if search_dirs:
-        env["LD_LIBRARY_PATH"] = ":".join(search_dirs)
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(search_dirs)
 
     collected: dict[str, Path] = {}
     inspected: set[Path] = set()
