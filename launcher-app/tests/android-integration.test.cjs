@@ -69,7 +69,8 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.equal(plugin.split('if (!"CPUE".equals(code) || romVersion != 1)').length - 1, 1);
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /input\.read\(\) != -1/);
-    assert.match(plugin, /!required\.isFile\(\) \|\| required\.length\(\) <= 0/);
+    assert.match(plugin, /if \(!isRegularFileWithoutSymlinks\(directory, relativePath\)\) return false;/);
+    assert.match(plugin, /if \(required\.length\(\) <= 0\) return false;/);
     assert.match(plugin, /runtime-manifest\.txt/);
     assert.match(plugin, /migrateLegacySaveIfNeeded\(destination\)/);
     assert.match(plugin, /save\.bin\.migrating/);

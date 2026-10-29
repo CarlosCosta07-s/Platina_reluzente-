@@ -577,7 +577,7 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
             raise RuntimePreparationError("Duplicate checked card-backup I/O helper block.")
         if "#ifdef SDK_PORT\nstatic inline BOOL CARDi_EnsureBackupFileSize" not in current:
             raise RuntimePreparationError("Card-backup I/O helper is not guarded by SDK_PORT.")
-        if "#endif /* SDK_PORT */\n  SDK_INLINE BOOL CARDi_ReadBackup(" not in current:
+        if "#endif /* SDK_PORT */\n\n  SDK_INLINE BOOL CARDi_ReadBackup(" not in current:
             raise RuntimePreparationError("Card-backup I/O helper SDK_PORT guard is incomplete.")
         expected_patched = (
             BACKUP_READ_BODY_PATCHED,

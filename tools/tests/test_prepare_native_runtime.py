@@ -260,7 +260,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(BACKUP_SAVE_PATH_INCLUDE_PATCHED, backup_content)
             self.assertIn(BACKUP_FILE_IO_HELPERS_PATCHED, backup_content)
             self.assertIn("#ifdef SDK_PORT\nstatic inline BOOL CARDi_EnsureBackupFileSize", backup_content)
-            self.assertIn("#endif /* SDK_PORT */\n  SDK_INLINE BOOL CARDi_ReadBackup(", backup_content)
+            self.assertIn("#endif /* SDK_PORT */\n\n  SDK_INLINE BOOL CARDi_ReadBackup(", backup_content)
             self.assertIn(BACKUP_READ_BODY_PATCHED, backup_content)
             self.assertIn(BACKUP_WRITE_BODY_PATCHED, backup_content)
             self.assertIn(BACKUP_WRITE_VERIFY_BODY_PATCHED, backup_content)
