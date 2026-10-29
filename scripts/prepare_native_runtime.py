@@ -699,6 +699,54 @@ SIM_ROM_EXTRACTOR_PATCHED = r'''void SIM_ShowRomExtractionDialog() {
 SIM_ROM_EXTRACTOR_INCLUDE_ORIGINAL = "#include <SDL2/SDL.h>\n#include <string>"
 SIM_ROM_EXTRACTOR_INCLUDE_PATCHED = "#include <SDL2/SDL.h>\n#include <cstdio>\n#include <cstdlib>\n#include <string>"
 
+NVRAM_FILE_READ_ORIGINAL = r'''#else
+    if(s_nvramFilePtr == NULL) {
+        s_nvramFilePtr = fopen(NVRAM_FILE_PATH, "rb+");
+    }
+
+    fseek(s_nvramFilePtr, address, SEEK_SET);
+    fread(buf, 1, size, s_nvramFilePtr);
+    fclose(s_nvramFilePtr);
+    s_nvramFilePtr = NULL;
+#endif'''
+NVRAM_FILE_READ_PATCHED = r'''#else
+    // firmware.bin is a local NVRAM backing file, not a ROM-extracted asset.
+    // A first run has no backing file yet: emulate erased flash for reads.
+    if (s_nvramFilePtr == NULL) {
+        s_nvramFilePtr = fopen(NVRAM_FILE_PATH, "rb");
+    }
+    if (s_nvramFilePtr == NULL) {
+        for (i = 0; i < (s32)size; i++) {
+            buf[i] = 0xFF;
+        }
+        fprintf(stderr, "[Platina] NVRAM backing file is unavailable; using erased flash bytes for this read.\\\\n");
+        return;
+    }
+    if (fseek(s_nvramFilePtr, (long)address, SEEK_SET) != 0) {
+        for (i = 0; i < (s32)size; i++) {
+            buf[i] = 0xFF;
+        }
+        fprintf(stderr, "[Platina] NVRAM backing read seek failed; using erased flash bytes.\\\\n");
+        fclose(s_nvramFilePtr);
+        s_nvramFilePtr = NULL;
+        return;
+    }
+    {
+        size_t bytesRead = fread(buf, 1, size, s_nvramFilePtr);
+        if (bytesRead < size) {
+            for (i = (s32)bytesRead; i < (s32)size; i++) {
+                buf[i] = 0xFF;
+            }
+            if (ferror(s_nvramFilePtr)) {
+                fprintf(stderr, "[Platina] NVRAM backing read was incomplete; the missing bytes were treated as erased flash.\\\\n");
+            }
+        }
+    }
+    fclose(s_nvramFilePtr);
+    s_nvramFilePtr = NULL;
+#endif'''
+
+
 BACKUP_SAVE_PATH_INCLUDE_ORIGINAL = '''#ifdef SDK_PORT
 #include <stdio.h>
 #include <stdlib.h>
@@ -1151,6 +1199,33 @@ def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool
     return extractor_path, current, current != original
 
 
+def _prepare_nvram_file_backing(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Prevent missing/corrupt optional local NVRAM backing from crashing the native port."""
+    source_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "libraries" / "sim7" / "src" / "spi" / "nvram"
+        / "nvram_instruction.c"
+    )
+    if not source_path.is_file():
+        raise RuntimePreparationError(f"Simulator NVRAM source missing: {source_path}")
+
+    original = source_path.read_text(encoding="utf-8")
+    current = original
+    if NVRAM_FILE_READ_PATCHED in current:
+        if current.count(NVRAM_FILE_READ_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate NVRAM backing fallback patch detected.")
+        if NVRAM_FILE_READ_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and patched NVRAM backing reads exist.")
+    else:
+        if current.count(NVRAM_FILE_READ_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one known NVRAM file-backed read block; refusing an uncertain patch."
+            )
+        current = current.replace(NVRAM_FILE_READ_ORIGINAL, NVRAM_FILE_READ_PATCHED, 1)
+
+    return source_path, current, current != original
+
+
 def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
     """Fix known simulator config bugs; reject unknown source rather than patching blindly."""
     if not config_path.is_file():
@@ -1243,9 +1318,11 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
     extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
     backup_path, backup_updated, backup_changed = _prepare_backup_save_path(source_root)
+    nvram_path, nvram_updated, nvram_changed = _prepare_nvram_file_backing(source_root)
 
     changed = (
-        current != original or config_changed or fs_changed or extractor_changed or backup_changed
+        current != original or config_changed or fs_changed or extractor_changed
+        or backup_changed or nvram_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
@@ -1257,6 +1334,8 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         extractor_path.write_text(extractor_updated, encoding="utf-8")
     if backup_changed:
         backup_path.write_text(backup_updated, encoding="utf-8")
+    if nvram_changed:
+        nvram_path.write_text(nvram_updated, encoding="utf-8")
     return changed
 
 
