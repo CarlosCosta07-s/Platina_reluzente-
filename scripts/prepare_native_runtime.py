@@ -581,25 +581,25 @@ SDL_INIT_PATCHED = r'''  // Video and timing are required; audio and joystick ar
 
 SIM_AUDIO_OPEN_ORIGINAL = r'''    s_requestedAudioSpec.callback = SIM_Audio_Callback;
     if(SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
-        printf("SDL Error %s\\n", SDL_GetError());
+        printf("SDL Error %s\n", SDL_GetError());
     }
     SDL_PauseAudio(0);'''
 SIM_AUDIO_OPEN_PATCHED = r'''    s_requestedAudioSpec.callback = SIM_Audio_Callback;
     if(SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
-        printf("[Platina] SDL audio device failed: %s. Retrying with the silent dummy driver.\\n",
+        printf("[Platina] SDL audio device failed: %s. Retrying with the silent dummy driver.\n",
                SDL_GetError());
         SDL_AudioQuit();
         if (SDL_AudioInit("dummy") < 0) {
-            printf("[Platina] SDL dummy audio initialization failed: %s.\\n", SDL_GetError());
+            printf("[Platina] SDL dummy audio initialization failed: %s.\n", SDL_GetError());
             return;
         }
         if (SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
-            printf("[Platina] SDL dummy audio device failed: %s. Audio callback is unavailable.\\n",
+            printf("[Platina] SDL dummy audio device failed: %s. Audio callback is unavailable.\n",
                    SDL_GetError());
             SDL_AudioQuit();
             return;
         }
-        printf("[Platina] Silent SDL dummy audio driver is active; playback is disabled.\\n");
+        printf("[Platina] Silent SDL dummy audio driver is active; playback is disabled.\n");
     }
     SDL_PauseAudio(0);'''
 
