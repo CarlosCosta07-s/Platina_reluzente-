@@ -30,7 +30,7 @@ static int IniHandler(void* user, const char* section, const char* name, const c
 void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
 {
     FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");
-    fprintf(configFile, "test=%d\\n", aConfig->internalResolutionScale);
+    fprintf(configFile, "test=%d\n", aConfig->internalResolutionScale);
     fclose(configFile);
 }'''
 
@@ -164,12 +164,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
     def test_upgrades_the_previous_desktop_only_rom_handoff_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = self.make_source(
-                root,
-                '#define SDL_MAIN_HANDLED\n#include <SDL2/SDL.h>\n\nint main(int argc, char *argv[]) {\n'
-                + LEGACY_PATCHED_HEADER_LOAD
-                + '\n}\n',
+            legacy_source = UPSTREAM_HEADER.replace(
+                ORIGINAL_HEADER_LOAD, LEGACY_PATCHED_HEADER_LOAD, 1
             )
+            source = self.make_source(root, legacy_source)
             self.assertTrue(prepare_native_runtime(root))
             content = source.read_text(encoding="utf-8")
             self.assertIn('SDL_AndroidGetInternalStoragePath()', content)
