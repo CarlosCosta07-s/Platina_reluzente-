@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
-const { resolveRuntimeDirectory, findBundledExecutable, validateNdsHeader } = require('./runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, validateNdsHeader } = require('./runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
 
@@ -48,8 +48,15 @@ async function readImportedRom() {
 }
 ipcMain.handle('platina:platform', () => process.platform);
 ipcMain.handle('platina:runtime-status', async () => {
-  const exe = findBundledExecutable(runtimeRoot(), process.platform);
-  return { available: Boolean(exe), executableName: exe ? path.basename(exe) : '', platform: process.platform };
+  const root = runtimeRoot();
+  const exe = findBundledExecutable(root, process.platform);
+  const runtimeDataAvailable = hasRequiredRuntimeData(root);
+  return {
+    available: Boolean(exe && runtimeDataAvailable),
+    executableName: exe ? path.basename(exe) : '',
+    runtimeDataAvailable,
+    platform: process.platform
+  };
 });
 ipcMain.handle('platina:get-imported-rom', async () => {
   const rom = await readImportedRom();
