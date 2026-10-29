@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { launchNativeProcess } = require('../electron/native-process.cjs');
+const { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle } = require('../electron/native-process.cjs');
 
 async function waitForLog(logPath, expectedFragments, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
@@ -40,7 +40,7 @@ test('native process startup writes stdout and stderr to a persistent local log'
 
   assert.equal(result.ok, true);
   assert.equal(result.logPath, logPath);
-  assert.match(result.message, /não confirma a tela de título/);
+  assert.match(result.message, /não comprova que a tela de título apareceu/);
   const log = await waitForLog(logPath, [message + '-stdout', message + '-stderr', 'spawn succeeded', 'process exit: code=0']);
   assert.match(log, /platform=/);
   assert.match(log, /rom_sha256=test-hash/);
@@ -61,7 +61,8 @@ test('native process startup failure is returned and recorded in the log', async
   assert.equal(result.ok, false);
   assert.equal(result.logPath, logPath);
   assert.match(result.message, /preparação segura do processo falhou/);
-  await assert.rejects(fs.access(logPath), { code: 'ENOENT' });
+  const log = await fs.readFile(logPath, 'utf8');
+  assert.match(log, /pre-launch validation failed/);
 });
 
 test('native launch rejects a symlink executable and a non-executable file', async (t) => {
@@ -116,6 +117,9 @@ test('native launcher does not start a second game while the first process is al
     platform: process.platform
   });
   assert.equal(first.ok, true);
+  assert.equal(hasActiveNativeProcess(), true);
+  let idleNotified = false;
+  onNativeProcessIdle(() => { idleNotified = true; });
 
   const second = await launchNativeProcess({
     executable: process.execPath,
@@ -128,6 +132,8 @@ test('native launcher does not start a second game while the first process is al
   assert.equal(second.ok, false);
   assert.match(second.message, /Outro jogo desta instalação já está em execução/);
   await waitForLog(logPath, ['process exit: code=0']);
+  assert.equal(hasActiveNativeProcess(), false);
+  assert.equal(idleNotified, true);
 });
 
 test('native launch reports an executable that exits during startup instead of a false success', async (t) => {
