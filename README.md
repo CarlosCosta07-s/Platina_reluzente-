@@ -11,7 +11,7 @@ O porte paralelo está agora fixado nas revisões compatíveis do [aletheia](htt
 ## Projetos da biblioteca
 
 - **Pokémon Platinum** — porte nativo principal em Windows/Linux. O launcher integrado já pode ser compilado, mas tela de título e jogabilidade ainda precisam ser confirmadas com uma cópia local compatível.
-- **Pokémon Black Version** — porte nativo paralelo com pipeline de validação e compilação em andamento, baseado em revisões fixadas de Aletheia/Eidos. A entrada informativa já está no launcher; importação e inicialização continuam desativadas e ainda não há build Black validado. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md) e acompanhe o [workflow sem dados do jogo](.github/workflows/pokemon-black-native-check.yml).
+- **Pokémon Black Version** — porte nativo paralelo com pipeline de validação e compilação em andamento, baseado em revisões fixadas de Aletheia/Eidos. A entrada informativa já está no launcher; importação e inicialização continuam desativadas e ainda não há build Black validado. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md), o [guia de build local](docs/POKEMON_BLACK_LOCAL_BUILD.md) e acompanhe o [workflow sem dados do jogo](.github/workflows/pokemon-black-native-check.yml).
 
 ## Estado real do projeto
 
