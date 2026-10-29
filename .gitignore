@@ -21,6 +21,10 @@ sim_config.ini
 runtime-manifest.txt
 launcher-runtime-version.txt
 
+# Temporary Black validation checkout (pinned upstream source, generated C, and build outputs).
+# Never commit the downloaded upstream trees or native build products.
+.black-ci/
+
 # Build outputs and Python cache.
 build/
 build_*/
