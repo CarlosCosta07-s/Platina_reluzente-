@@ -118,7 +118,7 @@ function assertRuntimeTreeHasNoSymlinks(root) {
 function runtimeIsUsable(runtimeRoot, platform) {
   try {
     assertRuntimeTreeHasNoSymlinks(runtimeRoot);
-    return Boolean(findBundledExecutable(runtimeRoot, platform) && hasRequiredRuntimeData(runtimeRoot));
+    return Boolean(findBundledExecutable(runtimeRoot, platform));
   } catch {
     return false;
   }
@@ -161,8 +161,8 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
 
   assertRuntimeTreeHasNoSymlinks(source);
   const sourceExecutable = findBundledExecutable(source, platform);
-  if (!sourceExecutable || !hasRequiredRuntimeData(source)) {
-    throw new Error('The bundled runtime is missing its executable or required game assets.');
+  if (!sourceExecutable) {
+    throw new Error('The bundled runtime is missing its native executable.');
   }
   const sourceBuildId = runtimeBuildId(source, platform);
   const parent = path.dirname(destination);
@@ -213,7 +213,7 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
   fs.chmodSync(stagedExecutable, executableMode);
 
   assertRuntimeTreeHasNoSymlinks(staging);
-  if (!findBundledExecutable(staging, platform) || !hasRequiredRuntimeData(staging)
+  if (!findBundledExecutable(staging, platform)
       || runtimeBuildId(staging, platform) !== sourceBuildId) {
     fs.rmSync(staging, { recursive: true, force: true });
     throw new Error('The writable runtime copy failed its post-copy validation.');
