@@ -510,7 +510,8 @@ SDL_WINDOW_CONTEXT_ORIGINAL = r'''  window = SDL_CreateWindow(
   context = SDL_GL_CreateContext(window);'''
 SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
-      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+          SDL_WINDOW_ALLOW_HIGHDPI);
   if (window == NULL) {
     fprintf(stderr, "SDL window creation failed: %s\n", SDL_GetError());
     return NULL;
@@ -543,6 +544,80 @@ MAIN_RENDER_HANDOFF_PATCHED = r'''  SIM_RenderInit(NULL);
     return 1;
   }
   G3SIM_DrawInit();'''
+SDL_VIEWPORT_ORIGINAL = "  glViewport(0, 0, windowWidth, windowHeight);"
+SDL_VIEWPORT_PATCHED = r'''  int drawableWidth = 0;
+  int drawableHeight = 0;
+  SDL_GL_GetDrawableSize(window, &drawableWidth, &drawableHeight);
+  if (drawableWidth <= 0 || drawableHeight <= 0) {
+    fprintf(stderr, "Invalid OpenGL drawable size: %d x %d\n",
+            drawableWidth, drawableHeight);
+    SDL_GL_DeleteContext(context);
+    SDL_DestroyWindow(window);
+    context = NULL;
+    window = NULL;
+    return NULL;
+  }
+  glViewport(0, 0, drawableWidth, drawableHeight);'''
+
+INPUT_RELEASE_HELPER_ORIGINAL = "static bool sFastForward = false;"
+INPUT_RELEASE_HELPER_PATCHED = r'''static bool sFastForward = false;
+
+// Release every DS button and the touch panel when focus is lost or a
+// controller disconnects, so a held key cannot remain stuck in the game.
+static void ReleaseDesktopInputState() {
+  s_reg_PAD_KEYINPUT = 0x03FF;
+  *(vu16 *)HW_BUTTON_XY_BUF = *(vu16 *)HW_BUTTON_XY_BUF | 0b0000110000000000;
+  isMouseDown = 0;
+  s_tpData.validity = 0;
+  s_tpData.touch = 0;
+  sFastForward = false;
+  if (context != NULL) {
+    (void)SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);
+  }
+}'''
+
+WINDOW_EVENT_ORIGINAL = r'''      if (Event.type == SDL_WINDOWEVENT) {
+        switch (Event.window.event) {
+        case SDL_WINDOWEVENT_CLOSE:
+          exit(0);
+          break;
+        }
+      }'''
+WINDOW_EVENT_PATCHED = r'''      if (Event.type == SDL_WINDOWEVENT) {
+        switch (Event.window.event) {
+        case SDL_WINDOWEVENT_CLOSE:
+          exit(0);
+          break;
+        case SDL_WINDOWEVENT_FOCUS_LOST:
+          ReleaseDesktopInputState();
+          break;
+        case SDL_WINDOWEVENT_RESIZED:
+        case SDL_WINDOWEVENT_SIZE_CHANGED: {
+          int drawableWidth = 0;
+          int drawableHeight = 0;
+          SDL_GL_GetDrawableSize(window, &drawableWidth, &drawableHeight);
+          if (drawableWidth > 0 && drawableHeight > 0) {
+            glViewport(0, 0, drawableWidth, drawableHeight);
+          } else {
+            fprintf(stderr, "Ignoring invalid resized OpenGL drawable: %d x %d\n",
+                    drawableWidth, drawableHeight);
+          }
+          break;
+        }
+        }
+      }'''
+KEYDOWN_ORIGINAL = "      if (Event.type == SDL_KEYDOWN) {"
+KEYDOWN_PATCHED = r'''      if (Event.type == SDL_JOYDEVICEREMOVED) {
+        if (s_SIM_SDLJoystick != NULL &&
+            SDL_JoystickInstanceID(s_SIM_SDLJoystick) == Event.jdevice.which) {
+          SDL_JoystickClose(s_SIM_SDLJoystick);
+          s_SIM_SDLJoystick = NULL;
+          ReleaseDesktopInputState();
+          fprintf(stderr, "Controller disconnected; input state released.\n");
+        }
+      }
+      if (Event.type == SDL_KEYDOWN && Event.key.repeat == 0) {'''
+
 
 
 FS_OPEN_FALLBACK_ORIGINAL = r'''        #if FS_FILE_OPEN_DEBUG
@@ -867,6 +942,10 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
         (SDL_WINDOW_CONTEXT_ORIGINAL, SDL_WINDOW_CONTEXT_PATCHED, "SDL window/context checks"),
         (GL_LOADER_ORIGINAL, GL_LOADER_PATCHED, "desktop OpenGL loader check"),
         (MAIN_RENDER_HANDOFF_ORIGINAL, MAIN_RENDER_HANDOFF_PATCHED, "renderer startup handoff check"),
+        (SDL_VIEWPORT_ORIGINAL, SDL_VIEWPORT_PATCHED, "high-DPI OpenGL viewport"),
+        (INPUT_RELEASE_HELPER_ORIGINAL, INPUT_RELEASE_HELPER_PATCHED, "desktop input release helper"),
+        (WINDOW_EVENT_ORIGINAL, WINDOW_EVENT_PATCHED, "focus-loss and resize event handling"),
+        (KEYDOWN_ORIGINAL, KEYDOWN_PATCHED, "keyboard key-repeat and controller-disconnect handling"),
     )
     for original, patched, label in blocks:
         if patched in current:
