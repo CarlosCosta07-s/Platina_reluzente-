@@ -72,7 +72,7 @@ public class PlatinaGamePlugin extends Plugin {
                         activity.startActivity(intent);
                         JSObject result = new JSObject();
                         result.put("ok", true);
-                        result.put("message", "ROM importada; iniciando o motor nativo incluído neste APK.");
+                        result.put("message", "A atividade SDL foi aberta. Confirme se a tela do jogo apareceu no dispositivo; abrir a atividade ainda não confirma que o jogo carregou.");
                         call.resolve(result);
                     } catch (Exception error) {
                         call.reject("Não foi possível iniciar o motor nativo: " + error.getMessage());
