@@ -58,10 +58,10 @@ jobs:
           set +o pipefail
           yes | "$sdkmanager_path" --licenses
           set -o pipefail
-          "$sdkmanager_path" "platforms;android-34" "platforms;android-35" "build-tools;34.0.0" "ndk;28.2.13676358"
+          "$sdkmanager_path" "platforms;android-34" "platforms;android-35" "build-tools;34.0.0" "ndk;30.0.16248370"
           echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$sdk_root/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          echo "$sdk_root/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
+          echo "ANDROID_NDK_HOME=$sdk_root/ndk/30.0.16248370" >> "$GITHUB_ENV"
+          echo "$sdk_root/ndk/30.0.16248370/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
       - name: Fetch pinned source revisions
         shell: bash
         run: |
