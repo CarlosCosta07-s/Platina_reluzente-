@@ -102,11 +102,6 @@ public class PlatinaGamePlugin extends Plugin {
                     "Esta compilação espera Pokémon Platinum USA Rev. 1 (código CPUE). "
                             + "A ROM selecionada não corresponde à versão configurada.");
         }
-        if (!"CPUE".equals(code)) {
-            throw new IOException(
-                    "Esta compilação nativa espera Pokémon Platinum USA Rev. 1 (código CPUE). "
-                            + "A ROM selecionada não corresponde à versão de jogo configurada.");
-        }
     }
 
     private void extractRuntimeAssets() throws IOException {
