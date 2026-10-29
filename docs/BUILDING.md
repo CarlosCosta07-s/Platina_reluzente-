@@ -40,6 +40,28 @@ Depois volte à raiz:
 
 A primeira instalação baixa ferramentas do MSYS2 e pode levar algum tempo. A compilação seguinte reutiliza esse ambiente. O script do projeto fixa as revisões Meson antes de iniciar o alvo win64.
 
+## Empacotar o launcher com o runtime nativo local
+
+Depois de compilar o runtime para a plataforma que será empacotada, os scripts do launcher fazem o staging automaticamente sem publicar os arquivos de jogo na CI.
+
+Linux:
+```sh
+./scripts/build-native.sh linux
+cd launcher-app
+npm install
+npm run build:linux
+```
+
+Windows (PowerShell):
+```powershell
+.\scripts\build-native.ps1
+cd launcher-app
+npm install
+npm run build:windows
+```
+
+O staging lê o runtime local em `vendor/pokeplatinum-native/build_linux/pokeplatinum` ou `build_win64/pokeplatinum`, valida os arquivos essenciais e cria `launcher-app/runtime`. Não inclui ROMs, patches, saves ou configurações pessoais. O diretório gerado fica ignorado pelo Git; não o adicione manualmente ao repositório nem o publique como artefato. A compilação de uma plataforma não gera um executável para a outra.
+
 ## Testes de manutenção
 
 Os testes do importador e do fixador de dependências não precisam de ROM:
