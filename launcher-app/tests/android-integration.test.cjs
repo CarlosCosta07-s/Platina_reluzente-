@@ -51,7 +51,12 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(mainActivity, /registerPlugin\(PlatinaGamePlugin\.class\)/);
     assert.match(plugin, /startActivity\(intent\)/);
     assert.match(plugin, /roms\/current\.nds/);
+    assert.match(plugin, /"CPUE"/);
+    assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
+    const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+    assert.match(launcherSource, /code !== 'CPUE'/);
+    assert.match(launcherSource, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /!destination\.exists\(\) && previous\.exists\(\) && !previous\.renameTo\(destination\)/);
     const existingBackupBranch = plugin.indexOf('if (destination.exists() && previous.exists())');
     const destinationVersionCheck = plugin.indexOf('if (isCompleteRuntime(destination, expectedVersion))', existingBackupBranch);
