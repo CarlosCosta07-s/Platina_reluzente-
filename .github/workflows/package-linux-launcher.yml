@@ -10,6 +10,10 @@ on:
     paths:
       - ".github/workflows/package-linux-launcher.yml"
       - "launcher-app/**"
+  workflow_run:
+    workflows: ["Native desktop build and localization checks"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,32 +22,39 @@ permissions:
 
 jobs:
   package-linux:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     name: Build integrated Linux x86-64 launcher
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Checkout main
+      - name: Checkout native build revision
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Find latest uploaded native Linux AppImage
+      - name: Select native AppImage from the matching successful build
         id: native_artifact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          artifact_info="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "Platina-Reluzente-Linux-x86_64-AppImage" and .expired == false)] | sort_by(.created_at) | last | if . == null then empty else [.workflow_run.id, .created_at] | @tsv end')"
-          if [[ -z "$artifact_info" ]]; then
-            echo "No unexpired native Linux AppImage artifact was found." >&2
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native-desktop.yml/runs?branch=main&status=success&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA)] | first | .id // empty')"
+          fi
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "No successful native build matches this launcher source revision." >&2
             exit 1
           fi
-          read -r run_id created_at <<< "$artifact_info"
-          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
-            echo "The native artifact's workflow run ID is invalid: $run_id" >&2
+          artifact_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "Platina-Reluzente-Linux-x86_64-AppImage" and .expired == false)] | sort_by(.created_at) | last | if . == null then empty else .name end')"
+          if [[ "$artifact_name" != "Platina-Reluzente-Linux-x86_64-AppImage" ]]; then
+            echo "The matching successful native build has no usable Linux AppImage artifact." >&2
             exit 1
           fi
           printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-          echo "Selected native AppImage uploaded by workflow run $run_id at $created_at."
+          echo "Selected the Linux AppImage built by matching native run $run_id."
 
       - name: Download verified native Linux AppImage
         uses: actions/download-artifact@v4
