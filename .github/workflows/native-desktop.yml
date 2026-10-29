@@ -125,11 +125,26 @@ jobs:
           APPIMAGE_PATH: ${{ steps.linux_appimage.outputs.path }}
         run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$APPIMAGE_PATH" 15
 
-      - name: Upload Linux AppImage (native executable and shared libraries only)
+      - name: Prepare Linux native artifact and path-only data manifest
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          artifact_dir="$RUNNER_TEMP/Platina-Reluzente-Linux-x86_64-native-artifact"
+          rm -rf "$artifact_dir"
+          mkdir -p "$artifact_dir"
+          appimage="${{ steps.linux_appimage.outputs.path }}"
+          install -m 0755 "$appimage" "$artifact_dir/$(basename "$appimage")"
+          node "$GITHUB_WORKSPACE/launcher-app/scripts/create-data-path-manifest.cjs" \
+            --input "$GITHUB_WORKSPACE/vendor/pokeplatinum-native/platinum.us/filesys.csv" \
+            --output "$artifact_dir/platinum-data-paths.txt"
+          test -s "$artifact_dir/platinum-data-paths.txt"
+          printf 'Prepared AppImage plus a path-only manifest. No ROM or extracted game asset is included.\\n'
+
+      - name: Upload Linux native runtime and path manifest (no game data)
         uses: actions/upload-artifact@v4
         with:
           name: Platina-Reluzente-Linux-x86_64-AppImage
-          path: ${{ steps.linux_appimage.outputs.path }}
+          path: ${{ runner.temp }}/Platina-Reluzente-Linux-x86_64-native-artifact/
           if-no-files-found: error
           retention-days: 14
 
@@ -280,14 +295,21 @@ jobs:
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath $file.FullName -Destination $destination
           }
+          $csvPath = Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/platinum.us/filesys.csv"
+          $pathManifestScript = Join-Path $env:GITHUB_WORKSPACE "launcher-app/scripts/create-data-path-manifest.cjs"
+          $pathManifest = Join-Path $stageDir "platinum-data-paths.txt"
+          node $pathManifestScript --input $csvPath --output $pathManifest
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $pathManifest -PathType Leaf)) {
+            throw "Failed to generate the extracted-data path-only manifest."
+          }
           @"
           Platina Reluzente - native Windows x64 executable test build
-          
-          This artifact contains native executable(s) and DLL dependencies only.
-          It deliberately excludes ROMs, firmware, extracted game resources, saves,
-          patches, and localization files. A legally obtained compatible ROM must
-          be supplied locally. Startup and gameplay have not yet been verified
-          with a ROM; successful compilation does not imply the game is playable.
+
+          This artifact contains native executable(s), DLL dependencies and a
+          path-only manifest of expected local game files. It excludes ROMs,
+          firmware, extracted game resources, saves, patches, and localization
+          files. A legally obtained compatible ROM must be supplied locally.
+          Startup and gameplay have not yet been verified with a ROM.
           "@ | Set-Content -LiteralPath (Join-Path $stageDir "README-FIRST-START.txt") -Encoding utf8
           $hashLines = @(
             Get-ChildItem -LiteralPath $stageDir -Recurse -File |
