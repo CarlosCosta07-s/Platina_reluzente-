@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { launchNativeProcess } = require('./native-process.cjs');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, validateNdsHeader } = require('./runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('./runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
 // Native runtime and generated assets are pinned to this exact retail image.
@@ -165,6 +165,7 @@ ipcMain.handle('platina:launch-game', async () => {
       path.join(app.getPath('userData'), 'runtime'),
       process.platform
     );
+    ensureHorizontalScreenLayout(writableRuntime.root);
   } catch (error) {
     return {
       ok: false,
@@ -176,7 +177,11 @@ ipcMain.handle('platina:launch-game', async () => {
     executable: writableRuntime.executable,
     args: process.platform === 'linux' ? ['--appimage-extract-and-run'] : [],
     cwd: writableRuntime.root,
-    env: { ...process.env, PLATINA_IMPORTED_ROM: rom.filePath },
+    env: {
+      ...process.env,
+      PLATINA_IMPORTED_ROM: rom.filePath,
+      PLATINA_IMPORTED_ROM_SHA256: rom.sha256
+    },
     logPath,
     platform: process.platform,
     romSha256: rom.sha256
