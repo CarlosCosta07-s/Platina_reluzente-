@@ -63,6 +63,8 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /romVersion != 1/);
     assert.match(plugin, /ROM version 0x1E igual a 1/);
     assert.match(launcherSource, /code !== 'CPUE'/);
+    assert.match(launcherSource, /romVersion !== 1/);
+    assert.match(launcherSource, /ROM version 0x1E igual a 1/);
     assert.match(launcherSource, /header\[0x1e\] !== 1/);
     assert.match(launcherSource, /ROM version no cabeçalho \(0x1E\) deve ser 1/);
     assert.match(plugin, /!destination\.exists\(\) && previous\.exists\(\) && !previous\.renameTo\(destination\)/);
