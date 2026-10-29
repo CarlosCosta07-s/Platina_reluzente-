@@ -14,7 +14,7 @@ const ORIGINAL_ROM_SHA1 = '0862ec35b24de5c7e2dcb88c9eea0873110d755c';
 function createWindow() {
   const window = new BrowserWindow({
     width: 1240, height: 860, minWidth: 760, minHeight: 620,
-    title: 'Platina Reluzente — Launcher', backgroundColor: '#0c1019',
+    title: 'Platina Reluzente — Biblioteca de Ports Nativos', backgroundColor: '#0c1019',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
   });
