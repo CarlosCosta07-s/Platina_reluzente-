@@ -1,7 +1,7 @@
 name: Native desktop build and localization checks
 
 concurrency:
-  group: native-desktop-v2-${{ github.ref }}
+  group: native-desktop-v3-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -13,6 +13,7 @@ on:
       - "scripts/**"
       - "tools/**"
       - "vendor/**"
+      - "launcher-app/**"
   workflow_dispatch:
 
 permissions:
@@ -136,6 +137,62 @@ jobs:
         if: always()
         run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" --restore "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
 
+      - name: Set up Node.js for Linux launcher
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - name: Install Linux launcher dependencies
+        working-directory: launcher-app
+        run: npm install --no-audit --no-fund
+      - name: Test Linux launcher before packaging
+        working-directory: launcher-app
+        run: npm test
+      - name: Build integrated Linux launcher
+        working-directory: launcher-app
+        run: npm run build:linux
+      - name: Stage Linux launcher artifacts without game data
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          dist_dir="$GITHUB_WORKSPACE/launcher-app/dist"
+          stage_dir="$RUNNER_TEMP/Platina-Reluzente-Launcher-Linux-x64"
+          mapfile -t appimages < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*-linux-x64.AppImage' -print)
+          mapfile -t archives < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*-linux-x64.tar.gz' -print)
+          if [[ "${#appimages[@]}" -ne 1 || "${#archives[@]}" -ne 1 ]]; then
+            echo "Expected exactly one Linux launcher AppImage and tar.gz; found ${#appimages[@]} AppImage(s), ${#archives[@]} archive(s)." >&2
+            find "$dist_dir" -maxdepth 1 -type f -print || true
+            exit 1
+          fi
+          rm -rf "$stage_dir"
+          mkdir -p "$stage_dir"
+          cp -- "${appimages[0]}" "${archives[0]}" "$stage_dir/"
+          cat > "$stage_dir/README-FIRST-START.txt" <<'EOF'
+          Platina Reluzente Launcher - Linux x86-64 test build
+
+          This is a native desktop launcher package. Its game runtime is compiled
+          native code and bundled libraries; no ROM, firmware, extracted NARC,
+          game save, or patch is included.
+
+          Import only a legally obtained compatible Pokemon Platinum USA Rev. 1
+          .nds image through the launcher. The current loader checks the full
+          image SHA-1 and rejects unsupported revisions. Missing data is meant
+          to be extracted locally from the imported ROM on first launch.
+
+          This is an experimental test build. CI confirmed the native Linux
+          window can open without a ROM, but has not confirmed title-screen
+          startup or gameplay with a ROM. Please report any failure and attach
+          the private native-startup.log; do not upload ROMs or extracted data.
+          EOF
+          (cd "$stage_dir" && sha256sum *.AppImage *.tar.gz README-FIRST-START.txt > SHA256SUMS.txt)
+          ls -lh "$stage_dir"
+      - name: Upload integrated Linux launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platina-Reluzente-Launcher-Linux-x64
+          path: ${{ runner.temp }}/Platina-Reluzente-Launcher-Linux-x64/
+          if-no-files-found: error
+          retention-days: 14
+
 
   windows:
     name: Windows x64 compile
@@ -255,6 +312,69 @@ jobs:
         if: always()
         shell: pwsh
         run: python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin_native_dependencies.py") --restore (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
+
+      - name: Set up Node.js for Windows launcher
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - name: Install Windows launcher dependencies
+        working-directory: launcher-app
+        run: npm install --no-audit --no-fund
+      - name: Test Windows launcher before packaging
+        working-directory: launcher-app
+        run: npm test
+      - name: Build integrated Windows launcher
+        working-directory: launcher-app
+        run: npm run build:windows
+      - name: Stage Windows launcher artifact without game data
+        shell: pwsh
+        run: |
+          $distDir = Join-Path $env:GITHUB_WORKSPACE "launcher-app/dist"
+          $stageDir = Join-Path $env:RUNNER_TEMP "Platina-Reluzente-Launcher-Windows-x64"
+          $launchers = @(Get-ChildItem -LiteralPath $distDir -File -Filter "Platina-Reluzente-Launcher-*-windows-x64.exe")
+          if ($launchers.Count -ne 1 -or $launchers[0].Length -le 0) {
+            throw "Expected exactly one non-empty integrated Windows x64 launcher; found $($launchers.Count)."
+          }
+          if (Test-Path -LiteralPath $stageDir) {
+            Remove-Item -LiteralPath $stageDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+          Copy-Item -LiteralPath $launchers[0].FullName -Destination $stageDir
+          @"
+          Platina Reluzente Launcher - Windows x64 test build
+
+          This is a native desktop launcher package. Its game runtime is compiled
+          native code and bundled libraries; no ROM, firmware, extracted NARC,
+          game save, or patch is included.
+
+          Import only a legally obtained compatible Pokemon Platinum USA Rev. 1
+          .nds image through the launcher. The current loader checks the full
+          image SHA-1 and rejects unsupported revisions. Missing data is meant
+          to be extracted locally from the imported ROM on first launch.
+
+          This is an experimental test build. Linux CI confirms the native
+          window opens without a ROM, but CI has not confirmed gameplay with a
+          ROM. Please report any failure and attach the private native-startup.log;
+          do not upload ROMs or extracted data.
+          "@ | Set-Content -LiteralPath (Join-Path $stageDir "README-FIRST-START.txt") -Encoding utf8
+          $hashLines = @(
+            Get-ChildItem -LiteralPath $stageDir -File |
+            Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
+            Sort-Object Name |
+            ForEach-Object {
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            }
+          )
+          $hashLines | Set-Content -LiteralPath (Join-Path $stageDir "SHA256SUMS.txt") -Encoding ascii
+          Get-ChildItem -LiteralPath $stageDir -File | Select-Object Name, Length
+      - name: Upload integrated Windows launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platina-Reluzente-Launcher-Windows-x64
+          path: ${{ runner.temp }}/Platina-Reluzente-Launcher-Windows-x64/
+          if-no-files-found: error
+          retention-days: 14
 
 
 # CI uploads short-lived executable-only artifacts after validation. It never uploads ROMs or extracted game resources.
