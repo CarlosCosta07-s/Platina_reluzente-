@@ -83,6 +83,12 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
       invalidDestinationCleanup > existingBackupBranch && previousRestore > invalidDestinationCleanup,
       'an invalid destination must be removed and the backup restored before a new copy begins',
     );
+    const stagingCleanup = plugin.indexOf('if (staging.exists() && !deleteRecursively(staging))');
+    const validRuntimeFastPath = plugin.indexOf('if (isCompleteRuntime(destination, expectedVersion)) return;');
+    assert.ok(
+      stagingCleanup >= 0 && validRuntimeFastPath > stagingCleanup,
+      'stale staging must be removed even when a valid runtime allows an early return',
+    );
     assert.match(manifest, /android:name="org\.libsdl\.app\.SDLActivity"/);
     assert.match(manifest, /android:exported="false"/);
     assert.match(manifest, /0x00030002/);
