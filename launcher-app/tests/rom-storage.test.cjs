@@ -67,6 +67,27 @@ const common = {
   toBase64: (buffer) => Buffer.from(buffer).toString('base64')
 };
 
+test('does not mistake a storage permission error for a missing previous ROM', async () => {
+  const { persistRomAtomically } = await loadPersistence();
+  const oldRom = Buffer.from('previous-valid-rom');
+  const filesystem = memoryFilesystem({ 'roms/current.nds': oldRom });
+  const originalStat = filesystem.stat.bind(filesystem);
+  filesystem.stat = async (options) => {
+    if (options.path === 'roms/current.nds') {
+      throw new Error('EACCES: permission denied');
+    }
+    return originalStat(options);
+  };
+
+  await assert.rejects(
+    persistRomAtomically({ ...common, filesystem, file: makeFile('new-rom-data') }),
+    /EACCES: permission denied/
+  );
+
+  assert.deepEqual(filesystem.files.get('roms/current.nds'), oldRom);
+  assert.equal(filesystem.writeOptions.length, 0);
+});
+
 test('writes Base64 chunks as binary and replaces the ROM only after completion', async () => {
   const { persistRomAtomically } = await loadPersistence();
   const oldRom = Buffer.from('previous-valid-rom');
