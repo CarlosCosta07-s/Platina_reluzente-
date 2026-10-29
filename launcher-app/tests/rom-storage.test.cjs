@@ -67,6 +67,27 @@ const common = {
   toBase64: (buffer) => Buffer.from(buffer).toString('base64')
 };
 
+test('rejects empty and oversized files before touching the stored ROM', async () => {
+  const { persistRomAtomically } = await loadPersistence();
+  const oldRom = Buffer.from('previous-valid-rom');
+  const filesystem = memoryFilesystem({ 'roms/current.nds': oldRom });
+
+  await assert.rejects(
+    persistRomAtomically({ ...common, filesystem, file: makeFile('') }),
+    /ROM size must be a positive safe integer/
+  );
+
+  const oversized = makeFile('unused');
+  Object.defineProperty(oversized, 'size', { value: 512 * 1024 * 1024 + 1 });
+  await assert.rejects(
+    persistRomAtomically({ ...common, filesystem, file: oversized }),
+    /ROM size must be a positive safe integer/
+  );
+
+  assert.deepEqual(filesystem.files.get('roms/current.nds'), oldRom);
+  assert.equal(filesystem.writeOptions.length, 0);
+});
+
 test('does not mistake a storage permission error for a missing previous ROM', async () => {
   const { persistRomAtomically } = await loadPersistence();
   const oldRom = Buffer.from('previous-valid-rom');
