@@ -138,7 +138,7 @@ function addSdlActivity(manifestPath) {
       '            android:name="org.libsdl.app.SDLActivity"',
       '            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"',
       '            android:exported="false"',
-      '            android:screenOrientation="portrait"',
+      '            android:screenOrientation="landscape"',
       '            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">',
       '            <meta-data android:name="SDL_ENV.SDL_ACCELEROMETER_AS_JOYSTICK" android:value="0" />',
       '        </activity>'
