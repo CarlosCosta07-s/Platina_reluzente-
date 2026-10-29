@@ -30,32 +30,53 @@ async function cleanupBestEffort(paths) {
   await Promise.allSettled(paths.map((filePath) => removeIfPresent(filePath)));
 }
 
-function hashFile(filePath, algorithm) {
+function hashFileDigests(filePath, algorithms) {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash(algorithm);
+    const hashes = Object.fromEntries(algorithms.map((algorithm) => [
+      algorithm, crypto.createHash(algorithm)
+    ]));
     const stream = createReadStream(filePath);
-    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('data', (chunk) => {
+      for (const hash of Object.values(hashes)) hash.update(chunk);
+    });
     stream.once('error', reject);
-    stream.once('end', () => resolve(hash.digest('hex')));
+    stream.once('end', () => {
+      resolve(Object.fromEntries(Object.entries(hashes).map(([name, hash]) => [
+        name, hash.digest('hex')
+      ])));
+    });
   });
+}
+
+function hashFile(filePath, algorithm) {
+  return hashFileDigests(filePath, [algorithm]).then((digests) => digests[algorithm]);
 }
 
 function sha256File(filePath) {
   return hashFile(filePath, 'sha256');
 }
 
-async function matchesMetadata(romPath, metadataPath) {
+function sha1File(filePath) {
+  return hashFile(filePath, 'sha1');
+}
+
+async function matchesMetadata(romPath, metadataPath, expectedSha1) {
   let metadataText;
   let stat;
+  let metadataStat;
   try {
-    [metadataText, stat] = await Promise.all([
+    [metadataText, stat, metadataStat] = await Promise.all([
       fs.readFile(metadataPath, 'utf8'),
-      fs.stat(romPath)
+      fs.lstat(romPath),
+      fs.lstat(metadataPath)
     ]);
   } catch (error) {
     if (isMissingPathError(error)) return false;
     throw error;
   }
+
+  if (stat.isSymbolicLink() || !stat.isFile()
+      || metadataStat.isSymbolicLink() || !metadataStat.isFile()) return false;
 
   let metadata;
   try {
@@ -63,14 +84,25 @@ async function matchesMetadata(romPath, metadataPath) {
   } catch {
     return false;
   }
-  if (!stat.isFile() || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
-    return false;
-  }
+  if (!Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) return false;
   if (typeof metadata.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(metadata.sha256)) {
     return false;
   }
+  if (expectedSha1 !== undefined
+      && (typeof metadata.sha1 !== 'string'
+        || metadata.sha1.toLowerCase() !== expectedSha1.toLowerCase())) {
+    return false;
+  }
+
   try {
-    return (await sha256File(romPath)) === metadata.sha256.toLowerCase();
+    const digests = await hashFileDigests(
+      romPath,
+      expectedSha1 === undefined ? ['sha256'] : ['sha256', 'sha1']
+    );
+    if (digests.sha256 !== metadata.sha256.toLowerCase()) return false;
+    if (expectedSha1 !== undefined
+        && digests.sha1 !== expectedSha1.toLowerCase()) return false;
+    return true;
   } catch (error) {
     if (isMissingPathError(error)) return false;
     throw error;
@@ -82,7 +114,11 @@ async function matchesMetadata(romPath, metadataPath) {
  * remains to prove which pair is valid. Ambiguous files are preserved and
  * reported instead of silently deleting a possible last-good ROM.
  */
-async function recoverDesktopRom({ destinationPath, metadataPath }) {
+async function recoverDesktopRom({ destinationPath, metadataPath, expectedSha1 }) {
+  if (expectedSha1 !== undefined
+      && (typeof expectedSha1 !== 'string' || !/^[a-f0-9]{40}$/i.test(expectedSha1))) {
+    throw new TypeError('O SHA-1 esperado para recuperação deve conter exatamente 40 dígitos hexadecimais.');
+  }
   const romBackup = destinationPath + '.previous';
   const romStaging = destinationPath + '.importing';
   const metadataBackup = metadataPath + '.previous';
@@ -93,7 +129,7 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
       exists(romStaging), exists(metadataStaging)
     ]);
 
-  if (hasRom && hasMetadata && await matchesMetadata(destinationPath, metadataPath)) {
+  if (hasRom && hasMetadata && await matchesMetadata(destinationPath, metadataPath, expectedSha1)) {
     await cleanupBestEffort([
       romBackup, metadataBackup, romStaging, metadataStaging
     ]);
@@ -111,7 +147,7 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
   // The temporary metadata carries the expected SHA-256, so recover only if
   // it proves that the installed ROM is exactly the staged version.
   if (hasRom && !hasMetadata && !hasRomBackup && !hasMetadataBackup
-      && hasMetadataStaging && await matchesMetadata(destinationPath, metadataStaging)) {
+      && hasMetadataStaging && await matchesMetadata(destinationPath, metadataStaging, expectedSha1)) {
     await fs.rename(metadataStaging, metadataPath);
     await cleanupBestEffort([romStaging, romBackup, metadataBackup]);
     return;
@@ -122,7 +158,7 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
   // files can be discarded without touching a last-good destination.
   if (!hasRom && !hasMetadata && !hasRomBackup && !hasMetadataBackup) {
     if (hasRomStaging && hasMetadataStaging
-        && await matchesMetadata(romStaging, metadataStaging)) {
+        && await matchesMetadata(romStaging, metadataStaging, expectedSha1)) {
       await fs.rename(romStaging, destinationPath);
       await fs.rename(metadataStaging, metadataPath);
       await cleanupBestEffort([romBackup, metadataBackup]);
@@ -132,7 +168,7 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
     return;
   }
 
-  if (hasRomBackup && hasMetadataBackup && await matchesMetadata(romBackup, metadataBackup)) {
+  if (hasRomBackup && hasMetadataBackup && await matchesMetadata(romBackup, metadataBackup, expectedSha1)) {
     await removeIfPresent(destinationPath);
     await removeIfPresent(metadataPath);
     await fs.rename(romBackup, destinationPath);
@@ -141,13 +177,13 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
     return;
   }
 
-  if (!hasRom && hasRomBackup && hasMetadata && await matchesMetadata(romBackup, metadataPath)) {
+  if (!hasRom && hasRomBackup && hasMetadata && await matchesMetadata(romBackup, metadataPath, expectedSha1)) {
     await fs.rename(romBackup, destinationPath);
     await cleanupBestEffort([metadataBackup, romStaging, metadataStaging]);
     return;
   }
 
-  if (hasRom && !hasMetadata && hasMetadataBackup && await matchesMetadata(destinationPath, metadataBackup)) {
+  if (hasRom && !hasMetadata && hasMetadataBackup && await matchesMetadata(destinationPath, metadataBackup, expectedSha1)) {
     await fs.rename(metadataBackup, metadataPath);
     await cleanupBestEffort([romBackup, romStaging, metadataStaging]);
     return;
@@ -171,7 +207,7 @@ async function commitDesktopRom({ sourcePath, destinationPath, metadataPath, met
   const romDirectory = path.dirname(destinationPath);
   await fs.mkdir(romDirectory, { recursive: true });
   await fs.mkdir(path.dirname(metadataPath), { recursive: true });
-  await recoverDesktopRom({ destinationPath, metadataPath });
+  await recoverDesktopRom({ destinationPath, metadataPath, expectedSha1 });
 
   const romStaging = destinationPath + '.importing';
   const romBackup = destinationPath + '.previous';
@@ -271,4 +307,4 @@ async function commitDesktopRom({ sourcePath, destinationPath, metadataPath, met
   }
 }
 
-module.exports = { commitDesktopRom, recoverDesktopRom, sha256File };
+module.exports = { commitDesktopRom, recoverDesktopRom, sha256File, sha1File };
