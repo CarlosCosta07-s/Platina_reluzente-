@@ -20,8 +20,8 @@ if (-not (Test-Path $launcher)) {
 
 Push-Location $nativeDir
 try {
-    # Pin, compile, and restore the upstream wrap files in the same MSYS shell.
-    $command = "python3 ../../scripts/pin_native_dependencies.py . && (trap 'python3 ../../scripts/pin_native_dependencies.py --restore .' EXIT; make $Target)"
+    # Match CI preparation and keep wrap pinning scoped to the MSYS process.
+    $command = "python3 ../../scripts/pin_native_dependencies.py . && (set -Eeuo pipefail; trap 'python3 ../../scripts/pin_native_dependencies.py --restore .' EXIT; make meson; python3 subprojects/meson-1.12.0/meson.py subprojects download --sourcedir .; python3 ../../scripts/prepare_native_runtime.py .; make $Target)"
     & $launcher $command
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE

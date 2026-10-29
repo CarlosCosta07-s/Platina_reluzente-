@@ -40,4 +40,15 @@ restore_pins() {
 trap restore_pins EXIT
 
 "$python_bin" "$pin_script" "$native_dir"
+
+# Match CI's preparation order so local builds get the same ROM handoff,
+# safe missing-resource behavior, save location and renderer failure checks.
+make -C "$native_dir" meson
+meson_script="$native_dir/subprojects/meson-1.12.0/meson.py"
+if [[ ! -f "$meson_script" ]]; then
+  printf 'Meson 1.12.0 was not prepared at %s\n' "$meson_script" >&2
+  exit 2
+fi
+"$python_bin" "$meson_script" subprojects download --sourcedir "$native_dir"
+"$python_bin" "$repo_root/scripts/prepare_native_runtime.py" "$native_dir"
 make -C "$native_dir" "$target"
