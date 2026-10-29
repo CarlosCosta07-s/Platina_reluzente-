@@ -1,0 +1,199 @@
+name: Pokémon Black native source validation (no game data)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pokemon-black-native-check.yml"
+      - "docs/POKEMON_BLACK_PORT.md"
+      - "docs/ROADMAP.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pokemon-black-native-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ALETHEIA_COMMIT: 6c2aae879f123bcbc028cf6a8b7f8df614402ac8
+  EIDOS_COMMIT: b79123f967980d1bb758161891205c03d606dec7
+  EIDOS_DEFAULT_RELAY: ${{ vars.EIDOS_DEFAULT_RELAY }}
+
+jobs:
+  linux-x86-64:
+    name: Linux x86-64 native compile and tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Platina Reluzente orchestration repository
+        uses: actions/checkout@v6
+
+      - name: Checkout pinned eidos port and aletheia source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .black-ci
+          git clone --filter=blob:none https://github.com/Project-Holon/eidos.git .black-ci/eidos
+          git -C .black-ci/eidos checkout --detach "$EIDOS_COMMIT"
+          git clone --filter=blob:none https://github.com/Project-Holon/aletheia.git .black-ci/aletheia
+          git -C .black-ci/aletheia checkout --detach "$ALETHEIA_COMMIT"
+          test "$(git -C .black-ci/eidos rev-parse HEAD)" = "$EIDOS_COMMIT"
+          test "$(git -C .black-ci/aletheia rev-parse HEAD)" = "$ALETHEIA_COMMIT"
+          grep -Fq "set(EIDOS_ALETHEIA_PIN \"$ALETHEIA_COMMIT\")" .black-ci/eidos/cmake/aletheia_pin.cmake
+          echo "Pinned upstream checkouts match eidos' recorded aletheia pin."
+
+      - name: Install host and SDL3 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build gcc-multilib libgl1-mesa-dev libegl1-mesa-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols libdrm-dev libgbm-dev \
+            libpulse-dev libasound2-dev libudev-dev libdbus-1-dev \
+            libibus-1.0-dev libfuse2 file
+
+      - name: Fetch pinned-hash native build dependencies
+        working-directory: .black-ci/eidos
+        run: |
+          python3 tools/fetch_sdl.py --flavor mingw
+          python3 tools/fetch_sdl.py --flavor source --build --tag linux-x64
+          python3 tools/fetch_wamr.py
+          python3 tools/fetch_mbedtls.py
+          python3 tools/fetch_wasm.py
+
+      - name: Prepare non-game placeholders in the temporary upstream checkout
+        working-directory: .black-ci/eidos
+        run: python3 tools/package_release.py placeholders --aletheia-root ../aletheia
+
+      - name: Configure and build upstream regression tests without a ROM
+        working-directory: .black-ci/eidos
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/ilp32-toolchain.cmake \
+            -DCMAKE_C_FLAGS="-m32 -O2 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -fno-omit-frame-pointer" \
+            -DEIDOS_SDL=OFF \
+            -DALETHEIA_ROOT="$PWD/../aletheia" \
+            -DBW_DATA_ROOT="$PWD/no-game-data/extract/data"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure --parallel 2
+
+      - name: Compile the x86-64 native port without game data
+        working-directory: .black-ci/eidos
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sdl_prefix="$(python3 tools/fetch_sdl.py --locate source --tag linux-x64)"
+          python3 tools/build64.py --build-dir build64 --release \
+            --aletheia-root "$PWD/../aletheia" \
+            --data-root "$PWD/no-game-data/extract/data" \
+            --sdl3-prefix "$sdl_prefix" \
+            --relay "$EIDOS_DEFAULT_RELAY"
+          test -x build64/host/eidos
+          file build64/host/eidos
+
+  windows-x64:
+    name: Windows x64 native compile and tests
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout Platina Reluzente orchestration repository
+        uses: actions/checkout@v6
+
+      - name: Checkout pinned eidos port and aletheia source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .black-ci
+          git clone --filter=blob:none https://github.com/Project-Holon/eidos.git .black-ci/eidos
+          git -C .black-ci/eidos checkout --detach "$EIDOS_COMMIT"
+          git clone --filter=blob:none https://github.com/Project-Holon/aletheia.git .black-ci/aletheia
+          git -C .black-ci/aletheia checkout --detach "$ALETHEIA_COMMIT"
+          test "$(git -C .black-ci/eidos rev-parse HEAD)" = "$EIDOS_COMMIT"
+          test "$(git -C .black-ci/aletheia rev-parse HEAD)" = "$ALETHEIA_COMMIT"
+          grep -Fq "set(EIDOS_ALETHEIA_PIN \"$ALETHEIA_COMMIT\")" .black-ci/eidos/cmake/aletheia_pin.cmake
+          echo "Pinned upstream checkouts match eidos' recorded aletheia pin."
+
+      - name: Install MinGW x64 build tools
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-python
+            zip
+            unzip
+
+      - name: Fetch pinned-hash xPack GCC 14.2.0 toolchain
+        working-directory: .black-ci/eidos
+        shell: msys2 {0}
+        run: |
+          set -Eeuo pipefail
+          zip=xpack-mingw-w64-gcc-14.2.0-1-win32-x64.zip
+          mkdir -p .cache/gcc
+          if [[ ! -d .cache/gcc/xpack-mingw-w64-gcc-14.2.0-1 ]]; then
+            curl -sSfL -o "$zip" \
+              "https://github.com/xpack-dev-tools/mingw-w64-gcc-xpack/releases/download/v14.2.0-1/$zip"
+            echo "d9f73bb51ada5ae0ac49277c91815ee0334c8096614d6ced1828fd864712ce73  $zip" | sha256sum -c -
+            unzip -q "$zip" -d .cache/gcc
+            rm "$zip"
+          fi
+          .cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin/x86_64-w64-mingw32-gcc.exe --version | head -1
+
+      - name: Fetch pinned-hash native build dependencies
+        working-directory: .black-ci/eidos
+        shell: msys2 {0}
+        run: |
+          set -Eeuo pipefail
+          python tools/fetch_sdl.py --flavor mingw
+          python tools/fetch_wamr.py
+          python tools/fetch_mbedtls.py
+          gcc_bin="$PWD/.cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin"
+          CC="$gcc_bin/x86_64-w64-mingw32-gcc.exe" CXX="$gcc_bin/x86_64-w64-mingw32-g++.exe" \
+            python tools/fetch_wasm.py
+
+      - name: Prepare non-game placeholders in the temporary upstream checkout
+        working-directory: .black-ci/eidos
+        shell: msys2 {0}
+        run: python tools/package_release.py placeholders --aletheia-root ../aletheia
+
+      - name: Configure and build upstream regression tests without a ROM
+        working-directory: .black-ci/eidos
+        shell: msys2 {0}
+        run: |
+          set -Eeuo pipefail
+          gcc_bin="$(cygpath -m "$PWD/.cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin")"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_C_COMPILER="$gcc_bin/i686-w64-mingw32-gcc.exe" \
+            -DCMAKE_RC_COMPILER="$gcc_bin/i686-w64-mingw32-windres.exe" \
+            -DCMAKE_C_FLAGS="-O2 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -fno-omit-frame-pointer" \
+            -DALETHEIA_ROOT="$(cygpath -m "$PWD/../aletheia")" \
+            -DBW_DATA_ROOT="$(cygpath -m "$PWD/no-game-data/extract/data")"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure --parallel 2
+
+      - name: Compile the x86-64 native port without game data
+        working-directory: .black-ci/eidos
+        shell: msys2 {0}
+        run: |
+          set -Eeuo pipefail
+          gcc_bin="$PWD/.cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin"
+          python tools/build64.py --build-dir build64 --release \
+            --aletheia-root "$(cygpath -m "$PWD/../aletheia")" \
+            --data-root "$(cygpath -m "$PWD/no-game-data/extract/data")" \
+            --cc "$gcc_bin/x86_64-w64-mingw32-gcc.exe" \
+            --relay "$EIDOS_DEFAULT_RELAY"
+          test -f build64/host/eidos.exe
+          file build64/host/eidos.exe
+
+# This workflow validates source compatibility and compilation only. It does not
+# upload a Black executable, ROM, firmware, save, or extracted game data.
