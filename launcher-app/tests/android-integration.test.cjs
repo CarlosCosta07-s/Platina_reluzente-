@@ -25,6 +25,10 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     fs.writeFileSync(path.join(runtimeData, 'header.bin'), 'header');
     fs.writeFileSync(path.join(runtimeData, 'firmware.bin'), 'firmware');
     fs.writeFileSync(path.join(runtimeData, 'build-version.txt'), 'test-build\n');
+    fs.mkdirSync(path.join(runtimeData, 'wazaeffect'), { recursive: true });
+    fs.mkdirSync(path.join(runtimeData, 'battle', 'skill'), { recursive: true });
+    fs.writeFileSync(path.join(runtimeData, 'wazaeffect', 'we.arc'), 'waza-effect archive');
+    fs.writeFileSync(path.join(runtimeData, 'battle', 'skill', 'waza_seq.narc'), 'move-animation archive');
     fs.writeFileSync(path.join(sdl, 'SDLActivity.java'), 'package org.libsdl.app; public class SDLActivity {}\n');
 
     const result = integrateAndroidRuntime({ projectDir: project, runtimeArtifactDir: runtime });
@@ -41,16 +45,28 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'header.bin')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'firmware.bin')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'build-version.txt')));
+    assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'wazaeffect', 'we.arc')));
+    assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'battle', 'skill', 'waza_seq.narc')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'java', 'org', 'libsdl', 'app', 'SDLActivity.java')));
     assert.match(mainActivity, /registerPlugin\(PlatinaGamePlugin\.class\)/);
     assert.match(plugin, /startActivity\(intent\)/);
     assert.match(plugin, /roms\/current\.nds/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
     assert.match(plugin, /!destination\.exists\(\) && previous\.exists\(\) && !previous\.renameTo\(destination\)/);
+    const existingBackupBranch = plugin.indexOf('if (destination.exists() && previous.exists())');
+    const destinationVersionCheck = plugin.indexOf('if (isCompleteRuntime(destination, expectedVersion))', existingBackupBranch);
+    const staleBackupCleanup = plugin.indexOf('deleteRecursively(previous);', destinationVersionCheck);
+    const invalidDestinationCleanup = plugin.indexOf('if (!deleteRecursively(destination))', existingBackupBranch);
+    const previousRestore = plugin.indexOf('if (!previous.renameTo(destination))', invalidDestinationCleanup);
     assert.ok(
-      plugin.indexOf('!destination.exists() && previous.exists()')
-        < plugin.indexOf('if (destination.exists() && previous.exists()) deleteRecursively(previous)'),
-      'the previous runtime must be recovered before stale backups are deleted',
+      existingBackupBranch >= 0
+        && destinationVersionCheck > existingBackupBranch
+        && staleBackupCleanup > destinationVersionCheck,
+      'the current runtime must be validated before its backup is deleted',
+    );
+    assert.ok(
+      invalidDestinationCleanup > existingBackupBranch && previousRestore > invalidDestinationCleanup,
+      'an invalid destination must be removed and the backup restored before a new copy begins',
     );
     assert.match(manifest, /android:name="org\.libsdl\.app\.SDLActivity"/);
     assert.match(manifest, /android:exported="false"/);
