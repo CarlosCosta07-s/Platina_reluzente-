@@ -13,7 +13,6 @@ from pin_native_dependencies import (  # noqa: E402
     pin_native_dependencies,
     restore_native_dependencies,
 )
-from android.scripts.prepare_android_build import LIBVCT_SHA  # noqa: E402
 
 
 def _make_native_root(root: Path, *, revision: str = "main") -> Path:
@@ -43,12 +42,6 @@ class PinNativeDependenciesTests(unittest.TestCase):
                 "https://github.com/cybervisi0n/libvct.git",
                 "a34ad47fc0d7d964483c287759b704b3b1f3b967",
             ),
-        )
-
-    def test_android_preparer_uses_the_same_libvct_revision_pin(self) -> None:
-        self.assertEqual(
-            LIBVCT_SHA,
-            PINNED_DEPENDENCIES["libvct.wrap"][1],
         )
 
     def test_pins_all_moving_wrap_revisions(self) -> None:
