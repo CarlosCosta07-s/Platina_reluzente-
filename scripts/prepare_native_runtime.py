@@ -163,6 +163,11 @@ SDL_INIT_PATCHED = r'''  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT
   }
   SIM_Audio_Init(44100);'''
 
+SDL_SWAP_INTERVAL_SETUP_ORIGINAL = r'''  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);'''
+SDL_SWAP_INTERVAL_SETUP_PATCHED = r'''  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  // Apply VSync only after SDL_GL_CreateContext succeeds.'''
+
 SDL_WINDOW_CONTEXT_ORIGINAL = r'''  window = SDL_CreateWindow(
       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
       SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -180,6 +185,9 @@ SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
     SDL_DestroyWindow(window);
     window = NULL;
     return NULL;
+  }
+  if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0) {
+    fprintf(stderr, "SDL swap interval unavailable: %s\n", SDL_GetError());
   }'''
 
 GL_LOADER_ORIGINAL = "  gladLoadGLLoader(SDL_GL_GetProcAddress);"
@@ -259,6 +267,11 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
     """Fail cleanly when SDL or the desktop OpenGL loader cannot initialize."""
     current = source
     blocks = (
+        (
+            SDL_SWAP_INTERVAL_SETUP_ORIGINAL,
+            SDL_SWAP_INTERVAL_SETUP_PATCHED,
+            "defer swap interval until a context exists",
+        ),
         (SDL_INIT_ORIGINAL, SDL_INIT_PATCHED, "SDL_Init result check"),
         (SDL_WINDOW_CONTEXT_ORIGINAL, SDL_WINDOW_CONTEXT_PATCHED, "SDL window/context checks"),
         (GL_LOADER_ORIGINAL, GL_LOADER_PATCHED, "desktop OpenGL loader check"),

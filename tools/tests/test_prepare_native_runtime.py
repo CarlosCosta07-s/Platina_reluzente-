@@ -41,6 +41,8 @@ void *SIM_RenderInit(void *arg) {
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
            SDL_INIT_JOYSTICK);
   SIM_Audio_Init(44100);
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);
   window = SDL_CreateWindow(
       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
       SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -116,6 +118,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('if (configFile == NULL) {\n        return;\n    }', config_content)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
+            self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
+            self.assertIn('if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0)', content)
             self.assertIn(GL_LOADER_PATCHED, content)
             self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
             self.assertFalse(prepare_native_runtime(root))
