@@ -150,7 +150,10 @@ h1 { font-size: clamp(29px, 3.2vw, 43px); line-height: 1.08; letter-spacing: -.9
   .hero { grid-template-columns: 1fr; gap: 21px; padding-top: 24px; }
   .hero-art { min-height: unset; aspect-ratio: 1.7; }
   .hero-copy { padding: 0 0 8px; }
-  .setup-grid { grid-template-columns: 1fr; }\n  .black-project-card { grid-template-columns: 1fr; gap: 0; }\n  .black-project-art { min-height: 215px; }\n  .black-project-copy { padding: 22px; }
+  .setup-grid { grid-template-columns: 1fr; }
+  .black-project-card { grid-template-columns: 1fr; gap: 0; }
+  .black-project-art { min-height: 215px; }
+  .black-project-copy { padding: 22px; }
 }
 @media (max-width: 520px) {
   .main-content { padding-left: 14px; padding-right: 14px; }
