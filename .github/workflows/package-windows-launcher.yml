@@ -10,6 +10,10 @@ on:
     paths:
       - ".github/workflows/package-windows-launcher.yml"
       - "launcher-app/**"
+  workflow_run:
+    workflows: ["Native desktop build and localization checks"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,14 +22,17 @@ permissions:
 
 jobs:
   package-windows:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     name: Build integrated Windows x64 launcher
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
-      - name: Checkout main
+      - name: Checkout native build revision
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Find latest uploaded native Windows artifact
+      - name: Select native Windows executable from the matching successful build
         id: native_artifact
         shell: pwsh
         env:
@@ -36,21 +43,132 @@ jobs:
             Authorization = "Bearer $env:GITHUB_TOKEN"
             "X-GitHub-Api-Version" = "2022-11-28"
           }
-          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts?per_page=100"
-          $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-          $artifact = @($response.artifacts |
-            Where-Object { $_.name -eq "Platina-Reluzente-Windows-x64-native" -and -not $_.expired } |
-            Sort-Object { [DateTime]$_.created_at } -Descending |
-            Select-Object -First 1)
-          if ($artifact.Count -ne 1) {
-            throw "No unexpired Platina-Reluzente-Windows-x64-native artifact was found."
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_run") {
+            $runId = [string]"${{ github.event.workflow_run.id }}"
+          } else {
+            $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/workflows/native-desktop.yml/runs?branch=main&per_page=100"
+            $runsResponse = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $matchingRuns = @($runsResponse.workflow_runs |
+              Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq "success" } |
+              Sort-Object { [DateTime]$_.updated_at } -Descending |
+              Select-Object -First 1)
+            if ($matchingRuns.Count -ne 1) {
+              throw "No successful native build matches this launcher source revision."
+            }
+            $runId = [string]$matchingRuns[0].id
           }
-          $runId = [string]$artifact[0].workflow_run.id
-          if ($runId -notmatch '^\d+$') {
-            throw "The native Windows artifact's workflow run ID is invalid: $runId"
+          if ($runId -notmatch '^\d+
+
+      - name: Download verified native Windows executable package
+        uses: actions/download-artifact@v4
+        with:
+          name: Platina-Reluzente-Windows-x64-native
+          path: ${{ runner.temp }}/native-engine
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.native_artifact.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare binary-only native runtime
+        shell: pwsh
+        run: |
+          $sourceDir = Join-Path $env:RUNNER_TEMP "native-engine"
+          $targetDir = Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/build_win64/pokeplatinum"
+          $executables = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -File -Filter "main.exe")
+          if ($executables.Count -ne 1) {
+            throw "Expected exactly one main.exe in the native artifact; found $($executables.Count)."
+          }
+          if (Test-Path -LiteralPath $targetDir) {
+            Remove-Item -LiteralPath $targetDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+          $nativeFiles = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -File |
+            Where-Object { $_.Extension -in @(".exe", ".dll") })
+          foreach ($file in $nativeFiles) {
+            $relativePath = [System.IO.Path]::GetRelativePath($sourceDir, $file.FullName)
+            $destination = Join-Path $targetDir $relativePath
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $destination
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $targetDir "main.exe") -PathType Leaf)) {
+            throw "Staged native Windows runtime does not contain root main.exe."
+          }
+          Write-Host "Staged $($nativeFiles.Count) native executable/DLL file(s). Game assets are not staged."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install launcher dependencies
+        working-directory: launcher-app
+        run: npm install --no-audit --no-fund
+
+      - name: Run launcher regression tests
+        working-directory: launcher-app
+        run: npm test
+
+      - name: Build integrated Windows launcher
+        working-directory: launcher-app
+        run: npm run build:windows
+
+      - name: Stage and validate Windows launcher artifact
+        shell: pwsh
+        run: |
+          $distDir = Join-Path $env:GITHUB_WORKSPACE "launcher-app/dist"
+          $stageDir = Join-Path $env:RUNNER_TEMP "Platina-Reluzente-Launcher-Windows-x64"
+          $launchers = @(Get-ChildItem -LiteralPath $distDir -File -Filter "Platina-Reluzente-Launcher-*-windows-x64.exe")
+          if ($launchers.Count -ne 1 -or $launchers[0].Length -le 0) {
+            throw "Expected exactly one non-empty integrated Windows x64 launcher; found $($launchers.Count)."
+          }
+          if (Test-Path -LiteralPath $stageDir) {
+            Remove-Item -LiteralPath $stageDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+          Copy-Item -LiteralPath $launchers[0].FullName -Destination $stageDir
+          @"
+          Platina Reluzente Launcher - Windows x64 experimental build
+
+          This portable launcher includes the native executable and required
+          libraries, but no ROM, firmware, extracted NARC/game resources, saves,
+          or patches. Import a legally obtained, compatible Pokemon Platinum
+          USA Rev. 1 .nds image through the launcher.
+
+          CI has compiled the native engine and tested the launcher code, but
+          has not verified the game's title screen or gameplay with a ROM.
+          If startup fails, inspect the local native-startup.log and report only
+          the error text. Never upload ROMs or extracted game data.
+          "@ | Set-Content -LiteralPath (Join-Path $stageDir "README-FIRST-START.txt") -Encoding utf8
+          $hashLines = @(
+            Get-ChildItem -LiteralPath $stageDir -File |
+            Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
+            Sort-Object Name |
+            ForEach-Object {
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            }
+          )
+          $hashLines | Set-Content -LiteralPath (Join-Path $stageDir "SHA256SUMS.txt") -Encoding ascii
+          Get-ChildItem -LiteralPath $stageDir -File | Select-Object Name, Length
+
+      - name: Upload integrated Windows launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platina-Reluzente-Launcher-Windows-x64
+          path: ${{ runner.temp }}/Platina-Reluzente-Launcher-Windows-x64/
+          if-no-files-found: error
+          retention-days: 14
+) {
+            throw "The native build workflow run ID is invalid: $runId"
+          }
+          $artifactUri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$runId/artifacts?per_page=100"
+          $artifactResponse = Invoke-RestMethod -Method Get -Uri $artifactUri -Headers $headers
+          $matchingArtifacts = @($artifactResponse.artifacts |
+            Where-Object { $_.name -eq "Platina-Reluzente-Windows-x64-native" -and -not $_.expired })
+          if ($matchingArtifacts.Count -lt 1) {
+            throw "The matching native build run has no unexpired Windows executable artifact."
           }
           "run_id=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          Write-Host "Selected native Windows artifact from run $runId, created $($artifact[0].created_at)."
+          Write-Host "Selected native Windows artifact from matching successful run $runId."
 
       - name: Download verified native Windows executable package
         uses: actions/download-artifact@v4
