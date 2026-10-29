@@ -40,80 +40,361 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header selected by the de
 
 ROM_PREFLIGHT_INCLUDE_ORIGINAL = "#include <SDL2/SDL.h>"
 ROM_PREFLIGHT_INCLUDE_PATCHED = r'''#include <SDL2/SDL.h>
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <exception>
+#include <iomanip>
+#include <sstream>
+#include <string>
 #include <system_error>
+#include <vector>
 #include "nds-extract.hpp"'''
 ROM_PREFLIGHT_ENTRY_ORIGINAL = "int main(int argc, char *argv[]) {\n#ifdef SDK_BUILD_NX"
 ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
-  // Extract imported game data before creating the SDL window. The renderer
-  // must not block inside its event loop while a potentially large ROM is read.
+  // The native runtime package contains a path-only manifest derived from the
+  // pinned filesys.csv. No ROM or extracted game contents are packaged.
+  const auto isRegularFileWithoutSymlinks = [](const std::filesystem::path &relativePath) {
+    if (relativePath.empty() || relativePath.is_absolute() || relativePath.has_root_name()) {
+      return false;
+    }
+    std::filesystem::path currentPath;
+    auto component = relativePath.begin();
+    for (; component != relativePath.end(); ++component) {
+      const std::string part = component->string();
+      if (part.empty() || part == "." || part == ".." ||
+          part.find('\\') != std::string::npos || part.find(':') != std::string::npos) {
+        return false;
+      }
+      currentPath /= *component;
+      std::error_code statusError;
+      const auto status = std::filesystem::symlink_status(currentPath, statusError);
+      if (statusError || std::filesystem::is_symlink(status)) return false;
+      auto next = component;
+      ++next;
+      if (next != relativePath.end()) {
+        if (!std::filesystem::is_directory(status)) return false;
+      } else if (!std::filesystem::is_regular_file(status)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const auto encodePathHex = [](const std::string &value) {
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (const unsigned char byte : value) {
+      output << std::setw(2) << static_cast<unsigned int>(byte);
+    }
+    return output.str();
+  };
+
+  const auto inspectFileCrc32 = [&](const std::string &relativeName,
+                                    std::uint64_t &fileSize,
+                                    std::uint32_t &crc32) {
+    if (!isRegularFileWithoutSymlinks(std::filesystem::path(relativeName))) return false;
+    std::ifstream input(relativeName, std::ios::binary);
+    if (!input.is_open()) return false;
+
+    std::uint64_t totalBytes = 0;
+    std::uint32_t crc = 0xFFFFFFFFu;
+    char buffer[64 * 1024];
+    while (input) {
+      input.read(buffer, sizeof(buffer));
+      const std::streamsize bytesRead = input.gcount();
+      if (bytesRead > 0) {
+        totalBytes += static_cast<std::uint64_t>(bytesRead);
+        for (std::streamsize index = 0; index < bytesRead; ++index) {
+          crc ^= static_cast<std::uint8_t>(buffer[index]);
+          for (int bit = 0; bit < 8; ++bit) {
+            crc = (crc & 1u) ? ((crc >> 1) ^ 0xEDB88320u) : (crc >> 1);
+          }
+        }
+      }
+    }
+    if (input.bad()) return false;
+    fileSize = totalBytes;
+    crc32 = crc ^ 0xFFFFFFFFu;
+    return true;
+  };
+
+  const auto loadExpectedDataPaths = [&](std::vector<std::string> &paths) {
+    const char *manifestPath = "platinum-data-paths.txt";
+    if (!isRegularFileWithoutSymlinks(std::filesystem::path(manifestPath))) return false;
+    std::ifstream manifest(manifestPath);
+    if (!manifest.is_open()) return false;
+
+    std::string line;
+    if (!std::getline(manifest, line) || line != "PLATINA_DATA_PATHS_V1") return false;
+    if (!std::getline(manifest, line) || line.empty()) return false;
+
+    std::size_t expectedCount = 0;
+    try {
+      std::size_t parsedCharacters = 0;
+      const unsigned long long parsed = std::stoull(line, &parsedCharacters, 10);
+      if (parsedCharacters != line.size() || parsed < 300 || parsed > 2000) return false;
+      expectedCount = static_cast<std::size_t>(parsed);
+    } catch (...) {
+      return false;
+    }
+
+    std::string previousPath;
+    while (std::getline(manifest, line)) {
+      if (line.empty() || line.find('\\') != std::string::npos ||
+          line.find(':') != std::string::npos || line.find('\0') != std::string::npos) {
+        return false;
+      }
+      const std::filesystem::path relativePath(line);
+      if (relativePath.empty() || relativePath.is_absolute() || relativePath.has_root_name()) return false;
+      for (const auto &part : relativePath) {
+        const std::string component = part.string();
+        if (component.empty() || component == "." || component == "..") return false;
+      }
+      if (!previousPath.empty() && line <= previousPath) return false;
+      previousPath = line;
+      paths.push_back(line);
+    }
+    if (manifest.bad() || paths.size() != expectedCount) return false;
+
+    const std::vector<std::string> requiredRootFiles = {
+      "header.bin", "firmware.bin", "wazaeffect/we.arc", "battle/skill/waza_seq.narc"
+    };
+    for (const std::string &required : requiredRootFiles) {
+      if (!std::binary_search(paths.begin(), paths.end(), required)) return false;
+    }
+    return true;
+  };
+
+  const auto validateExtractedData = [&](const std::vector<std::string> &paths,
+                                         std::string *missingPath) {
+    for (const std::string &relativeName : paths) {
+      std::uint64_t fileSize = 0;
+      std::uint32_t crc32 = 0;
+      if (!inspectFileCrc32(relativeName, fileSize, crc32)) {
+        if (missingPath != NULL) *missingPath = relativeName;
+        return false;
+      }
+      if ((relativeName == "header.bin" && fileSize < 0x4000) ||
+          (relativeName == "firmware.bin" && fileSize == 0) ||
+          (relativeName == "wazaeffect/we.arc" && fileSize == 0) ||
+          (relativeName == "battle/skill/waza_seq.narc" && fileSize == 0)) {
+        if (missingPath != NULL) *missingPath = relativeName + " (tamanho inválido)";
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
+                                         const std::string &romSha256) {
+    const char *cachePath = "platina-rom-extraction.manifest";
+    if (!isRegularFileWithoutSymlinks(std::filesystem::path(cachePath))) return false;
+    std::ifstream cache(cachePath);
+    if (!cache.is_open()) return false;
+
+    std::string line;
+    if (!std::getline(cache, line) || line != "PLATINA_EXTRACTION_CACHE_V1") return false;
+    if (!std::getline(cache, line) || line != romSha256) return false;
+    if (!std::getline(cache, line)) return false;
+
+    std::size_t cachedCount = 0;
+    try {
+      std::size_t parsedCharacters = 0;
+      const unsigned long long parsed = std::stoull(line, &parsedCharacters, 10);
+      if (parsedCharacters != line.size() || parsed != paths.size()) return false;
+      cachedCount = static_cast<std::size_t>(parsed);
+    } catch (...) {
+      return false;
+    }
+
+    for (std::size_t index = 0; index < cachedCount; ++index) {
+      if (!std::getline(cache, line)) return false;
+      std::istringstream entry(line);
+      std::string pathHex;
+      std::string sizeText;
+      std::string crcText;
+      std::string extra;
+      if (!(entry >> pathHex >> sizeText >> crcText) || (entry >> extra)) return false;
+      if (pathHex != encodePathHex(paths[index]) || crcText.size() != 8) return false;
+
+      std::uint64_t cachedSize = 0;
+      std::uint32_t cachedCrc = 0;
+      try {
+        std::size_t sizeCharacters = 0;
+        const unsigned long long parsedSize = std::stoull(sizeText, &sizeCharacters, 10);
+        if (sizeCharacters != sizeText.size()) return false;
+        cachedSize = static_cast<std::uint64_t>(parsedSize);
+
+        std::size_t crcCharacters = 0;
+        const unsigned long parsedCrc = std::stoul(crcText, &crcCharacters, 16);
+        if (crcCharacters != crcText.size() || parsedCrc > 0xFFFFFFFFul) return false;
+        cachedCrc = static_cast<std::uint32_t>(parsedCrc);
+      } catch (...) {
+        return false;
+      }
+
+      std::uint64_t actualSize = 0;
+      std::uint32_t actualCrc = 0;
+      if (!inspectFileCrc32(paths[index], actualSize, actualCrc) ||
+          actualSize != cachedSize || actualCrc != cachedCrc) return false;
+    }
+
+    if (std::getline(cache, line)) return false;
+    return !cache.bad();
+  };
+
+  const auto writeExtractionCache = [&](const std::vector<std::string> &paths,
+                                        const std::string &romSha256) {
+    const std::filesystem::path cachePath("platina-rom-extraction.manifest");
+    const std::filesystem::path tempPath("platina-rom-extraction.manifest.tmp");
+    const std::filesystem::path previousPath("platina-rom-extraction.manifest.previous");
+    std::error_code fileError;
+    const auto cacheStatus = std::filesystem::symlink_status(cachePath, fileError);
+    if (!fileError && std::filesystem::is_symlink(cacheStatus)) return false;
+    if (fileError && fileError != std::errc::no_such_file_or_directory) return false;
+
+    fileError.clear();
+    const auto tempStatus = std::filesystem::symlink_status(tempPath, fileError);
+    if (!fileError && std::filesystem::is_symlink(tempStatus)) return false;
+    if (!fileError && std::filesystem::exists(tempStatus)) {
+      if (!std::filesystem::is_regular_file(tempStatus)) return false;
+      std::filesystem::remove(tempPath, fileError);
+      if (fileError) return false;
+    } else if (fileError && fileError != std::errc::no_such_file_or_directory) {
+      return false;
+    }
+
+    std::ofstream output(tempPath, std::ios::binary | std::ios::out | std::ios::trunc);
+    if (!output.is_open()) return false;
+    output << "PLATINA_EXTRACTION_CACHE_V1\n" << romSha256 << '\n' << paths.size() << '\n';
+    for (const std::string &relativeName : paths) {
+      std::uint64_t fileSize = 0;
+      std::uint32_t crc32 = 0;
+      if (!inspectFileCrc32(relativeName, fileSize, crc32)) {
+        output.close();
+        std::filesystem::remove(tempPath, fileError);
+        return false;
+      }
+      output << encodePathHex(relativeName) << ' ' << fileSize << ' '
+             << std::hex << std::setw(8) << std::setfill('0') << crc32
+             << std::dec << std::setfill(' ') << '\n';
+    }
+    output.flush();
+    if (!output.good()) {
+      output.close();
+      std::filesystem::remove(tempPath, fileError);
+      return false;
+    }
+    output.close();
+    if (output.fail()) {
+      std::filesystem::remove(tempPath, fileError);
+      return false;
+    }
+
+    // Rename the old marker aside, then promote the fully written temporary
+    // manifest. If promotion fails, preserve/restore the previous marker.
+    bool movedPrevious = false;
+    fileError.clear();
+    const auto previousStatus = std::filesystem::symlink_status(previousPath, fileError);
+    if (!fileError && std::filesystem::is_symlink(previousStatus)) return false;
+    if (!fileError && std::filesystem::exists(previousStatus)) {
+      if (!std::filesystem::is_regular_file(previousStatus)) return false;
+      std::filesystem::remove(previousPath, fileError);
+      if (fileError) return false;
+    } else if (fileError && fileError != std::errc::no_such_file_or_directory) {
+      return false;
+    }
+
+    fileError.clear();
+    if (std::filesystem::exists(cachePath, fileError)) {
+      if (fileError) return false;
+      std::filesystem::rename(cachePath, previousPath, fileError);
+      if (fileError) return false;
+      movedPrevious = true;
+    } else if (fileError && fileError != std::errc::no_such_file_or_directory) {
+      return false;
+    }
+
+    fileError.clear();
+    std::filesystem::rename(tempPath, cachePath, fileError);
+    if (fileError) {
+      if (movedPrevious) {
+        std::error_code restoreError;
+        std::filesystem::rename(previousPath, cachePath, restoreError);
+      }
+      return false;
+    }
+    if (movedPrevious) {
+      std::error_code cleanupError;
+      std::filesystem::remove(previousPath, cleanupError);
+    }
+    return true;
+  };
+
   const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
-  const char *managedRomSha256 = getenv("PLATINA_IMPORTED_ROM_SHA256");
   if (managedRomPath != NULL && managedRomPath[0] != '\0') {
     std::error_code romError;
-    if (!std::filesystem::is_regular_file(std::filesystem::path(managedRomPath), romError)
-        || romError) {
-      fprintf(stderr, "[Platina] Imported ROM is not a readable regular file: %s\n",
-              managedRomPath);
+    const std::filesystem::path importedRom(managedRomPath);
+    if (!std::filesystem::is_regular_file(importedRom, romError) || romError) {
+      fprintf(stderr, "[Platina] Imported ROM is not a readable regular file: %s\n", managedRomPath);
       return 2;
     }
 
-    bool extractionCacheValid = false;
-    if (managedRomSha256 != NULL && managedRomSha256[0] != '\0') {
-      std::ifstream cacheFile("platina-rom-extraction.sha256");
-      std::string cachedSha256;
-      if (std::getline(cacheFile, cachedSha256) && cachedSha256 == managedRomSha256) {
-        std::error_code assetError;
-        extractionCacheValid = std::filesystem::is_regular_file(
-            std::filesystem::path("msgdata/msg.narc"), assetError) && !assetError;
-      }
+    const char *managedRomSha256 = getenv("PLATINA_IMPORTED_ROM_SHA256");
+    if (managedRomSha256 == NULL || std::strlen(managedRomSha256) != 64 ||
+        !std::all_of(managedRomSha256, managedRomSha256 + 64,
+                     [](unsigned char value) { return std::isxdigit(value) != 0; })) {
+      fprintf(stderr, "[Platina] Imported ROM has no valid SHA-256 identity in the launcher environment.\n");
+      return 2;
+    }
+    const std::string romSha256(managedRomSha256);
+
+    std::vector<std::string> expectedDataPaths;
+    if (!loadExpectedDataPaths(expectedDataPaths)) {
+      fprintf(stderr, "[Platina] The packaged Platinum data-path manifest is missing or invalid. Rebuild the desktop package.\n");
+      return 4;
     }
 
-    if (!extractionCacheValid) {
-      fprintf(stdout, "[Platina] Extracting local game data before renderer startup.\n");
+    if (!verifyExtractionCache(expectedDataPaths, romSha256)) {
+      fprintf(stdout, "[Platina] Verifying or extracting local game data before renderer startup.\n");
       fflush(stdout);
       int extractionStatus = -1;
       try {
         extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
       } catch (const std::exception &exception) {
-        fprintf(stderr, "[Platina] ROM extraction threw an exception: %s\n",
-                exception.what());
+        fprintf(stderr, "[Platina] ROM extraction threw an exception: %s\n", exception.what());
         return 3;
       }
       if (extractionStatus != 0) {
-        fprintf(stderr, "[Platina] ROM extraction failed with status %d.\n",
-                extractionStatus);
+        fprintf(stderr, "[Platina] ROM extraction failed with status %d.\n", extractionStatus);
         return 3;
       }
 
-      if (managedRomSha256 != NULL && managedRomSha256[0] != '\0') {
-        const char *cacheTempPath = "platina-rom-extraction.sha256.tmp";
-        std::ofstream cacheTemp(cacheTempPath, std::ios::trunc);
-        if (cacheTemp.is_open()) {
-          cacheTemp << managedRomSha256 << '\n';
-          cacheTemp.close();
-          if (cacheTemp.good()) {
-            std::error_code cacheError;
-            std::filesystem::remove("platina-rom-extraction.sha256", cacheError);
-            cacheError.clear();
-            std::filesystem::rename(cacheTempPath, "platina-rom-extraction.sha256", cacheError);
-            if (cacheError) {
-              std::filesystem::remove(cacheTempPath, cacheError);
-              fprintf(stderr, "[Platina] Warning: unable to persist extraction cache marker.\n");
-            }
-          } else {
-            fprintf(stderr, "[Platina] Warning: unable to write extraction cache marker.\n");
-          }
-        } else {
-          fprintf(stderr, "[Platina] Warning: unable to create extraction cache marker.\n");
+      std::string missingDataPath;
+      if (!validateExtractedData(expectedDataPaths, &missingDataPath)) {
+        fprintf(stderr, "[Platina] Extractor returned success, but required local data is missing/corrupted: %s\n",
+                missingDataPath.c_str());
+        return 4;
+      }
+      if (!writeExtractionCache(expectedDataPaths, romSha256)) {
+        fprintf(stderr, "[Platina] Warning: extracted data passed validation, but its integrity manifest could not be saved; the next launch will verify/extract again.\n");
+      } else {
+        // Re-read the just-written manifest to ensure it can be trusted on the
+        // next launch, before renderer startup begins.
+        if (!verifyExtractionCache(expectedDataPaths, romSha256)) {
+          fprintf(stderr, "[Platina] Integrity manifest self-check failed after extraction.\n");
+          return 4;
         }
       }
-      fprintf(stdout, "[Platina] ROM extraction completed.\n");
+
+      fprintf(stdout, "[Platina] Local game data extraction and integrity check completed.\n");
       fflush(stdout);
     } else {
-      fprintf(stdout, "[Platina] Reusing verified local game data.\n");
+      fprintf(stdout, "[Platina] Reusing local game data after per-file CRC32 verification.\n");
       fflush(stdout);
     }
   }
