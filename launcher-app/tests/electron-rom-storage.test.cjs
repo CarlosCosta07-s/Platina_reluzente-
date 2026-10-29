@@ -203,6 +203,34 @@ test('desktop recovery completes a verified first-import staging pair', async (t
   await assert.rejects(fs.access(store.metadataPath + '.importing'));
 });
 
+test('desktop recovery validates the ROM SHA-256 even when no temporary files remain', async (t) => {
+  const store = await makeStore(t);
+  await fs.mkdir(store.romDir, { recursive: true });
+  const expectedRom = Buffer.from('valid-ROM-content');
+  const corruptedRom = Buffer.from('wrong-ROM-content');
+  assert.equal(expectedRom.length, corruptedRom.length);
+  const metadata = {
+    name: 'current.nds',
+    size: expectedRom.length,
+    sha256: crypto.createHash('sha256').update(expectedRom).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'test-time'
+  };
+  await fs.writeFile(store.destinationPath, corruptedRom);
+  await fs.writeFile(store.metadataPath, JSON.stringify(metadata));
+
+  await assert.rejects(
+    recoverDesktopRom({
+      destinationPath: store.destinationPath,
+      metadataPath: store.metadataPath
+    }),
+    /não foi possível identificar com segurança/
+  );
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), corruptedRom);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
+});
+
 test('desktop recovery propagates permission errors instead of treating protected files as absent', async (t) => {
   const store = await makeStore(t);
   const originalAccess = fs.access;
