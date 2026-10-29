@@ -4,22 +4,18 @@ on:
   push:
     branches: [main]
     paths:
-      - "android/**"
-      - "scripts/**"
-      - "tools/**"
-      - "vendor/**"
-      - ".gitmodules"
-      - "launcher-app/**"
-      - ".github/workflows/native-desktop.yml"
-      - ".github/workflows/android-native-cross-build.yml"
+      - ".github/workflows/android-graphics-compat.yml"
+      - "android/scripts/prepare_android_build.py"
+      - "android/scripts/prepare_android_graphics.py"
+      - "android/tests/test_prepare_android_build.py"
+      - "android/tests/test_prepare_android_graphics.py"
   workflow_dispatch:
-
 permissions:
   contents: read
 
 concurrency:
-  group: android-gles-preparation-v2-${{ github.sha }}
-  cancel-in-progress: false
+  group: android-gles-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   prepare-and-validate-shaders:

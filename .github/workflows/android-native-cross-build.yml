@@ -1,8 +1,8 @@
 name: Android native ARM64 cross-build
 
 concurrency:
-  group: android-native-build-v2-${{ github.sha }}
-  cancel-in-progress: false
+  group: android-native-arm64-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -14,9 +14,6 @@ on:
       - "tools/**"
       - "vendor/**"
       - ".gitmodules"
-      - "launcher-app/**"
-      - ".github/workflows/native-desktop.yml"
-      - ".github/workflows/android-graphics-compat.yml"
   workflow_dispatch:
 
 permissions:
