@@ -185,6 +185,18 @@ function createBlackLaunchSpec({ runtime, paths, romPath, romSha256, platform = 
     childEnv.APPDATA = paths.processAppData;
   } else {
     childEnv.XDG_DATA_HOME = paths.processXdgDataHome;
+
+    // Eidos may link against SDL3 or other pinned shared libraries outside the
+    // system library directories. Search the runtime's own folder first, then
+    // preserve the caller's loader path so staged native dependencies resolve
+    // on Linux without relying on the build machine's absolute RPATH.
+    const inheritedLibraryPath = typeof env.LD_LIBRARY_PATH === 'string'
+      ? env.LD_LIBRARY_PATH.split(':').filter(Boolean)
+      : [];
+    childEnv.LD_LIBRARY_PATH = Array.from(new Set([
+      runtime.directory,
+      ...inheritedLibraryPath
+    ])).join(':');
   }
   return {
     executable: runtime.executable,
