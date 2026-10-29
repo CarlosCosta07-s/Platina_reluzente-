@@ -189,20 +189,20 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     for axis in ("S", "T"):
         original = "glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_" + axis + ", GL_CLAMP_TO_BORDER);"
         replacement = "glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_" + axis + ", SIM_GetBorderClampMode());"
-        # The pinned renderer sets border clamping at both texture creation and
-        # later texture-state updates. Patch both call sites, rejecting partial
-        # or unrecognized source instead of silently leaving desktop-only GL.
+        # In the pinned libntr revision, each axis has one border-clamp call
+        # in G3SIM_FlushArray. The translucent draw path uses repeat modes and
+        # is not a second border-clamp call site. Reject partial or unknown edits.
         original_count = draw.count(original)
         replacement_count = draw.count(replacement)
-        if original_count == 0 and replacement_count == 2:
+        if original_count == 0 and replacement_count == 1:
             changed = False
-        elif original_count == 2 and replacement_count == 0:
-            draw = draw.replace(original, replacement)
+        elif original_count == 1 and replacement_count == 0:
+            draw = draw.replace(original, replacement, 1)
             changed = True
         else:
             raise AndroidGraphicsPatchError(
-                "border clamp " + axis + ": expected exactly two original or "
-                "two patched call sites; no files written."
+                "border clamp " + axis + ": expected exactly one original or "
+                "one patched call site; no files written."
             )
         if changed:
             changes.append("g3_draw.cpp: route " + axis + " border clamp call sites through capability check")
