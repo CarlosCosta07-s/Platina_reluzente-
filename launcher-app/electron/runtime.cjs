@@ -414,13 +414,16 @@ function validateNdsHeader(header, fileSize) {
 }
 
 function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.platform, env = process.env }) {
-  if (!runtime || typeof runtime.executable !== 'string' || !path.isAbsolute(runtime.executable)
-      || typeof runtime.root !== 'string' || !path.isAbsolute(runtime.root)) {
+  const isAbsolutePath = (value) => platform === 'win32'
+    ? path.win32.isAbsolute(value)
+    : path.posix.isAbsolute(value);
+  if (!runtime || typeof runtime.executable !== 'string' || !isAbsolutePath(runtime.executable)
+      || typeof runtime.root !== 'string' || !isAbsolutePath(runtime.root)) {
     throw new TypeError('O runtime de Platinum deve ser preparado antes da inicialização.');
   }
-  if (!rom || typeof rom.filePath !== 'string' || !path.isAbsolute(rom.filePath)
+  if (!rom || typeof rom.filePath !== 'string' || !isAbsolutePath(rom.filePath)
       || typeof rom.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(rom.sha256)
-      || typeof logPath !== 'string' || !path.isAbsolute(logPath)) {
+      || typeof logPath !== 'string' || !isAbsolutePath(logPath)) {
     throw new TypeError('A ROM verificada, o SHA-256 e o caminho do log são obrigatórios.');
   }
   if (platform !== 'win32' && platform !== 'linux') {
