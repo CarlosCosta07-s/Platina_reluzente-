@@ -249,7 +249,7 @@ def extract_localization(
 ) -> list[dict[str, str | int | bool]]:
     """Extract the allowlisted localized archives to destination; return metadata only."""
     rom_path = Path(rom_path).expanduser().resolve()
-    destination = Path(destination).expanduser().resolve()
+    destination = Path(destination).expanduser().absolute()  # Preserve the root path so symlinks can be rejected.
     files, fat_entries, rom_size = _index_rom(rom_path)
     selected: list[tuple[PurePosixPath, RomFile, int]] = []
 
