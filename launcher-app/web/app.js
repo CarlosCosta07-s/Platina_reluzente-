@@ -11,6 +11,7 @@
   const launchLabel = $('launch-label');
   const romButton = $('rom-button');
   const launchStatus = $('launch-status');
+  const startupLogButton = $('startup-log-button');
   const romSummary = $('rom-summary');
   const blackRomButton = $('black-rom-button');
   const blackLaunchButton = $('black-launch-button');
@@ -132,6 +133,25 @@
       setStatus('Falha ao iniciar o jogo: ' + error.message, true);
     } finally {
       renderPrimaryAction();
+    }
+  }
+
+  async function openStartupLog() {
+    if (!window.platina || typeof window.platina.openStartupLog !== 'function') {
+      setStatus('O log só pode ser aberto pela versão desktop do launcher.', true);
+      return;
+    }
+    startupLogButton.disabled = true;
+    try {
+      const result = await window.platina.openStartupLog();
+      if (!result || !result.ok) {
+        throw new Error(result && result.message ? result.message : 'Não foi possível abrir o log de inicialização.');
+      }
+      setStatus(result.message || 'Log de inicialização aberto.');
+    } catch (error) {
+      setStatus('Falha ao abrir o log de inicialização: ' + error.message, true);
+    } finally {
+      startupLogButton.disabled = false;
     }
   }
 
@@ -299,6 +319,7 @@
   });
   launchButton.addEventListener('click', launchGame);
   romButton.addEventListener('click', chooseRom);
+  startupLogButton.addEventListener('click', openStartupLog);
   blackRomButton.addEventListener('click', importBlackRom);
   blackLaunchButton.addEventListener('click', launchBlackGame);
   renderBlackActions();
