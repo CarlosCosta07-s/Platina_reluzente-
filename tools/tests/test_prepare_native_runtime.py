@@ -17,6 +17,8 @@ from scripts.prepare_native_runtime import (
     MAIN_RENDER_HANDOFF_PATCHED,
     ORIGINAL_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
+    ROM_PREFLIGHT_ENTRY_PATCHED,
+    ROM_PREFLIGHT_INCLUDE_PATCHED,
     RuntimePreparationError,
     SIM_ROM_EXTRACTOR_ORIGINAL,
     SIM_ROM_EXTRACTOR_PATCHED,
@@ -252,6 +254,15 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             content = source.read_text(encoding="utf-8")
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', content)
             self.assertIn('fopen(importedRomPath, "rb")', content)
+            self.assertIn(ROM_PREFLIGHT_ENTRY_PATCHED, content)
+            self.assertIn(ROM_PREFLIGHT_INCLUDE_PATCHED, content)
+            self.assertIn('getenv("PLATINA_IMPORTED_ROM_SHA256")', content)
+            self.assertIn("platina-rom-extraction.sha256", content)
+            self.assertIn("Reusing verified local game data.", content)
+            self.assertLess(
+                content.index("SIM_NDSExtract(std::string(managedRomPath))"),
+                content.index("SIM_RenderInit(NULL)"),
+            )
             self.assertNotIn("SDL_AndroidGetInternalStoragePath", content)
             self.assertNotIn("SDK_BUILD_ANDROID", content)
             self.assertIn("#define SDL_MAIN_HANDLED", content)
