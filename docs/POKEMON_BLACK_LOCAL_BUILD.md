@@ -93,13 +93,14 @@ O arquivo esperado é `build64/host/eidos.exe`. Os nomes exatos de pacotes e pr�
 
 ## 5. Testar o contrato de inicialização sem um segundo seletor de ROM
 
-O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados do jogo. Essa interface permite que uma futura ação do Platina Reluzente passe o arquivo já importado pelo launcher, sem abrir um segundo seletor. `EIDOS_HOME` pode isolar a configuração do Eidos da configuração de outras instalações.
+O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados. A seleção da ROM pelo launcher poderá ser reaproveitada sem abrir um segundo seletor. Importante: `EIDOS_HOME` isola a configuração, mas **não** redireciona a pasta de saves na revisão fixada. Por isso, também isole `APPDATA` no Windows ou `XDG_DATA_HOME` no Linux no ambiente do processo.
 
 Linux:
 
 ```sh
-EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home" \
-  ./build64/host/eidos \
+export EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home"
+export XDG_DATA_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/process-data"
+./build64/host/eidos \
   --rom "/caminho/local/Pokemon Black.nds" \
   --data-root "$HOME/.local/share/platina-reluzente/pokemon-black/extract"
 ```
@@ -108,6 +109,7 @@ Windows (PowerShell):
 
 ```powershell
 $env:EIDOS_HOME = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\eidos-home"
+$env:APPDATA = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\process-appdata"
 $eidosArgs = @(
   "--rom", "C:\caminho\local\Pokemon Black.nds",
   "--data-root", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\extract")
@@ -115,8 +117,7 @@ $eidosArgs = @(
 & ".\build64\host\eidos.exe" @eidosArgs
 ```
 
-Execute a partir do diretório do build e mantenha `EIDOS_HOME`, a pasta de extração, a ROM importada e os saves separados do diretório de Platinum. Esses comandos são para teste local com um runtime que você compilou; o launcher ainda não expõe essa ação e não há um pacote Black redistribuível aprovado.
-
+Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Esses comandos são para teste local com um runtime que você compilou; o launcher ainda não expõe essa ação e não há pacote Black redistribuível aprovado.
 ## 6. Validação mínima antes de pensar na integração
 
 1. Execute os testes `ctest --test-dir build --output-on-failure` para a configuração de testes que você construiu, quando aplicável.
