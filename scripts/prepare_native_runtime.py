@@ -44,6 +44,7 @@ ROM_PREFLIGHT_INCLUDE_PATCHED = r'''#include <SDL2/SDL.h>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <exception>
