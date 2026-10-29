@@ -21,7 +21,7 @@ const PERSONAL_FILES = new Set([
 const FORBIDDEN_EXTENSIONS = new Set([
   '.nds', '.3ds', '.cia', '.cci', '.iso', '.gba', '.gbc', '.gb',
   '.n64', '.z64', '.v64', '.gcm', '.wbfs', '.dsv', '.sav',
-  '.xdelta', '.ips', '.bps'
+  '.xdelta', '.ips', '.bps', '.zip', '.rar', '.7z'
 ]);
 
 const TARGETS = Object.freeze({
