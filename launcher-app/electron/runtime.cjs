@@ -238,6 +238,65 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
   };
 }
 
+function ensureHorizontalScreenLayout(runtimeRoot) {
+  const configPath = path.join(path.resolve(runtimeRoot), 'sim_config.ini');
+  let contents = '';
+  try {
+    const stat = fs.lstatSync(configPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error('O arquivo de configuração do runtime deve ser um arquivo regular: ' + configPath);
+    }
+    contents = fs.readFileSync(configPath, 'utf8');
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error;
+  }
+
+  const newline = contents.includes('\r\n') ? '\r\n' : '\n';
+  const hadTrailingNewline = contents.length === 0 || /(?:\r\n|\n)$/.test(contents);
+  const lines = contents.length === 0 ? [] : contents.split(/\r?\n/);
+  if (hadTrailingNewline && lines.length && lines[lines.length - 1] === '') lines.pop();
+
+  let generalStart = lines.findIndex((line) => /^\s*\[\s*General\s*\]\s*$/i.test(line));
+  let changed = false;
+  if (generalStart === -1) {
+    if (lines.some((line) => line.trim() !== '')) lines.push('');
+    lines.push('[General]', 'ScreenLayout=horizontal');
+    changed = true;
+  } else {
+    let generalEnd = lines.length;
+    for (let index = generalStart + 1; index < lines.length; index += 1) {
+      if (/^\s*\[[^\]]+\]\s*$/.test(lines[index])) {
+        generalEnd = index;
+        break;
+      }
+    }
+
+    const layoutLines = [];
+    for (let index = generalStart + 1; index < generalEnd; index += 1) {
+      if (/^\s*ScreenLayout\s*=/i.test(lines[index])) layoutLines.push(index);
+    }
+    if (layoutLines.length === 0) {
+      lines.splice(generalStart + 1, 0, 'ScreenLayout=horizontal');
+      changed = true;
+    } else {
+      const first = layoutLines[0];
+      if (lines[first] !== 'ScreenLayout=horizontal') {
+        lines[first] = 'ScreenLayout=horizontal';
+        changed = true;
+      }
+      for (let index = layoutLines.length - 1; index >= 1; index -= 1) {
+        lines.splice(layoutLines[index], 1);
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    fs.writeFileSync(configPath, lines.join(newline) + (hadTrailingNewline ? newline : ''), 'utf8');
+  }
+  return configPath;
+}
+
 function validateNdsHeader(header, fileSize) {
   if (!Buffer.isBuffer(header) || header.length < 0x160
       || !Number.isSafeInteger(fileSize) || fileSize < 0x200
@@ -250,4 +309,4 @@ function validateNdsHeader(header, fileSize) {
   // header's ROM-version byte as well.
   return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, prepareWritableRuntime, validateNdsHeader };
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader };
