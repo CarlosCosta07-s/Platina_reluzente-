@@ -6,6 +6,8 @@ from scripts.prepare_native_runtime import (
     ANDROID_MAIN_INIT,
     LEGACY_ANDROID_MAIN_INIT,
     LEGACY_PATCHED_HEADER_LOAD,
+    ORIGINAL_HEADER_LOAD,
+    PREVIOUS_PATCHED_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
     RuntimePreparationError,
     prepare_native_runtime,
@@ -67,6 +69,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('perror("Changing to the game runtime directory");', content)
             self.assertIn("return 1;", content)
             self.assertIn('fopen("header.bin", "rb")', content)
+            self.assertIn("headerBytesRead != 0x160", content)
+            self.assertIn("Incomplete ROM header: expected 352 bytes, read %zu", content)
             self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
             self.assertFalse(prepare_native_runtime(root))
 
@@ -95,6 +99,21 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(1, content.count("const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();"))
             self.assertFalse(prepare_native_runtime(root))
 
+
+    def test_upgrades_the_previous_patched_rom_header_reader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            previous_source = UPSTREAM_HEADER.replace(
+                ORIGINAL_HEADER_LOAD, PREVIOUS_PATCHED_HEADER_LOAD, 1
+            )
+            source = self.make_source(root, previous_source)
+
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
+            self.assertNotIn(PREVIOUS_PATCHED_HEADER_LOAD, content)
+            self.assertIn("headerBytesRead != 0x160", content)
+            self.assertFalse(prepare_native_runtime(root))
 
     def test_upgrades_the_previous_desktop_only_rom_handoff_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
