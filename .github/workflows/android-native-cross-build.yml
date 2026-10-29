@@ -39,6 +39,8 @@ jobs:
         run: python -m unittest android.tests.test_prepare_android_build -v
       - name: Test native SDL entrypoint and ROM handoff
         run: python -m unittest tools.tests.test_prepare_native_runtime -v
+      - name: Test Android runtime manifest creation
+        run: python -m unittest tools.tests.test_create_runtime_manifest -v
       - name: Install host build tools
         run: |
           set -euo pipefail
@@ -269,6 +271,9 @@ jobs:
           rm -f android-native-artifact/runtime-data/main
           printf '%s\n' "$GITHUB_SHA" > android-native-artifact/runtime-data/build-version.txt
           test -s android-native-artifact/runtime-data/build-version.txt
+          python "$GITHUB_WORKSPACE/tools/create_runtime_manifest.py" \
+            --runtime-dir android-native-artifact/runtime-data
+          test -s android-native-artifact/runtime-data/runtime-manifest.txt
       - name: Write summary
         if: always()
         run: |
