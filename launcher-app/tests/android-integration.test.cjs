@@ -50,6 +50,8 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'java', 'org', 'libsdl', 'app', 'SDLActivity.java')));
     assert.match(mainActivity, /registerPlugin\(PlatinaGamePlugin\.class\)/);
     assert.match(plugin, /startActivity\(intent\)/);
+    assert.match(plugin, /A atividade SDL foi aberta/);
+    assert.match(plugin, /abrir a atividade ainda não confirma que o jogo carregou/);
     assert.match(plugin, /roms\/current\.nds/);
     assert.match(plugin, /"CPUE"/);
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
