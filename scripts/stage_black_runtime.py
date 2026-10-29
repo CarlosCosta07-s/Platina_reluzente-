@@ -115,15 +115,43 @@ def _linux_dependencies(executable: Path, dependency_dirs: list[Path]) -> dict[s
         )
 
     collected: dict[str, Path] = {}
-    for name, resolved_path in parse_ldd_dependencies(result.stdout):
-        if is_linux_system_library(resolved_path, name):
+    inspected: set[Path] = set()
+    pending: list[Path] = [executable.resolve()]
+
+    # Inspect each staged candidate as well as the primary executable. A shared
+    # library may itself depend on a non-system library that would otherwise be
+    # missed by running ldd only once against the executable.
+    while pending:
+        image = pending.pop()
+        image_key = image.resolve()
+        if image_key in inspected:
             continue
-        actual = resolved_path.resolve()
-        _require_regular_file(actual, f"Biblioteca nativa {name}")
-        previous = collected.get(name)
-        if previous is not None and previous.resolve() != actual:
-            raise RuntimeStageError(f"Dependência duplicada com origens diferentes: {name}")
-        collected[name] = actual
+        inspected.add(image_key)
+        result = subprocess.run(
+            ["ldd", str(image)],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if result.returncode != 0:
+            raise RuntimeStageError(
+                f"Não foi possível inspecionar dependências de {image}: "
+                + (result.stderr.strip() or result.stdout.strip() or f"ldd saiu com {result.returncode}")
+            )
+
+        for name, resolved_path in parse_ldd_dependencies(result.stdout):
+            if is_linux_system_library(resolved_path, name):
+                continue
+            actual = resolved_path.resolve()
+            _require_regular_file(actual, f"Biblioteca nativa {name}")
+            previous = collected.get(name)
+            if previous is not None:
+                if previous.resolve() != actual:
+                    raise RuntimeStageError(f"Dependência duplicada com origens diferentes: {name}")
+                continue
+            collected[name] = actual
+            pending.append(actual)
     return collected
 
 
