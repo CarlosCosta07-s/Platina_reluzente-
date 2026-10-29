@@ -44,7 +44,7 @@ ROM_PREFLIGHT_INCLUDE_PATCHED = """#include <SDL2/SDL.h>
 #include <fstream>
 #include <exception>
 #include <system_error>
-#include "nds-extract.hpp\""""
+#include "nds-extract.hpp""""
 ROM_PREFLIGHT_ENTRY_ORIGINAL = "int main(int argc, char *argv[]) {\n#ifdef SDK_BUILD_NX"
 ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   // Extract imported game data before creating the SDL window. The renderer
