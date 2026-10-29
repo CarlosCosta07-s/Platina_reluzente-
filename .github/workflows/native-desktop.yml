@@ -124,6 +124,14 @@ jobs:
           APPIMAGE_PATH: ${{ steps.linux_appimage.outputs.path }}
         run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$APPIMAGE_PATH" 15
 
+      - name: Upload Linux AppImage (native executable and shared libraries only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platina-Reluzente-Linux-x86_64-AppImage
+          path: ${{ steps.linux_appimage.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Restore Meson dependency references
         if: always()
         run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" --restore "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"
@@ -194,11 +202,60 @@ jobs:
             throw "No .exe was found in the verified Windows runtime package."
           }
           $executables | ForEach-Object { Write-Host ("Windows executable: " + $_.FullName) }
+
+      - name: Stage Windows executable and DLLs without game data
+        shell: pwsh
+        run: |
+          $packageDir = Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native/build_win64/pokeplatinum"
+          $stageDir = Join-Path $env:RUNNER_TEMP "Platina-Reluzente-Windows-x64"
+          if (Test-Path -LiteralPath $stageDir) {
+            Remove-Item -LiteralPath $stageDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+          $nativeFiles = @(Get-ChildItem -LiteralPath $packageDir -Recurse -File | Where-Object { $_.Extension -in @(".exe", ".dll") })
+          $executables = @($nativeFiles | Where-Object { $_.Extension -eq ".exe" })
+          if ($executables.Count -eq 0) {
+            throw "No Windows executable was available for artifact staging."
+          }
+          foreach ($file in $nativeFiles) {
+            $relativePath = [System.IO.Path]::GetRelativePath($packageDir, $file.FullName)
+            $destination = Join-Path $stageDir $relativePath
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $destination
+          }
+          @"
+          Platina Reluzente - native Windows x64 executable test build
+          
+          This artifact contains native executable(s) and DLL dependencies only.
+          It deliberately excludes ROMs, firmware, extracted game resources, saves,
+          patches, and localization files. A legally obtained compatible ROM must
+          be supplied locally. Startup and gameplay have not yet been verified
+          with a ROM; successful compilation does not imply the game is playable.
+          "@ | Set-Content -LiteralPath (Join-Path $stageDir "README-FIRST-START.txt") -Encoding utf8
+          $hashLines = @(
+            Get-ChildItem -LiteralPath $stageDir -Recurse -File |
+            Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relativePath = [System.IO.Path]::GetRelativePath($stageDir, $_.FullName) -replace '\\', '/'
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $relativePath"
+            }
+          )
+          $hashLines | Set-Content -LiteralPath (Join-Path $stageDir "SHA256SUMS.txt") -Encoding ascii
+          Write-Host "Staged $($executables.Count) executable(s) and $(@($nativeFiles | Where-Object { $_.Extension -eq '.dll' }).Count) DLL(s). No game resource files were staged."
+      - name: Upload Windows x64 native executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platina-Reluzente-Windows-x64-native
+          path: ${{ runner.temp }}/Platina-Reluzente-Windows-x64/
+          if-no-files-found: error
+          retention-days: 14
       - name: Restore Meson dependency references
         if: always()
         shell: pwsh
         run: python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin_native_dependencies.py") --restore (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
 
 
-# CI compiles and validates native builds but does not upload executables or game-derived runtime data.
-# ROMs and extracted resources remain local to the developer.
+# CI uploads short-lived executable-only artifacts after validation. It never uploads ROMs or extracted game resources.
+# The Linux AppImage bundles the compiled application and its libraries; Windows artifacts contain only .exe/.dll files plus notices/checksums.
