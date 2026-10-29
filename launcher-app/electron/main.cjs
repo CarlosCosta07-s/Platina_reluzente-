@@ -365,7 +365,9 @@ if (!hasSingleInstanceLock) {
       // Keep this one launcher process alive until the game exits. This retains
       // the in-process launch guard and prevents a second launcher from starting
       // another native game while the first game window is still open.
-      onNativeProcessIdle(() => app.quit());
+      onNativeProcessIdle(() => {
+        if (BrowserWindow.getAllWindows().length === 0) app.quit();
+      });
       return;
     }
     app.quit();
