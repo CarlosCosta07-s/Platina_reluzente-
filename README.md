@@ -19,6 +19,8 @@ Não anunciamos o porte como concluído nem jogável do início ao fim antes de 
 
 ## Compilação e validação
 
+Depois de compilar o runtime nativo para a plataforma desejada, o empacotamento do launcher prepara automaticamente a pasta local de runtime. Os comandos completos de Windows/Linux estão no [guia de compilação](docs/BUILDING.md). O staging e os builds continuam locais, sem disponibilizar ROMs ou recursos de jogo como artefatos públicos.
+
 A CI verifica testes de manutenção, compilação nativa e a inicialização pré-ROM da interface Linux. O launcher desktop registra as saídas stdout/stderr do runtime nativo em `native-startup.log` no diretório privado do aplicativo e mostra o caminho do arquivo em caso de diagnóstico. Isso ajuda a investigar falhas, mas não substitui a confirmação da tela de título e gameplay. A CI não publica executáveis, AppImages, APKs ou arquivos runtime que possam conter recursos derivados do jogo. Esses dados permanecem na área temporária do job e não são disponibilizados como artefatos para download.
 
 Para teste manual, compile o porte localmente seguindo o [guia de compilação](docs/BUILDING.md), use uma cópia de ROM que você tenha direito de utilizar e mantenha os dados extraídos fora do Git. O smoke test automático confirma apenas a criação da janela sem ROM; não comprova que o jogo chega à tela inicial ou que seja jogável. A importação PT-BR é um passo local separado e ainda exige validação dentro do jogo.
