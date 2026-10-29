@@ -78,3 +78,26 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
+
+test('Android runtime integration rejects an artifact missing a required game archive', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-android-missing-archive-'));
+  try {
+    const runtime = path.join(temp, 'native-artifact');
+    const runtimeData = path.join(runtime, 'runtime-data');
+    fs.mkdirSync(runtimeData, { recursive: true });
+    for (const name of ['libmain.so', 'libSDL2.so', 'libc++_shared.so']) {
+      fs.writeFileSync(path.join(runtime, name), Buffer.from('binary ' + name));
+    }
+    for (const name of ['header.bin', 'firmware.bin', 'build-version.txt']) {
+      fs.writeFileSync(path.join(runtimeData, name), name === 'build-version.txt' ? 'test-build\n' : 'fixture');
+    }
+
+    assert.throws(
+      () => integrateAndroidRuntime({ projectDir: path.join(temp, 'android'), runtimeArtifactDir: runtime }),
+      /Runtime data is missing wazaeffect\/we\.arc/,
+    );
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
