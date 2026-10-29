@@ -60,6 +60,16 @@ test('launcher reserves the internal Black resource path without bundling an unl
 });
 
 
+test('Platinum launch failure diagnostics are directly accessible from the UI', () => {
+  assert.match(html, /id="startup-log-button"/);
+  assert.match(html, /Abrir log de inicialização/);
+  assert.match(appJs, /startupLogButton\.addEventListener\('click', openStartupLog\)/);
+  assert.match(preload, /openStartupLog: \(\) => ipcRenderer\.invoke\('platina:open-startup-log'\)/);
+  assert.match(electronMain, /ipcMain\.handle\('platina:open-startup-log'/);
+  assert.match(electronMain, /shell\.openPath\(logPath\)/);
+  assert.match(electronMain, /O caminho do log não é um arquivo regular seguro/);
+});
+
 test('Platinum importer gives a specific error for USA Rev. 0 instead of treating it as Rev. 1', () => {
   assert.ok(electronMain.includes(
     "header.subarray(0x0c, 0x10).toString('ascii') === 'CPUE' && header[0x1e] === 0"
