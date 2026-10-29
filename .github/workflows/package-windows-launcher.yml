@@ -100,6 +100,11 @@ jobs:
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath $file.FullName -Destination $destination
           }
+          $pathManifests = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -File -Filter "platinum-data-paths.txt")
+          if ($pathManifests.Count -ne 1) {
+            throw "Expected exactly one path-only extracted-data manifest from the matching native build; found $($pathManifests.Count)."
+          }
+          Copy-Item -LiteralPath $pathManifests[0].FullName -Destination (Join-Path $targetDir "platinum-data-paths.txt")
           if (-not (Test-Path -LiteralPath (Join-Path $targetDir "main.exe") -PathType Leaf)) {
             throw "Staged native Windows runtime does not contain root main.exe."
           }
