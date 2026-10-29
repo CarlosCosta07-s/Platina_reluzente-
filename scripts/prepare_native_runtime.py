@@ -241,9 +241,12 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       }
       std::error_code sizeError;
       const std::uintmax_t fileSize = std::filesystem::file_size(path, sizeError);
+      // ARM7 overlay-table data can legitimately be empty for Platinum
+      // images with no separate ARM7 overlays. Keep the file path required,
+      // but do not reject the valid zero-byte payload.
       const bool requiredCoreFileIsEmpty =
           ((relativeName == "arm9.bin" || relativeName == "arm7.bin" ||
-            relativeName == "arm9ovt.bin" || relativeName == "arm7ovt.bin" ||
+            relativeName == "arm9ovt.bin" ||
             relativeName == "banner.bin" || relativeName == "fnt.bin" ||
             relativeName == "fat.bin" || relativeName == "rsasig.bin") && fileSize == 0);
       if (sizeError ||
