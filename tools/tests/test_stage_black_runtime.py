@@ -55,7 +55,7 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             sdl = source / "SDL3.dll"
             sdl.write_bytes(b"fake SDL")
             dependency_dir = root / "toolchain" / "bin"
-            dependency_dir.mkdir()
+            dependency_dir.mkdir(parents=True)
             helper = dependency_dir / "Helper.dll"
             helper.write_bytes(b"fake helper")
 
