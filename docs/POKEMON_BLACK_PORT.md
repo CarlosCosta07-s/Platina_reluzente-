@@ -1,47 +1,62 @@
 # Pokémon Black Version — porte nativo para PC
 
-**Estado em 29/10/2026:** projeto paralelo anunciado e em fase inicial de auditoria técnica. Ainda não existe um runtime de Pokémon Black integrado a este launcher. A entrada da biblioteca é apenas informativa e não permite importar nem iniciar Black.
+**Estado em 29/10/2026:** desenvolvimento paralelo em auditoria técnica. A entrada na biblioteca continua informativa; não existe runtime Black validado nem um pacote Black para baixar.
 
-## Objetivo
+## Objetivo e regra de arquitetura
 
-Desenvolver, em paralelo ao porte de Pokémon Platinum, um porte nativo de Pokémon Black Version para **Windows x64 e Linux x86-64**. A meta é compilar a lógica C reconstruída para a arquitetura do computador, substituindo os serviços do Nintendo DS por uma camada de plataforma — sem usar um emulador de DS nem interpretar instruções ARM durante a partida.
+Desenvolver o porte de Pokémon Black Version para Windows x64 e Linux x86-64 em paralelo ao porte de Platinum, usando o código C reconstruído e uma camada nativa de plataforma. Não usaremos um emulador de Nintendo DS nem um interpretador de instruções ARM durante a partida. A biblioteca de Black terá um identificador, importador, runtime, diretório de dados e saves independentes de Platinum.
 
-A ROM local é necessária somente para verificar a versão e fornecer os dados originais exigidos pelo runtime. Ela, os dados extraídos, os saves e quaisquer outros materiais protegidos permanecerão fora do GitHub e dos artefatos públicos.
+O alvo inicial é **Pokémon Black USA/Europe NDSi Enhanced**, identificado na documentação upstream por SHA-1 `26ad0b9967aa279c4a266ee69f52b9b2332399a5` e tamanho de 268.435.456 bytes. Esse hash é uma referência de identificação, não autorização para redistribuir ROMs. A ROM e os arquivos extraídos permanecem locais e nunca são enviados aos runners.
 
-## Bases técnicas para auditoria
+## Auditoria das bases e revisões fixadas
 
-- [Project-Holon/aletheia](https://github.com/Project-Holon/aletheia) — projeto público de decompilação matching de Pokémon Black. Sua documentação descreve a reconstrução de funções de modo que possam ser recompiladas e comparadas byte a byte com a referência.
-- [Project-Holon/eidos](https://github.com/Project-Holon/eidos) — porte nativo para PC construído sobre aletheia. O README do upstream declara que compila o código C reconstruído e não emula o Nintendo DS. O upstream descreve progresso até as primeiras horas do jogo; isso **não** é evidência de que este repositório tenha compilado ou validado aquele código.
-- [squiddonaut/pokeblack](https://github.com/squiddonaut/pokeblack) — outra referência pública para identificar a versão-base e ferramentas do processo de decompilação.
+| Componente | Revisão fixada | Função |
+|---|---|---|
+| [Project-Holon/aletheia](https://github.com/Project-Holon/aletheia) | `6c2aae879f123bcbc028cf6a8b7f8df614402ac8` | Decompilação e ferramenta de extração; o upstream relata código 100% byte-matched. |
+| [Project-Holon/eidos](https://github.com/Project-Holon/eidos) | `b79123f967980d1bb758161891205c03d606dec7` | Porte nativo para PC, camada de plataforma, shims de hardware do DS e testes. |
 
-Esses projetos são **candidatos para revisão**, não dependências já adotadas. Há um bloqueio jurídico a resolver antes de incorporar a base: a licença do aletheia declara expressamente que o MIT cobre ferramentas e documentação, mas **não** concede licença para o código reconstruído do jogo em `src/`; o `LEGAL.md` do eidos também diferencia seu próprio código original do código de jogo compilado a partir do aletheia. Portanto, as licenças MIT dos repositórios não devem ser interpretadas como autorização para redistribuir o código ou a obra do jogo. Antes de copiar, vincular, empacotar ou publicar componentes derivados desse código, será necessária uma revisão jurídica da situação e das alternativas disponíveis. A finalidade de preservação e a ausência de lucro não resolvem, por si só, essa questão.
+A revisão eidos fixada registra a revisão aletheia `6c2aae879f123bcbc028cf6a8b7f8df614402ac8`, portanto os dois repositórios são um par compatível. Não usaremos `main` sem fixar um commit: o código e os manifests da decompilação mudam independentemente do porte.
 
-O upstream aletheia declara a variante USA/Europa NDSi Enhanced com o SHA-1 listado abaixo e relata 100% de correspondência byte a byte; isso é evidência técnica do projeto upstream, não validação realizada por este repositório. A documentação atual do eidos/aletheia indica trabalho de preparação para 64 bits, mas o repositório apresenta diferentes configurações e toolchains de build. Antes de aprovar a base técnica, devemos fixar commits exatos e reproduzir builds limpos Windows x64 e Linux x86-64, incluindo todos os requisitos de extração e compilação. Nenhum desses builds foi executado por este repositório ainda.
+A última correção de aletheia, de 29/10/2026, ajustou a leitura da sequência de animação do cursor de golpes no ramo PC: o código anterior lia aproximadamente 0x20 bytes além do slot correto e podia quebrar o menu da segunda ação em algumas batalhas de treinador no build de 32 bits. O eidos fixou exatamente essa revisão e registrou que as três batalhas de reprodução passaram nos testes upstream. Esse é um bom exemplo de por que precisamos fixar a revisão dos dois projetos juntos.
 
-## Variante de ROM e importação
+### Modelo de build
 
-A versão-alvo inicial para investigação é **Pokémon Black USA/Europe (NDSi Enhanced)**, associada nas referências públicas ao SHA-1:
+Eidos utiliza CMake/Ninja e C99 para a camada nativa. O build oficial descrito pelo upstream gera o módulo de jogo em WebAssembly, converte-o de WebAssembly para C com a ferramenta wasm2c como etapa de build e compila a saída para o binário nativo de 64 bits. Isso não executa uma CPU de Nintendo DS emulada nem interpreta instruções ARM durante a partida. O WAMR opcional para mods WebAssembly é uma função separada do código do jogo.
 
-`26ad0b9967aa279c4a266ee69f52b9b2332399a5`
+Para o primeiro marco, vamos seguir a cadeia de ferramentas e as flags utilizadas pelo próprio upstream, em vez de criar uma engine genérica ou misturar as bibliotecas de Platinum. As compilações precisam demonstrar um executável de host x86-64 para cada sistema-alvo.
 
-Esse hash serve como candidato de identificação, não como autorização para distribuir uma ROM. Um importador futuro deve validar a imagem integral, não apenas o título ou o código de jogo do cabeçalho. Se a referência selecionada mudar, o hash, a ferramenta de extração e os testes de compatibilidade deverão mudar juntos e ficar documentados.
+## Requisitos e primeiro marco
 
-## Plano de execução
+A documentação upstream exige Python 3.11+, CMake 3.16+, Ninja e um compilador C compatível. O SDL3 fornece janela, áudio e entrada na configuração de distribuição. Eidos também mantém uma suíte de testes sem dados de jogo; os testes que exigem a ROM local são ignorados quando `BW_ROM` não está definido.
 
-1. **Auditar a base:** revisar código, commits, licenças, ferramentas, dependências e o status real dos testes upstream.
-2. **Fixar a versão-alvo:** confirmar a ROM USA/Europe NDSi Enhanced por hash e documentar o contrato dos dados que o runtime necessita. A ROM será usada localmente, nunca enviada à CI.
-3. **Compilar o código nativo:** preparar builds reproduzíveis para Windows x64 e Linux x86-64. Resolver os requisitos de 32/64 bits antes de escolher definitivamente a base.
-4. **Separar o runtime:** manter código, executáveis, dados extraídos, configurações e saves de Black isolados dos equivalentes de Platinum.
-5. **Integrar a biblioteca do launcher:** usar um identificador próprio, como `pokemon-black`, um validador de ROM independente e uma localização de dados própria. A implementação Black não pode reutilizar acidentalmente o hash ou o processo de inicialização de Platinum.
-6. **Criar testes e pacotes:** verificar que o staging contém apenas o runtime autorizado, nunca ROMs, patches, saves, firmware ou arquivos extraídos.
-7. **Validar funcionamento real:** confirmar inicialização, tela de título, nova partida, controles, áudio, batalhas e salvamento antes de anunciar cada etapa como concluída.
+1. Fixar as revisões de eidos e aletheia e confirmar que o CMake de eidos declara o mesmo pin da decompilação.
+2. Compilar e executar os testes de regressão do motor sem ROM nem assets.
+3. Compilar o executável nativo x86-64 no Linux e no Windows, sem distribuir o resultado da compilação.
+4. Em ambiente local, usar uma cópia legal da ROM para validar a extração, a tela de título, o início de uma nova partida, controles, áudio, salvamento e retomada.
+5. Só após o build sem ROM passar, conectar um perfil independente de Black ao launcher e validar o importador por SHA-1 integral, separação de diretórios e preservação dos testes de Platinum.
 
-## Estado da integração com o launcher
+O novo workflow `[Pokémon Black native source validation (no game data)](../.github/workflows/pokemon-black-native-check.yml)` está configurado para Linux x86-64 e Windows x64. Ele fixa os dois commits upstream, executa testes e tenta compilar o porte sem dados do jogo. Ele **não** publica executáveis, ROMs, firmware, saves ou arquivos extraídos. O primeiro resultado da CI será usado para corrigir as instruções, não tratado como prova de que a tela de título funciona.
 
-Atualmente o backend de importação/inicialização em `launcher-app/electron/main.cjs` é específico de Pokémon Platinum: ele valida o SHA-1 de Platinum USA Rev. 1 e encontra o runtime Platinum incluído no pacote. A entrada de Black no HTML não altera esse backend, não passa uma ROM de Black pelo validador de Platinum e não finge que existe um executável Black.
+## Limite jurídico que afeta distribuição
 
-A entrada só deverá ser habilitada depois que houver um runtime próprio, importação versionada, caminhos separados para dados e saves, testes de regressão e pacotes Windows/Linux confirmados. A integração não pode quebrar o fluxo já existente de Platinum.
+As licenças e avisos foram inspecionados diretamente nos repositórios upstream:
 
-## Critérios para declarar progresso
+- A licença MIT de **eidos** cobre o código original do porte.
+- Em **aletheia**, a licença MIT cobre ferramentas, manifests/layout e documentação; o diretório `src/` com o código reconstruído do jogo é explicitamente distribuído **sem concessão de licença** em `LICENSE` e `LEGAL.md`.
 
-Uma página de biblioteca, compilação de stubs ou criação de uma janela vazia não demonstra que o jogo é jogável. Cada marco será registrado com a revisão do código, comandos de build, resultado dos testes e limitações ainda conhecidas. A CI não recebe nem publica uma ROM comercial.
+Logo, o fato de as ferramentas serem MIT, o uso de ROM própria ou a finalidade de preservação sem lucro não significa que temos permissão de redistribuir a fonte reconstruída ou binários derivados dela. Por isso, a CI inicial só verifica o build em runners temporários e não envia executáveis Black para releases ou artefatos. Antes de publicar binários para terceiros, precisamos de uma análise jurídica adequada da situação e das alternativas permitidas. Não vamos mascarar esse bloqueio no README nem confundir a licença do launcher com a do código do jogo.
+
+## Limites de progresso
+
+Nenhuma compilação de Black foi produzida por este repositório antes deste workflow, e ainda não validamos a ROM local, a tela de título ou gameplay. A entrada no launcher permanece desativada para importação/inicialização. Não marcaremos o marco como concluído até haver logs de CI reproduzíveis e testes locais documentados, mantendo a ROM e seus dados fora do GitHub.
+
+## Referências
+
+- [aletheia — README](https://github.com/Project-Holon/aletheia/blob/6c2aae879f123bcbc028cf6a8b7f8df614402ac8/README.md)
+- [aletheia — LICENSE](https://github.com/Project-Holon/aletheia/blob/6c2aae879f123bcbc028cf6a8b7f8df614402ac8/LICENSE)
+- [aletheia — LEGAL.md](https://github.com/Project-Holon/aletheia/blob/6c2aae879f123bcbc028cf6a8b7f8df614402ac8/LEGAL.md)
+- [eidos — README](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/README.md)
+- [eidos — pinned aletheia revision](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/docs/aletheia-pin.md)
+- [eidos — build guide](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/docs/building.md)
+- [eidos — legal notice](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/LEGAL.md)
+- [eidos — release build workflow](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/.github/workflows/release.yml)
