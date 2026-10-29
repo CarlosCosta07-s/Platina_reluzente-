@@ -380,15 +380,15 @@ test('runtime integrity check refuses a tampered native executable even when the
     assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user config');
     assert.equal(first.buildId, repaired.buildId);
 
-    fs.writeFileSync(path.join(destination, 'untrusted.dll'), 'unmanifested native library');
+    fs.writeFileSync(path.join(destination, 'untrusted.so'), 'unmanifested native library');
     assert.equal(verifyRuntimeManifest(destination, 'linux'), false);
     assert.equal(isRuntimeUsable(destination, 'linux'), false);
     assert.throws(
       () => prepareWritableRuntime(source, destination, 'linux'),
       /post-copy validation/
     );
-    assert.equal(fs.existsSync(path.join(destination, 'untrusted.dll')), true);
-    fs.unlinkSync(path.join(destination, 'untrusted.dll'));
+    assert.equal(fs.existsSync(path.join(destination, 'untrusted.so')), true);
+    fs.unlinkSync(path.join(destination, 'untrusted.so'));
     assert.equal(verifyRuntimeManifest(destination, 'linux'), true);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
