@@ -98,13 +98,13 @@ test('refuses to stage a Windows runtime that contains a ROM or patch and preser
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main.exe')), false);
 });
 
-test('refuses symbolic links in the native runtime source', (t) => {
+test('refuses symbolic links in the native Windows runtime source', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-stage-runtime-link-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const sourceRoot = path.join(root, 'build_linux', 'pokeplatinum');
+  const sourceRoot = path.join(root, 'build_win64', 'pokeplatinum');
   const destinationRoot = path.join(root, 'launcher-app', 'runtime');
   const outside = path.join(root, 'outside.txt');
-  createRuntime(sourceRoot, 'linux');
+  createRuntime(sourceRoot, 'windows');
   fs.writeFileSync(outside, 'external file');
   try {
     fs.symlinkSync(outside, path.join(sourceRoot, 'external.txt'), 'file');
@@ -117,7 +117,7 @@ test('refuses symbolic links in the native runtime source', (t) => {
   }
 
   assert.throws(
-    () => stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux' }),
+    () => stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'windows' }),
     /link simbólico/
   );
   assert.equal(fs.existsSync(destinationRoot), false);
