@@ -116,6 +116,14 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
 const GAME_DATA_PATHS_FILE = 'platinum-data-paths.txt';
 const REQUIRED_EXTRACTED_PATHS = [
   'header.bin',
+  'arm9.bin',
+  'arm7.bin',
+  'arm9ovt.bin',
+  'arm7ovt.bin',
+  'banner.bin',
+  'fnt.bin',
+  'fat.bin',
+  'rsasig.bin',
   'wazaeffect/we.arc',
   'battle/skill/waza_seq.narc'
 ];
