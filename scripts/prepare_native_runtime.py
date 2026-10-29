@@ -162,7 +162,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     if (manifest.bad() || paths.size() != expectedCount) return false;
 
     const std::vector<std::string> requiredRootFiles = {
-      "header.bin", "firmware.bin", "wazaeffect/we.arc", "battle/skill/waza_seq.narc"
+      "header.bin", "wazaeffect/we.arc", "battle/skill/waza_seq.narc"
     };
     for (const std::string &required : requiredRootFiles) {
       if (!std::binary_search(paths.begin(), paths.end(), required)) return false;
@@ -182,7 +182,6 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       const std::uintmax_t fileSize = std::filesystem::file_size(path, sizeError);
       if (sizeError ||
           (relativeName == "header.bin" && fileSize < 0x4000) ||
-          (relativeName == "firmware.bin" && fileSize == 0) ||
           (relativeName == "wazaeffect/we.arc" && fileSize == 0) ||
           (relativeName == "battle/skill/waza_seq.narc" && fileSize == 0)) {
         if (missingPath != NULL) *missingPath = relativeName + " (tamanho inválido)";
