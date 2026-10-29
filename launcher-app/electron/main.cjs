@@ -2,7 +2,7 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { launchNativeProcess } = require('./native-process.cjs');
+const { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
@@ -34,15 +34,18 @@ async function readImportedRom() {
   // Verify the saved ROM against its SHA-256 sidecar and recover interrupted
   // imports before exposing it. Unverified files are not shown as imported;
   // ambiguous transaction residue and storage errors still surface to the UI.
-  const recoveryResult = await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile });
+  const recoveryResult = await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile, expectedSha1: ORIGINAL_ROM_SHA1 });
   if (recoveryResult === false) return null;
   try {
-    const [metadataText, stat] = await Promise.all([
+    const [metadataText, stat, metadataStat] = await Promise.all([
       fs.promises.readFile(metadataFile, 'utf8'),
-      fs.promises.stat(filePath)
+      fs.promises.lstat(filePath),
+      fs.promises.lstat(metadataFile)
     ]);
     const metadata = JSON.parse(metadataText);
-    if (!stat.isFile() || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
+    if (stat.isSymbolicLink() || !stat.isFile()
+        || metadataStat.isSymbolicLink() || !metadataStat.isFile()
+        || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
       return null;
     }
     // Imports saved by older launcher versions did not carry the approved
@@ -62,7 +65,8 @@ async function readImportedBlackRom() {
   const paths = blackPaths({ platform: process.platform, env: process.env });
   const recoveryResult = await recoverDesktopRom({
     destinationPath: paths.romPath,
-    metadataPath: paths.romMetadataPath
+    metadataPath: paths.romMetadataPath,
+    expectedSha1: BLACK_ROM_SHA1
   });
   if (recoveryResult === false) return null;
 
@@ -333,8 +337,37 @@ ipcMain.handle('platina:launch-game', async () => {
   });
 });
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-});
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length === 0) {
+      createWindow();
+      return;
+    }
+    const mainWindow = windows[0];
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  app.whenReady().then(() => {
+    createWindow();
+    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform === 'darwin') return;
+    if (hasActiveNativeProcess()) {
+      // Keep this one launcher process alive until the game exits. This retains
+      // the in-process launch guard and prevents a second launcher from starting
+      // another native game while the first game window is still open.
+      onNativeProcessIdle(() => app.quit());
+      return;
+    }
+    app.quit();
+  });
+}
