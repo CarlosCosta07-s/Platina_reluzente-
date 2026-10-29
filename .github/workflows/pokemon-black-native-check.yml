@@ -34,11 +34,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p .black-ci
-          git clone --filter=blob:none https://github.com/Project-Holon/eidos.git .black-ci/eidos
-          git -C .black-ci/eidos checkout --detach "$EIDOS_COMMIT"
-          git clone --filter=blob:none https://github.com/Project-Holon/aletheia.git .black-ci/aletheia
-          git -C .black-ci/aletheia checkout --detach "$ALETHEIA_COMMIT"
+          mkdir -p .black-ci/eidos .black-ci/aletheia
+          git -C .black-ci/eidos init
+          git -C .black-ci/eidos remote add origin https://github.com/Project-Holon/eidos.git
+          git -C .black-ci/eidos fetch --depth=1 origin "$EIDOS_COMMIT"
+          git -C .black-ci/eidos checkout --detach FETCH_HEAD
+          git -C .black-ci/aletheia init
+          git -C .black-ci/aletheia remote add origin https://github.com/Project-Holon/aletheia.git
+          git -C .black-ci/aletheia fetch --depth=1 origin "$ALETHEIA_COMMIT"
+          git -C .black-ci/aletheia checkout --detach FETCH_HEAD
           test "$(git -C .black-ci/eidos rev-parse HEAD)" = "$EIDOS_COMMIT"
           test "$(git -C .black-ci/aletheia rev-parse HEAD)" = "$ALETHEIA_COMMIT"
           grep -Fq "set(EIDOS_ALETHEIA_PIN \"$ALETHEIA_COMMIT\")" .black-ci/eidos/cmake/aletheia_pin.cmake
@@ -111,11 +115,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p .black-ci
-          git clone --filter=blob:none https://github.com/Project-Holon/eidos.git .black-ci/eidos
-          git -C .black-ci/eidos checkout --detach "$EIDOS_COMMIT"
-          git clone --filter=blob:none https://github.com/Project-Holon/aletheia.git .black-ci/aletheia
-          git -C .black-ci/aletheia checkout --detach "$ALETHEIA_COMMIT"
+          mkdir -p .black-ci/eidos .black-ci/aletheia
+          git -C .black-ci/eidos init
+          git -C .black-ci/eidos remote add origin https://github.com/Project-Holon/eidos.git
+          git -C .black-ci/eidos fetch --depth=1 origin "$EIDOS_COMMIT"
+          git -C .black-ci/eidos checkout --detach FETCH_HEAD
+          git -C .black-ci/aletheia init
+          git -C .black-ci/aletheia remote add origin https://github.com/Project-Holon/aletheia.git
+          git -C .black-ci/aletheia fetch --depth=1 origin "$ALETHEIA_COMMIT"
+          git -C .black-ci/aletheia checkout --detach FETCH_HEAD
           test "$(git -C .black-ci/eidos rev-parse HEAD)" = "$EIDOS_COMMIT"
           test "$(git -C .black-ci/aletheia rev-parse HEAD)" = "$ALETHEIA_COMMIT"
           grep -Fq "set(EIDOS_ALETHEIA_PIN \"$ALETHEIA_COMMIT\")" .black-ci/eidos/cmake/aletheia_pin.cmake
