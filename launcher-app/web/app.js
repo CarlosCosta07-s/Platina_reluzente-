@@ -104,7 +104,7 @@ const NativeGame = registerPlugin('PlatinaGame');
       state.runtimeAvailable = Boolean(runtime && runtime.available);
       if (rom) { state.romName = rom.name; state.romSize = rom.size || 0; state.romImported = true; }
       renderRom(); renderPrimaryAction();
-      if (!state.runtimeAvailable) setStatus('O executável nativo não está incluído neste pacote. Use o pacote desktop completo.', true);
+      if (!state.runtimeAvailable) setStatus('O pacote desktop está incompleto: o executável nativo ou os recursos obrigatórios do jogo estão ausentes. Instale o pacote completo.', true);
       else setStatus(state.romImported ? 'ROM importada. O executável nativo já está incluído.' : 'Importe sua ROM .nds. O executável nativo já vem incluído.');
       return;
     }
