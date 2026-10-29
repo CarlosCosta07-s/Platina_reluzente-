@@ -145,3 +145,4 @@ h1 { font-size: clamp(29px, 3.2vw, 43px); line-height: 1.08; letter-spacing: -.9
   .compat-state { grid-column: 2; }
   .footer { font-size: 8px; }
 }
+a.nav-item { text-decoration: none; }
