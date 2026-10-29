@@ -91,7 +91,33 @@ file build64/host/eidos.exe
 
 O arquivo esperado é `build64/host/eidos.exe`. Os nomes exatos de pacotes e pré-requisitos podem mudar no upstream; compare sempre este roteiro com os [documentos oficiais de build do Eidos](https://github.com/Project-Holon/eidos/blob/b79123f967980d1bb758161891205c03d606dec7/docs/building.md).
 
-## 5. Testar o contrato de inicialização sem um segundo seletor de ROM
+## 5. Integrar o build local ao launcher para teste
+
+Depois de compilar Eidos a partir das revisões fixadas, prepare uma cópia **local e ignorada pelo Git** do runtime. O helper copia somente o executável e as bibliotecas nativas resolvidas para `launcher-app/black-runtime`; não copia a ROM, arquivos extraídos, saves ou intermediários de build.
+
+Linux x86-64 (execute na raiz do repositório Platina Reluzente, com Eidos e Aletheia em pastas irmãs):
+
+```sh
+SDL_PREFIX="$(python3 ../eidos/tools/fetch_sdl.py --locate source --tag linux-x64)"
+python3 scripts/stage_black_runtime.py \
+  --platform linux \
+  --source-dir ../eidos/build64/host \
+  --dependency-dir "$SDL_PREFIX/lib"
+```
+
+Windows x64 (execute em um terminal MSYS2 MINGW64, na raiz do repositório; o diretório de build Eidos deve ser a pasta irmã `../eidos`):
+
+```sh
+gcc_bin="../eidos/.cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin"
+python scripts/stage_black_runtime.py \
+  --platform windows \
+  --source-dir ../eidos/build64/host \
+  --dependency-dir "$gcc_bin"
+```
+
+O script recusa dependências não resolvidas e preserva o runtime anterior quando a nova preparação falha. Para abrir a biblioteca em modo de desenvolvimento, compile a interface web com `npm run build:web` dentro de `launcher-app` e execute Electron a partir dessa pasta. Com o runtime local validado presente, o launcher resolve-o internamente — não há seletor de executável externo. Essa cópia local serve para testes de desenvolvimento; ela é ignorada pelo Git e **não** autoriza a publicação de um pacote ou binário derivado.
+
+## 6. Testar o contrato de inicialização sem um segundo seletor de ROM
 
 O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados. O launcher já importa a ROM uma única vez e passa o caminho interno ao runtime pelo argumento `--rom`, sem exigir um segundo seletor de ROM. Importante: `EIDOS_HOME` isola a configuração, mas **não** redireciona a pasta de saves na revisão fixada. Por isso, também isole `APPDATA` no Windows ou `XDG_DATA_HOME` no Linux no ambiente do processo.
 
@@ -117,8 +143,8 @@ $eidosArgs = @(
 & ".\build64\host\eidos.exe" @eidosArgs
 ```
 
-Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Estes comandos são somente para testes locais de desenvolvimento com um runtime compilado por você; eles não fazem parte do fluxo normal do usuário. O launcher unificado não permite escolher esse executável externo: ele reserva um recurso interno para Black e mantém a ação Iniciar bloqueada enquanto o runtime não puder ser distribuído legalmente. O início de um processo local não comprova que a tela de título apareceu. Não há pacote Black redistribuível aprovado.
-## 6. Validação mínima do runtime local e próximo passo
+Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Os comandos diretos são úteis para diagnosticar o runtime sem a interface; o fluxo integrado usa o helper da seção anterior e resolve o executável internamente. Em um checkout normal, sem runtime local preparado, Iniciar continua bloqueado. A CI pública não inclui nem publica o runtime Black. Iniciar um processo não comprova que a tela de título apareceu. Não há pacote Black redistribuível aprovado.
+## 7. Validação mínima do runtime local e próximo passo
 
 1. Execute os testes `ctest --test-dir build --output-on-failure` para a configuração de testes que você construiu, quando aplicável.
 2. Execute o binário local com os dados extraídos da própria ROM compatível.
