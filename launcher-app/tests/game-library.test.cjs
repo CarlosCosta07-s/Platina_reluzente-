@@ -49,7 +49,11 @@ test('Black import and launch use an internal runtime slot; no external runtime 
 
 test('launcher reserves the internal Black resource path without bundling an unlicensed runtime', () => {
   const resources = packageConfig.build.extraResources.map((resource) => resource.to);
-  assert.deepEqual(resources, ['runtime', 'black-runtime']);
+  assert.deepEqual(resources, ['runtime', 'black-runtime/README.md']);
+  assert.doesNotMatch(
+    JSON.stringify(packageConfig.build),
+    /"from":\s*"black-runtime"\s*,\s*"to":\s*"black-runtime"/
+  );
   assert.doesNotMatch(JSON.stringify(packageConfig.build), /eidos\.exe|SDL3\.dll|PokemonBlack/i);
   assert.match(electronMain, /O runtime nativo de Pokémon Black ainda não está integrado/);
   assert.match(electronMain, /readBundledBlackRuntime\(\)/);
