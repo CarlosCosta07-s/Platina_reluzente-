@@ -173,13 +173,15 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   const auto validateExtractedData = [&](const std::vector<std::string> &paths,
                                          std::string *missingPath) {
     for (const std::string &relativeName : paths) {
-      std::uint64_t fileSize = 0;
-      std::uint32_t crc32 = 0;
-      if (!inspectFileCrc32(relativeName, fileSize, crc32)) {
+      const std::filesystem::path path(relativeName);
+      if (!isRegularFileWithoutSymlinks(path)) {
         if (missingPath != NULL) *missingPath = relativeName;
         return false;
       }
-      if ((relativeName == "header.bin" && fileSize < 0x4000) ||
+      std::error_code sizeError;
+      const std::uintmax_t fileSize = std::filesystem::file_size(path, sizeError);
+      if (sizeError ||
+          (relativeName == "header.bin" && fileSize < 0x4000) ||
           (relativeName == "firmware.bin" && fileSize == 0) ||
           (relativeName == "wazaeffect/we.arc" && fileSize == 0) ||
           (relativeName == "battle/skill/waza_seq.narc" && fileSize == 0)) {
@@ -188,6 +190,45 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       }
     }
     return true;
+  };
+
+  // A failed cache verification must not let stale files mask an incomplete
+  // extraction. Remove only allowlisted ROM-derived files, never save/config,
+  // the native executable, libraries or the imported ROM.
+  const auto removeRelativeFileWithoutSymlinks = [&](const std::string &relativeName) {
+    const std::filesystem::path relativePath(relativeName);
+    if (relativePath.empty() || relativePath.is_absolute() || relativePath.has_root_name()) return false;
+    std::filesystem::path currentPath;
+    auto component = relativePath.begin();
+    for (; component != relativePath.end(); ++component) {
+      const std::string part = component->string();
+      if (part.empty() || part == "." || part == ".." ||
+          part.find('\\') != std::string::npos || part.find(':') != std::string::npos) return false;
+      currentPath /= *component;
+      std::error_code statusError;
+      const auto status = std::filesystem::symlink_status(currentPath, statusError);
+      if (statusError == std::errc::no_such_file_or_directory) return true;
+      if (statusError || std::filesystem::is_symlink(status)) return false;
+      auto next = component;
+      ++next;
+      if (next != relativePath.end()) {
+        if (!std::filesystem::exists(status)) return true;
+        if (!std::filesystem::is_directory(status)) return false;
+      } else {
+        if (!std::filesystem::exists(status)) return true;
+        if (!std::filesystem::is_regular_file(status)) return false;
+        std::error_code removeError;
+        return std::filesystem::remove(currentPath, removeError) && !removeError;
+      }
+    }
+    return true;
+  };
+
+  const auto clearInvalidExtraction = [&](const std::vector<std::string> &paths) {
+    for (const std::string &relativeName : paths) {
+      if (!removeRelativeFileWithoutSymlinks(relativeName)) return false;
+    }
+    return removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest");
   };
 
   const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
@@ -363,8 +404,12 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     }
 
     if (!verifyExtractionCache(expectedDataPaths, romSha256)) {
-      fprintf(stdout, "[Platina] Verifying or extracting local game data before renderer startup.\n");
+      fprintf(stdout, "[Platina] Cache validation failed; rebuilding extracted data from the imported ROM.\n");
       fflush(stdout);
+      if (!clearInvalidExtraction(expectedDataPaths)) {
+        fprintf(stderr, "[Platina] Refusing to replace unsafe or non-regular extracted data paths.\n");
+        return 4;
+      }
       int extractionStatus = -1;
       try {
         extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
