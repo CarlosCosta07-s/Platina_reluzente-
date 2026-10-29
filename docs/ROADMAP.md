@@ -50,6 +50,7 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 - [x] Conferir que a ROM PT-BR de referência tem byte de revisão `0`, enquanto o launcher exige Rev. 1 (`0x1E == 1`).
 - [x] Verificar o novo ZIP USA: SHA-1 `ce81046eda7d232513069519cb2085349896dec7`, CRC-32 `9253921D`, byte de revisão `0` — ROM oficial Rev. 0, recusada pelo alvo nativo Rev. 1.
 - [x] Verificar que o CRC-base documentado pelo patch E4T (`1D8A5220`) não corresponde à ROM Rev. 0 enviada (`9253921D`) nem à Rev. 1 (`69D628E8`).
+- [x] Comparar os sete NARC allowlisted entre a ROM Rev. 0 enviada e a referência PT-BR: os sete caminhos e IDs FAT coincidem, todos são NARC válidos e a referência traduzida passa nos hashes aprovados.
 - [x] Endurecer o importador do launcher para exigir o SHA-1 integral exato da ROM Rev. 1 antes de instalar a cópia local; teste de regressão mantém a ROM anterior se o hash falhar.
 - [x] Registrar stdout/stderr do runtime nativo em `native-startup.log` e mostrar o caminho no launcher quando o processo é iniciado; a mensagem deixa claro que isso não prova a tela de título.
 - [ ] Validar o patch Xdelta v1.2.0 contra uma ROM que corresponda à base documentada CRC-32 `1D8A5220`; essa aplicação ainda não foi executada.
