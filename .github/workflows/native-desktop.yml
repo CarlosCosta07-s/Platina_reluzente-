@@ -1,7 +1,7 @@
 name: Native desktop build and localization checks
 
 concurrency:
-  group: native-desktop-v3-${{ github.ref }}
+  group: native-desktop-v4-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -156,7 +156,7 @@ jobs:
           set -Eeuo pipefail
           dist_dir="$GITHUB_WORKSPACE/launcher-app/dist"
           stage_dir="$RUNNER_TEMP/Platina-Reluzente-Launcher-Linux-x64"
-          mapfile -t appimages < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*-linux-x64.AppImage' -print)
+          mapfile -t appimages < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*.AppImage' -print)
           mapfile -t archives < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*-linux-x64.tar.gz' -print)
           if [[ "${#appimages[@]}" -ne 1 || "${#archives[@]}" -ne 1 ]]; then
             echo "Expected exactly one Linux launcher AppImage and tar.gz; found ${#appimages[@]} AppImage(s), ${#archives[@]} archive(s)." >&2
