@@ -26,14 +26,24 @@ function metadataPath() {
 }
 async function readImportedRom() {
   const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
+  const metadataFile = metadataPath();
+  // Recovery verifies the ROM's SHA-256 against its metadata even when there
+  // are no staging files left. Do not hide permission, disk, or ambiguous
+  // recovery errors as if the user had simply never imported a ROM.
+  await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile });
   try {
-    await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataPath() });
-    const metadata = JSON.parse(await fs.promises.readFile(metadataPath(), 'utf8'));
-    const stat = await fs.promises.stat(filePath);
-    if (!stat.isFile() || stat.size !== metadata.size) return null;
+    const [metadataText, stat] = await Promise.all([
+      fs.promises.readFile(metadataFile, 'utf8'),
+      fs.promises.stat(filePath)
+    ]);
+    const metadata = JSON.parse(metadataText);
+    if (!stat.isFile() || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
+      return null;
+    }
     return { ...metadata, filePath };
-  } catch {
-    return null;
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return null;
+    throw error;
   }
 }
 ipcMain.handle('platina:platform', () => process.platform);
