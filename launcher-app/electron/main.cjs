@@ -27,9 +27,9 @@ function metadataPath() {
 async function readImportedRom() {
   const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
   const metadataFile = metadataPath();
-  // Recovery verifies the ROM's SHA-256 against its metadata even when there
-  // are no staging files left. Do not hide permission, disk, or ambiguous
-  // recovery errors as if the user had simply never imported a ROM.
+  // Reconcile any interrupted import before exposing the saved ROM. When
+  // staging/backup files exist, recovery checks the SHA-256 metadata pair.
+  // Do not hide permission, disk, or ambiguous recovery errors as "no ROM".
   await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile });
   try {
     const [metadataText, stat] = await Promise.all([
