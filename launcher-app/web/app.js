@@ -2,20 +2,26 @@
 
 (function () {
   const $ = (id) => document.getElementById(id);
-  const romButton = $('rom-button');
+  const platformLabel = $('platform-label');
+  const platinumCard = $('platinum-library-card');
+  const blackCard = $('black-library-card');
+  const platinumDetail = $('platinum-detail');
+  const blackDetail = $('black-detail');
   const launchButton = $('launch-button');
   const launchLabel = $('launch-label');
+  const romButton = $('rom-button');
   const launchStatus = $('launch-status');
-  const platformLabel = $('platform-label');
   const romSummary = $('rom-summary');
-  const blackRuntimeButton = $('black-runtime-button');
   const blackRomButton = $('black-rom-button');
   const blackLaunchButton = $('black-launch-button');
+  const blackRomSummary = $('black-rom-summary');
   const blackStatusSymbol = $('black-status-symbol');
   const blackStatusTitle = $('black-status-title');
   const blackStatusCopy = $('black-status-copy');
   const blackLaunchStatus = $('black-launch-status');
+
   const state = {
+    selectedGame: 'platinum',
     romImported: false,
     romName: '',
     romSize: 0,
@@ -28,7 +34,7 @@
     romImported: false,
     romName: '',
     romSize: 0,
-    executableName: '',
+    runtimeError: '',
     busy: false
   };
 
@@ -40,7 +46,18 @@
 
   function setStatus(message, bad) {
     launchStatus.textContent = message;
-    launchStatus.style.color = bad ? '#f1a7a7' : '#8c9cb1';
+    launchStatus.classList.toggle('status-error', Boolean(bad));
+  }
+
+  function selectGame(game) {
+    state.selectedGame = game === 'black' ? 'black' : 'platinum';
+    const blackSelected = state.selectedGame === 'black';
+    platinumCard.classList.toggle('selected', !blackSelected);
+    blackCard.classList.toggle('selected', blackSelected);
+    platinumCard.setAttribute('aria-pressed', String(!blackSelected));
+    blackCard.setAttribute('aria-pressed', String(blackSelected));
+    platinumDetail.hidden = blackSelected;
+    blackDetail.hidden = !blackSelected;
   }
 
   function renderRom() {
@@ -63,6 +80,7 @@
       launchLabel.textContent = 'Iniciar jogo';
       launchButton.disabled = false;
     }
+    romButton.disabled = state.importing;
   }
 
   async function chooseRom() {
@@ -79,15 +97,10 @@
       state.romName = result.name;
       state.romSize = result.size;
       state.romImported = true;
-      localStorage.setItem('platinaRom', JSON.stringify({
-        name: result.name,
-        size: result.size,
-        sha256: result.sha256
-      }));
       renderRom();
       setStatus(state.runtimeDataAvailable
-        ? 'ROM validada e copiada para os dados privados do aplicativo. Os dados locais do jogo já estão disponíveis.'
-        : 'ROM validada e copiada. Os recursos do jogo serão extraídos localmente na primeira inicialização.');
+        ? 'ROM verificada e importada. Os dados locais do jogo estão preparados.'
+        : 'ROM verificada e importada. Os recursos necessários serão preparados localmente na primeira inicialização.');
     } catch (error) {
       setStatus('Falha ao importar ROM: ' + error.message, true);
     } finally {
@@ -106,14 +119,15 @@
       return;
     }
     if (!state.runtimeAvailable) {
-      setStatus('O pacote desktop está incompleto: o executável nativo não está disponível.', true);
+      setStatus('O runtime nativo de Platinum não está disponível neste pacote.', true);
       return;
     }
+
     launchButton.disabled = true;
-    setStatus('Iniciando o executável nativo incluído no pacote…');
+    setStatus('Iniciando Pokémon Platinum pelo launcher…');
     try {
       const result = await window.platina.launchGame();
-      setStatus(result.message || 'O motor nativo foi iniciado.', !result.ok);
+      setStatus(result.message || 'O processo nativo foi iniciado.', !result.ok);
     } catch (error) {
       setStatus('Falha ao iniciar o jogo: ' + error.message, true);
     } finally {
@@ -121,90 +135,71 @@
     }
   }
 
-  function setBlackStatus(title, message, failed) {
-    if (blackStatusTitle) blackStatusTitle.textContent = title;
-    if (blackStatusCopy) blackStatusCopy.textContent = message;
-    if (blackStatusSymbol) {
-      blackStatusSymbol.textContent = failed ? '!' : (blackState.runtimeAvailable && blackState.romImported ? '✓' : '…');
-      blackStatusSymbol.classList.toggle('good', !failed && blackState.runtimeAvailable && blackState.romImported);
-      blackStatusSymbol.classList.toggle('pending', failed || !blackState.runtimeAvailable || !blackState.romImported);
-    }
-  }
-
   function renderBlackActions() {
     const desktopAvailable = Boolean(window.platina)
       && typeof window.platina.getBlackStatus === 'function';
-    if (blackRuntimeButton) {
-      blackRuntimeButton.disabled = !desktopAvailable || blackState.busy;
-      blackRuntimeButton.textContent = blackState.runtimeAvailable
-        ? 'Trocar runtime Eidos local'
-        : 'Selecionar runtime Eidos local';
-    }
-    if (blackRomButton) {
-      blackRomButton.disabled = !desktopAvailable || blackState.busy;
-      blackRomButton.textContent = blackState.romImported ? 'Trocar ROM Black' : 'Importar ROM Black';
-    }
-    if (blackLaunchButton) {
-      blackLaunchButton.disabled = !desktopAvailable || blackState.busy
-        || !blackState.runtimeAvailable || !blackState.romImported;
-    }
+    const canUseDesktop = desktopAvailable && !blackState.busy;
+    blackRomButton.disabled = !canUseDesktop;
+    blackRomButton.textContent = blackState.romImported ? 'Importar / trocar ROM' : 'Importar / trocar ROM';
+    blackLaunchButton.disabled = !canUseDesktop
+      || !blackState.runtimeAvailable || !blackState.romImported;
+    blackRomSummary.textContent = blackState.romImported
+      ? blackState.romName + (blackState.romSize ? ' · ' + formatSize(blackState.romSize) : '')
+      : 'Nenhuma ROM importada.';
+  }
+
+  function setBlackStatus(title, message, failed) {
+    blackStatusTitle.textContent = title;
+    blackStatusCopy.textContent = message;
+    blackStatusSymbol.textContent = failed ? '!' : (blackState.runtimeAvailable && blackState.romImported ? '✓' : '…');
+    blackStatusSymbol.classList.toggle('good', !failed && blackState.runtimeAvailable && blackState.romImported);
+    blackStatusSymbol.classList.toggle('pending', failed || !blackState.runtimeAvailable || !blackState.romImported);
   }
 
   async function refreshBlackStatus() {
     if (!window.platina || typeof window.platina.getBlackStatus !== 'function') {
       blackState.runtimeAvailable = false;
       blackState.romImported = false;
+      blackState.runtimeError = 'Abra a versão desktop para consultar e importar os dados locais.';
+      setBlackStatus('Disponível na versão desktop', blackState.runtimeError, false);
       renderBlackActions();
-      setBlackStatus('Disponível no launcher desktop', 'Vincule um build Eidos local e importe sua ROM compatível na versão desktop.', false);
       return;
     }
+
     try {
       const value = await window.platina.getBlackStatus();
       blackState.runtimeAvailable = Boolean(value && value.runtimeAvailable);
       blackState.romImported = Boolean(value && value.romImported);
       blackState.romName = value && value.romName ? value.romName : '';
       blackState.romSize = value && value.romSize ? value.romSize : 0;
-      blackState.executableName = value && value.executableName ? value.executableName : '';
+      blackState.runtimeError = value && value.error ? value.error : '';
 
-      if (value && value.error && !blackState.runtimeAvailable) {
-        setBlackStatus('Runtime local indisponível', value.error, true);
-      } else if (blackState.runtimeAvailable && blackState.romImported) {
-        setBlackStatus('Runtime e ROM prontos', blackState.executableName + ' vinculado e ROM verificada. Iniciar confirma apenas o processo, não a tela de título.', false);
-      } else if (blackState.runtimeAvailable) {
-        setBlackStatus('Runtime Eidos vinculado', 'Importe a ROM compatível de Pokémon Black para continuar.', false);
+      if (!blackState.runtimeAvailable) {
+        setBlackStatus('Runtime nativo não integrado', blackState.runtimeError
+          || 'A execução será habilitada quando o runtime puder ser incluído legalmente no pacote único.', false);
+        if (!blackState.romImported) {
+          blackLaunchStatus.textContent = 'Você pode preparar a importação local, mas o jogo ainda não pode ser iniciado neste build.';
+        } else {
+          blackLaunchStatus.textContent = 'ROM importada e armazenada localmente. A inicialização aguarda o runtime integrado ao launcher.';
+        }
+      } else if (blackState.romImported) {
+        setBlackStatus('Pokémon Black pronto', 'ROM compatível verificada e runtime interno disponível. O início do processo ainda não comprova a tela de título.', false);
+        blackLaunchStatus.textContent = 'O jogo será iniciado pelo mesmo launcher, sem selecionar outro executável.';
       } else {
-        setBlackStatus('Runtime local necessário', 'Selecione a pasta build64/host do seu build Eidos local. O launcher não inclui esse executável.', false);
+        setBlackStatus('Runtime integrado', 'Importe uma cópia compatível de Pokémon Black para continuar.', false);
+        blackLaunchStatus.textContent = 'A ROM fica em armazenamento privado, separado de Platinum.';
       }
     } catch (error) {
-      setBlackStatus('Falha ao consultar o estado do Black', error.message, true);
+      blackState.runtimeAvailable = false;
+      blackState.runtimeError = error.message;
+      setBlackStatus('Falha ao consultar Pokémon Black', error.message, true);
     }
     renderBlackActions();
-  }
-
-  async function selectBlackRuntime() {
-    if (!window.platina || typeof window.platina.selectBlackRuntime !== 'function') {
-      setBlackStatus('Abra o launcher desktop', 'A seleção de runtime local está disponível na versão desktop.', true);
-      return;
-    }
-    blackState.busy = true;
-    renderBlackActions();
-    try {
-      const result = await window.platina.selectBlackRuntime();
-      if (!result || result.canceled) return;
-      if (!result.ok) throw new Error(result.message || 'Não foi possível validar o runtime Eidos.');
-      await refreshBlackStatus();
-      if (blackLaunchStatus) blackLaunchStatus.textContent = 'Runtime local vinculado; nenhum executável Black foi copiado para o pacote do launcher.';
-    } catch (error) {
-      setBlackStatus('Falha ao selecionar runtime', error.message, true);
-    } finally {
-      blackState.busy = false;
-      renderBlackActions();
-    }
   }
 
   async function importBlackRom() {
     if (!window.platina || typeof window.platina.importBlackRom !== 'function') {
-      setBlackStatus('Abra o launcher desktop', 'A importação de Pokémon Black está disponível na versão desktop.', true);
+      setBlackStatus('Abra o launcher desktop', 'A importação da ROM de Pokémon Black está disponível na versão desktop.', true);
       return;
     }
     blackState.busy = true;
@@ -214,9 +209,14 @@
       if (!result || result.canceled) return;
       if (!result.ok) throw new Error(result.message || 'Não foi possível importar a ROM de Pokémon Black.');
       await refreshBlackStatus();
-      if (blackLaunchStatus) blackLaunchStatus.textContent = 'ROM verificada pelo hash completo e copiada para o armazenamento privado do Black.';
+      if (blackLaunchStatus) {
+        blackLaunchStatus.textContent = blackState.runtimeAvailable
+          ? 'ROM verificada e guardada no armazenamento privado de Black.'
+          : 'ROM verificada e guardada localmente. A inicialização será ativada quando o runtime interno for integrado.';
+      }
     } catch (error) {
       setBlackStatus('Falha ao importar ROM Black', error.message, true);
+      blackLaunchStatus.textContent = 'Falha ao importar Pokémon Black: ' + error.message;
     } finally {
       blackState.busy = false;
       renderBlackActions();
@@ -225,22 +225,24 @@
 
   async function launchBlackGame() {
     if (!window.platina || typeof window.platina.launchBlackGame !== 'function') {
-      setBlackStatus('Abra o launcher desktop', 'A inicialização do Black está disponível na versão desktop.', true);
+      setBlackStatus('Abra o launcher desktop', 'A inicialização está disponível na versão desktop quando o runtime interno estiver integrado.', true);
       return;
     }
     if (!blackState.runtimeAvailable || !blackState.romImported) {
       await refreshBlackStatus();
       return;
     }
+
     blackState.busy = true;
     renderBlackActions();
-    if (blackLaunchStatus) blackLaunchStatus.textContent = 'Iniciando o processo nativo local de Pokémon Black…';
+    blackLaunchStatus.textContent = 'Iniciando Pokémon Black pelo launcher…';
     try {
       const result = await window.platina.launchBlackGame();
-      if (!result || !result.ok) throw new Error(result && result.message ? result.message : 'Não foi possível iniciar o runtime Black.');
-      if (blackLaunchStatus) blackLaunchStatus.textContent = result.message;
+      if (!result || !result.ok) throw new Error(result && result.message
+        ? result.message : 'Não foi possível iniciar Pokémon Black.');
+      blackLaunchStatus.textContent = result.message;
     } catch (error) {
-      if (blackLaunchStatus) blackLaunchStatus.textContent = 'Falha ao iniciar Pokémon Black: ' + error.message;
+      blackLaunchStatus.textContent = 'Falha ao iniciar Pokémon Black: ' + error.message;
       setBlackStatus('Falha ao iniciar Pokémon Black', error.message, true);
     } finally {
       blackState.busy = false;
@@ -254,8 +256,8 @@
       renderRom();
       renderPrimaryAction();
       renderBlackActions();
-      setBlackStatus('Disponível no launcher desktop', 'Vincule um build Eidos local e importe sua ROM compatível na versão desktop.', false);
-      setStatus('Abra a versão desktop do launcher para importar sua ROM e iniciar o jogo.', true);
+      setBlackStatus('Disponível na versão desktop', 'Abra o launcher desktop para consultar os motores nativos e importar ROMs.', false);
+      setStatus('Abra a versão desktop do launcher para importar uma ROM e iniciar o jogo.', true);
       return;
     }
 
@@ -263,7 +265,7 @@
     platformLabel.textContent = value === 'win32'
       ? 'Windows x64'
       : value === 'linux'
-        ? 'Linux desktop'
+        ? 'Linux x86-64'
         : value;
     const [runtime, rom] = await Promise.all([
       window.platina.getRuntimeStatus(),
@@ -279,28 +281,30 @@
     renderRom();
     renderPrimaryAction();
     if (!state.runtimeAvailable) {
-      setStatus('O pacote desktop está incompleto: o executável nativo está ausente.', true);
+      setStatus('O runtime nativo de Platinum está ausente deste pacote.', true);
     } else if (state.romImported) {
       setStatus(state.runtimeDataAvailable
         ? 'ROM importada. Os dados locais do jogo estão preparados.'
-        : 'ROM importada. Os recursos serão extraídos localmente ao iniciar o jogo.');
+        : 'ROM importada. Os recursos necessários serão extraídos localmente ao iniciar.');
     } else {
       setStatus(state.runtimeDataAvailable
-        ? 'Importe sua ROM .nds. O executável nativo já vem incluído.'
-        : 'Importe sua ROM .nds. O executável está incluído; os recursos do jogo serão extraídos localmente na primeira inicialização.');
+        ? 'Importe uma ROM compatível. O motor nativo já vem incluído.'
+        : 'Importe uma ROM compatível; os recursos necessários serão preparados localmente na primeira inicialização.');
     }
     await refreshBlackStatus();
   }
 
-  romButton.addEventListener('click', chooseRom);
+  document.querySelectorAll('[data-game-select]').forEach((card) => {
+    card.addEventListener('click', () => selectGame(card.dataset.gameSelect));
+  });
   launchButton.addEventListener('click', launchGame);
-  if (blackRuntimeButton) blackRuntimeButton.addEventListener('click', selectBlackRuntime);
-  if (blackRomButton) blackRomButton.addEventListener('click', importBlackRom);
-  if (blackLaunchButton) blackLaunchButton.addEventListener('click', launchBlackGame);
+  romButton.addEventListener('click', chooseRom);
+  blackRomButton.addEventListener('click', importBlackRom);
+  blackLaunchButton.addEventListener('click', launchBlackGame);
   renderBlackActions();
   initialize().catch((error) => {
-    setStatus('Falha ao inicializar launcher: ' + error.message, true);
-    setBlackStatus('Falha ao inicializar launcher', error.message, true);
+    setStatus('Falha ao inicializar o launcher: ' + error.message, true);
+    setBlackStatus('Falha ao inicializar o launcher', error.message, true);
     renderPrimaryAction();
     renderBlackActions();
   });
