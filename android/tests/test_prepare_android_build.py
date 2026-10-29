@@ -96,7 +96,7 @@ class AndroidMesonPatchTests(unittest.TestCase):
             root = Path(tmp)
             (root / ".git").mkdir()
             actual = "b" * 40
-            result = SimpleNamespace(returncode=0, stdout=actual + "\\n", stderr="")
+            result = SimpleNamespace(returncode=0, stdout=actual + "\n", stderr="")
             with patch("android.scripts.prepare_android_build.subprocess.run", return_value=result):
                 with self.assertRaisesRegex(PatchError, "revision mismatch"):
                     check_pin(root, "a" * 40, "libvct")
