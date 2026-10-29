@@ -26,6 +26,8 @@ test('ROM header validation checks a plausible Nintendo DS title, code and size'
   header.write('CPUE', 0x0c, 'ascii');
   assert.equal(validateNdsHeader(header, 1024), true);
   assert.equal(validateNdsHeader(header, 0x100), false);
+  assert.equal(validateNdsHeader(header, 512 * 1024 * 1024 + 1), false);
+  assert.equal(validateNdsHeader(header, Number.NaN), false);
   header.write('CPUP', 0x0c, 'ascii');
   assert.equal(validateNdsHeader(header, 1024), false);
   header.write('@@!!', 0x0c, 'ascii');
