@@ -25,6 +25,14 @@ O upstream pret/pokeplatinum documenta estas impressões digitais para Pokémon 
 
 A cópia USA fornecida para o desenvolvimento corresponde à Rev. 1 e serve como referência inicial de compatibilidade.
 
+## Verificação adicional da ROM USA enviada em 29/10/2026
+
+O ZIP `Pokemon - Platinum Version (USA).zip` foi inspecionado extraindo apenas o arquivo NDS para cálculo local de identificadores. A imagem tem 134.217.728 bytes, SHA-1 `ce81046eda7d232513069519cb2085349896dec7`, SHA-256 `ede62292aa7f7014ff27d42097e769753380531739889c29b968b67b80f80678`, CRC-32 `9253921D`, código `CPUE` e byte de revisão `0`. O SHA-1 confirma a ROM oficial USA Rev. 0 de referência do projeto pret/pokeplatinum.
+
+Essa imagem **não é compatível com a configuração atual do runtime**, que foi fixada em USA Rev. 1 (SHA-1 `0862ec35b24de5c7e2dcb88c9eea0873110d755c`). A partir da validação do launcher, a seleção da Rev. 0 será recusada explicitamente e a ROM só será copiada para o armazenamento privado se o SHA-1 integral corresponder à Rev. 1 esperada. Não se deve remover essa proteção nem tratar apenas um cabeçalho `CPUE` como prova suficiente.
+
+O patch PT-BR E4T v1.2.0 publicado documenta como base `3541 – Pokémon Platinum Version (US)(XenoPhobia).nds`, CRC-32 `1D8A5220` (fonte: [E4T — informações de Pokémon Platina](https://e4t.com.br/downloads/pokemon-platina/informacoes-pokemon-platina/)). Esse CRC não corresponde nem à ROM Rev. 0 enviada agora (`9253921D`) nem à ROM Rev. 1 suportada (`69D628E8`). Portanto, **o arquivo de patch não deve ser aplicado diretamente à ROM enviada nem à Rev. 1 presumindo compatibilidade**. A fonte PT-BR já examinada continua sendo apenas uma referência local para os sete recursos NARC aprovados; a compatibilidade visual e de jogo desses recursos em execução nativa ainda não foi demonstrada.
+
 ## Verificação do patch PT-BR v1.2.0 (29/10/2026)
 
 O arquivo enviado contém `Pokemon Platinum (BR) v1.2.0.xdelta`. O README incluído no pacote e a página da tradução identificam a ROM-base como `3541 – Pokémon Platinum Version (US)(XenoPhobia).nds`, CRC-32 `1D8A5220` ([informações da tradução E4T](https://e4t.com.br/downloads/pokemon-platina/informacoes-pokemon-platina/)).
