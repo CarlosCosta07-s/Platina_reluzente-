@@ -134,6 +134,19 @@ async function inspectBlackRuntime(runtimeDirectory, platform = process.platform
     throw new Error('A pasta do runtime Eidos precisa ser um diretório real, não um link simbólico.');
   }
 
+  // Eidos portable mode writes saves beside its executable before consulting APPDATA.
+  // Refuse it so the launcher's per-game save root cannot be bypassed.
+  let portableMode = false;
+  try {
+    await fs.promises.lstat(path.join(directory, 'portable.txt'));
+    portableMode = true;
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error;
+  }
+  if (portableMode) {
+    throw new Error('O runtime Eidos contém portable.txt; remova esse marcador para manter os saves do Black isolados.');
+  }
+
   const executableName = platform === 'win32' ? 'eidos.exe' : 'eidos';
   const executable = path.join(directory, executableName);
   const executableStat = await fs.promises.lstat(executable);
