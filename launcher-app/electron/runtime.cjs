@@ -412,4 +412,34 @@ function validateNdsHeader(header, fileSize) {
   // header's ROM-version byte as well.
   return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader };
+
+function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.platform, env = process.env }) {
+  if (!runtime || typeof runtime.executable !== 'string' || !path.isAbsolute(runtime.executable)
+      || typeof runtime.root !== 'string' || !path.isAbsolute(runtime.root)) {
+    throw new TypeError('O runtime de Platinum deve ser preparado antes da inicialização.');
+  }
+  if (!rom || typeof rom.filePath !== 'string' || !path.isAbsolute(rom.filePath)
+      || typeof rom.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(rom.sha256)
+      || typeof logPath !== 'string' || !path.isAbsolute(logPath)) {
+    throw new TypeError('A ROM verificada, o SHA-256 e o caminho do log são obrigatórios.');
+  }
+  if (platform !== 'win32' && platform !== 'linux') {
+    throw new Error('O porte nativo de Platinum só oferece suporte a Windows e Linux.');
+  }
+
+  return {
+    executable: runtime.executable,
+    args: platform === 'linux' ? ['--appimage-extract-and-run'] : [],
+    cwd: runtime.root,
+    env: {
+      ...env,
+      PLATINA_IMPORTED_ROM: rom.filePath,
+      PLATINA_IMPORTED_ROM_SHA256: rom.sha256
+    },
+    logPath,
+    platform,
+    romSha256: rom.sha256
+  };
+}
+
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec };
