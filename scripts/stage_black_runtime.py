@@ -244,10 +244,32 @@ def stage_black_runtime(
     destination = Path(destination_dir).expanduser().absolute()
     dependencies = [Path(item).expanduser().absolute() for item in (dependency_dirs or [])]
 
+    if destination == source or source in destination.parents or destination in source.parents:
+        raise RuntimeStageError(
+            "O diretório de build e o destino do runtime não podem conter um ao outro."
+        )
+
+    # Recover a previous interrupted commit before inspecting the new build.
+    # If the destination exists, a leftover backup is stale and can be removed;
+    # if only the backup exists, restore it before any new-build validation so
+    # a missing executable or dependency cannot leave the launcher without its
+    # last usable local runtime.
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    backup = destination.with_name(destination.name + ".previous")
+    if destination.is_symlink():
+        raise RuntimeStageError(f"O destino não pode ser link simbólico: {destination}")
+    if destination.exists() and not destination.is_dir():
+        raise RuntimeStageError(f"O destino existe e não é uma pasta: {destination}")
+    if backup.is_symlink() or (backup.exists() and not backup.is_dir()):
+        raise RuntimeStageError(f"Backup anterior inseguro: {backup}")
+    if backup.exists():
+        if destination.exists():
+            shutil.rmtree(backup)
+        else:
+            os.replace(backup, destination)
+
     if source.is_symlink() or not source.is_dir():
         raise RuntimeStageError(f"Diretório de build inválido: {source}")
-    if destination == source or source in destination.parents:
-        raise RuntimeStageError("O destino do runtime não pode estar dentro do diretório de build.")
     if any(item.is_symlink() or not item.is_dir() for item in dependencies):
         raise RuntimeStageError("Cada --dependency-dir precisa ser um diretório real, sem link simbólico.")
 
@@ -265,14 +287,7 @@ def stage_black_runtime(
                 "O runtime Windows não resolveu SDL3.dll; não será preparado um pacote incompleto."
             )
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_symlink():
-        raise RuntimeStageError(f"O destino não pode ser link simbólico: {destination}")
-    if destination.exists() and not destination.is_dir():
-        raise RuntimeStageError(f"O destino existe e não é uma pasta: {destination}")
-
     temporary_root = Path(tempfile.mkdtemp(prefix=destination.name + ".staging-", dir=destination.parent))
-    backup = destination.with_name(destination.name + ".previous")
     try:
         staged_executable = temporary_root / executable_name
         _copy_native_file(executable, staged_executable)
@@ -285,10 +300,9 @@ def stage_black_runtime(
         if platform == "windows" and not (temporary_root / "SDL3.dll").is_file():
             raise RuntimeStageError("SDL3.dll está ausente do runtime preparado.")
 
-        if backup.exists():
-            if backup.is_symlink() or not backup.is_dir():
-                raise RuntimeStageError(f"Backup anterior inseguro: {backup}")
-            shutil.rmtree(backup)
+        # A backup can only be present here if a previous destination is
+        # being moved aside during this commit. It was already recovered or
+        # validated above, so never delete it before the replacement is ready.
         had_previous = destination.exists()
         if had_previous:
             os.replace(destination, backup)
@@ -299,7 +313,9 @@ def stage_black_runtime(
                 os.replace(backup, destination)
             raise
         if backup.exists():
-            shutil.rmtree(backup)
+            # The new runtime is already installed. A stale-backup cleanup
+            # failure must not report the completed install as failed.
+            shutil.rmtree(backup, ignore_errors=True)
     except Exception:
         if temporary_root.exists():
             shutil.rmtree(temporary_root, ignore_errors=True)
