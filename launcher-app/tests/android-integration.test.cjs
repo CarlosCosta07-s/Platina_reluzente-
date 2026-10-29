@@ -56,8 +56,8 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /!\"CPUE\"\.equals\(code\)/);
     assert.equal(plugin.split('if (!"CPUE".equals(code))').length - 1, 1);
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
-    assert.match(plugin, /input\\.read\\(\\) != -1/);
-    assert.match(plugin, /!required\\.isFile\\(\\) \\|\\| required\\.length\\(\\) <= 0/);
+    assert.match(plugin, /input\.read\(\) != -1/);
+    assert.match(plugin, /!required\.isFile\(\) \|\| required\.length\(\) <= 0/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
     const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
     assert.match(launcherSource, /code !== 'CPUE'/);
