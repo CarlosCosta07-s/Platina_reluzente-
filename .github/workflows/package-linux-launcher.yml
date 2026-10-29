@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   package-linux:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     name: Build integrated Linux x86-64 launcher
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -32,29 +32,15 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Select native AppImage from the matching successful build
+      - name: Select a successful compatible native Linux build
         id: native_artifact
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          NATIVE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
         run: |
           set -Eeuo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
-            run_id="${{ github.event.workflow_run.id }}"
-          else
-            run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native-desktop.yml/runs?branch=main&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .conclusion == "success")] | first | .id // empty')"
-          fi
-          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
-            echo "No successful native build matches this launcher source revision." >&2
-            exit 1
-          fi
-          artifact_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "Platina-Reluzente-Linux-x86_64-AppImage" and .expired == false)] | sort_by(.created_at) | last | if . == null then empty else .name end')"
-          if [[ "$artifact_name" != "Platina-Reluzente-Linux-x86_64-AppImage" ]]; then
-            echo "The matching successful native build has no usable Linux AppImage artifact." >&2
-            exit 1
-          fi
-          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-          echo "Selected the Linux AppImage built by matching native run $run_id."
+          node "$GITHUB_WORKSPACE/launcher-app/scripts/select-compatible-native-build.cjs" linux
 
       - name: Download verified native Linux AppImage
         uses: actions/download-artifact@v4
