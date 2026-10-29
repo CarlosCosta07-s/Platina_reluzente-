@@ -674,7 +674,9 @@ SDL_VIEWPORT_PATCHED = r'''  int drawableWidth = 0;
   glViewport(0, 0, drawableWidth, drawableHeight);'''
 
 INPUT_RELEASE_HELPER_ORIGINAL = "static bool sFastForward = false;"
-INPUT_RELEASE_HELPER_PATCHED = r'''static bool sFastForward = false;
+INPUT_RELEASE_HELPER_PATCHED = r'''// Must be declared before ReleaseDesktopInputState(), which clears it.
+static u8 isMouseDown = 0;
+static bool sFastForward = false;
 
 // Release every DS button and the touch panel when focus is lost or a
 // controller disconnects, so a held key cannot remain stuck in the game.
@@ -721,6 +723,9 @@ WINDOW_EVENT_PATCHED = r'''      if (Event.type == SDL_WINDOWEVENT) {
         }
       }'''
 KEYDOWN_ORIGINAL = "      if (Event.type == SDL_KEYDOWN) {"
+MOUSE_DOWN_DECLARATION_ORIGINAL = "static u8 isMouseDown = 0;";
+MOUSE_DOWN_DECLARATION_PATCHED = "// isMouseDown is declared above ReleaseDesktopInputState().";
+
 KEYDOWN_PATCHED = r'''      if (Event.type == SDL_JOYDEVICEREMOVED) {
         if (s_SIM_SDLJoystick != NULL &&
             SDL_JoystickInstanceID(s_SIM_SDLJoystick) == Event.jdevice.which) {
@@ -1123,6 +1128,23 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
                 f"Expected exactly one known upstream marker for {label}; refusing uncertain patch."
             )
         current = current.replace(original, patched, 1)
+
+    # ReleaseDesktopInputState is inserted near sFastForward, before the
+    # upstream declaration of isMouseDown. Move that storage forward rather
+    # than merely forward-declaring it: otherwise C++ sees an undeclared name.
+    if MOUSE_DOWN_DECLARATION_PATCHED in current:
+        if current.count(MOUSE_DOWN_DECLARATION_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate moved desktop mouse-state declaration.")
+        if current.count(MOUSE_DOWN_DECLARATION_ORIGINAL) != 0:
+            raise RuntimePreparationError("Both old and moved desktop mouse-state declarations remain.")
+    elif current.count(MOUSE_DOWN_DECLARATION_ORIGINAL) == 1:
+        current = current.replace(
+            MOUSE_DOWN_DECLARATION_ORIGINAL,
+            MOUSE_DOWN_DECLARATION_PATCHED,
+            1,
+        )
+    elif current.count(MOUSE_DOWN_DECLARATION_ORIGINAL) > 1:
+        raise RuntimePreparationError("Duplicate upstream mouse-state declarations detected.")
     return current, current != source
 
 
