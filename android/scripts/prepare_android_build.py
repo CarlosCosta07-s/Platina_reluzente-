@@ -308,8 +308,10 @@ def patch_android_ppwlobby_c_args(root: Path) -> list[str]:
     for path, old, new in cpp_arg_patches:
         original = path.read_text(encoding="utf-8")
         if new in original:
-            if original.count(new) != 1:
-                raise PatchError(f"PPW lobby C++ flags: duplicated patched marker in {path}")
+            if original.count(new) != 1 or old in original:
+                raise PatchError(
+                    f"PPW lobby C++ flags: partial or duplicated patch markers in {path}"
+                )
             continue
         if original.count(old) != 1:
             raise PatchError(f"PPW lobby C++ flags: expected exactly one C++ argument marker in {path}")
