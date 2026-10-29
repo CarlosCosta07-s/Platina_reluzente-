@@ -323,12 +323,47 @@
 
   // Console-style dashboard: live clock and keyboard / gamepad-like navigation.
   const clockElement = document.getElementById('clock');
+  let clockTimer = null;
+  // Clock follows the system time: it re-aligns to the exact start of every
+  // minute (no drift) and re-syncs when the window regains focus or the
+  // computer wakes from sleep.
   function tickClock() {
-    if (!clockElement) return;
-    clockElement.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    if (clockTimer) clearTimeout(clockTimer);
+    const now = new Date();
+    if (clockElement) {
+      clockElement.textContent = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      clockElement.dateTime = now.toISOString();
+      clockElement.title = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    }
+    clockTimer = setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
   }
   tickClock();
-  setInterval(tickClock, 15000);
+  window.addEventListener('focus', tickClock);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tickClock(); });
+
+  // Battery indicator (Chromium Battery Status API, available in Electron).
+  const batteryBox = document.getElementById('battery');
+  const batteryFill = document.getElementById('battery-fill');
+  const batteryText = document.getElementById('battery-text');
+  const batteryBolt = document.getElementById('battery-bolt');
+  function renderBattery(battery) {
+    if (!batteryBox) return;
+    const percent = Math.round(battery.level * 100);
+    batteryBox.hidden = false;
+    batteryText.textContent = percent + '%';
+    batteryFill.style.width = Math.max(4, percent) + '%';
+    batteryBox.classList.toggle('low', percent <= 20 && !battery.charging);
+    batteryBox.classList.toggle('charging', Boolean(battery.charging));
+    batteryBolt.hidden = !battery.charging;
+    batteryBox.title = battery.charging ? 'Carregando' : 'Usando a bateria';
+    batteryBox.setAttribute('aria-label', 'Bateria ' + percent + '%' + (battery.charging ? ', carregando' : ''));
+  }
+  if (typeof navigator.getBattery === 'function') {
+    navigator.getBattery().then((battery) => {
+      renderBattery(battery);
+      ['levelchange', 'chargingchange'].forEach((name) => battery.addEventListener(name, () => renderBattery(battery)));
+    }).catch(() => {});
+  }
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     const target = event.target;

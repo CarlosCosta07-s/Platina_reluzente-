@@ -313,3 +313,11 @@ html, body {
   .hint-bar { display: none; }
   .main-content { padding-bottom: 24px; }
 }
+.battery { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border: 1px solid #ffffff1f; border-radius: 999px; background: #ffffff0d; color: #dfe9fa; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.battery-icon { position: relative; width: 26px; height: 13px; border: 2px solid #b9c8e0; border-radius: 4px; padding: 1px; }
+.battery-icon::after { content: ""; position: absolute; right: -5px; top: 2px; width: 3px; height: 5px; border-radius: 0 2px 2px 0; background: #b9c8e0; }
+.battery-fill { display: block; height: 100%; border-radius: 2px; background: #8fdfba; transition: width .4s ease; }
+.battery.low { color: #ffb4b4; border-color: #ff7a7a66; }
+.battery.low .battery-fill { background: #ff7a7a; }
+.battery-bolt { color: #ffd76a; }
+@media (max-width: 560px) { .battery { padding: 6px 9px; font-size: 11px; } }

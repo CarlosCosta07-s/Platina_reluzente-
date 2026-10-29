@@ -25,6 +25,10 @@
         </nav>
         <div class="top-right">
           <div class="platform-chip"><span class="status-dot"></span><span id="platform-label">Detectando plataforma…</span></div>
+          <div id="battery" class="battery" role="status" aria-live="off" aria-label="Bateria" hidden>
+            <span class="battery-icon" aria-hidden="true"><span class="battery-fill" id="battery-fill"></span></span>
+            <span id="battery-text">--%</span><span id="battery-bolt" class="battery-bolt" aria-hidden="true" hidden>⚡</span>
+          </div>
           <time id="clock" class="clock" aria-label="Hora atual">--:--</time>
         </div>
       </header>
