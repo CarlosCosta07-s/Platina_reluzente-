@@ -17,6 +17,9 @@ export async function persistRomAtomically({
   if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) {
     throw new TypeError('chunkSize must be a positive safe integer.');
   }
+  if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > 512 * 1024 * 1024) {
+    throw new RangeError('ROM size must be a positive safe integer no greater than 512 MiB.');
+  }
 
   const destination = 'roms/current.nds';
   const staging = 'roms/current.nds.importing';
