@@ -9,6 +9,9 @@ on:
     branches: [main]
     paths:
       - "android/**"
+      - "launcher-app/android-native/**"
+      - "launcher-app/scripts/integrate-android-runtime.cjs"
+      - "launcher-app/tests/android-integration.test.cjs"
       - ".github/workflows/android-native-cross-build.yml"
       - "scripts/**"
       - "tools/**"

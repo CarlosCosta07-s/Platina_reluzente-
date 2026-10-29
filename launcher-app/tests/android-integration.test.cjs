@@ -71,6 +71,15 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /input\.read\(\) != -1/);
     assert.match(plugin, /!required\.isFile\(\) \|\| required\.length\(\) <= 0/);
     assert.match(plugin, /runtime-manifest\.txt/);
+    assert.match(plugin, /migrateLegacySaveIfNeeded\(destination\)/);
+    assert.match(plugin, /save\.bin\.migrating/);
+    assert.match(plugin, /output\.getFD\(\)\.sync\(\)/);
+    assert.match(plugin, /if \(canonicalSave\.exists\(\)\) return;/);
+    assert.ok(
+      plugin.indexOf('migrateLegacySaveIfNeeded(destination);')
+        < plugin.indexOf('if (isCompleteRuntime(destination, expectedVersion)) return;'),
+      'legacy save migration must run before the valid-runtime early return'
+    );
     assert.match(plugin, /Os\.lstat\(file\.getAbsolutePath\(\)\)/);
     assert.match(plugin, /isRegularFileWithoutSymlinks\(directory, fields\[0\]\)/);
     assert.match(plugin, /if \(isSymbolicLink\(file\)\) return file\.delete\(\)/);

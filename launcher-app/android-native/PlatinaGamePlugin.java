@@ -150,6 +150,8 @@ public class PlatinaGamePlugin extends Plugin {
             throw new IOException("Não foi possível limpar a importação anterior dos recursos locais.");
         }
 
+        // Preserve saves created by older APKs before replacing their runtime tree.
+        if (destination.exists()) migrateLegacySaveIfNeeded(destination);
         if (isCompleteRuntime(destination, expectedVersion)) return;
 
         copyAssetTree("pokeplatinum", staging);
@@ -202,6 +204,75 @@ public class PlatinaGamePlugin extends Plugin {
         // The new runtime is complete. Backup cleanup is non-fatal: a stale
         // backup consumes space but must not turn a successful install into failure.
         deleteRecursively(previous);
+    }
+
+    private void migrateLegacySaveIfNeeded(File legacyRuntimeDirectory) throws IOException {
+        if (isSymbolicLink(legacyRuntimeDirectory)) {
+            throw new IOException("A pasta antiga de recursos não pode ser um link simbólico.");
+        }
+        if (!legacyRuntimeDirectory.isDirectory()) return;
+
+        File legacySave = new File(legacyRuntimeDirectory, "save.bin");
+        File canonicalSave = new File(getContext().getFilesDir(), "save.bin");
+        if (isSymbolicLink(legacySave) || isSymbolicLink(canonicalSave)) {
+            throw new IOException("O arquivo de salvamento contém um link simbólico; migração interrompida.");
+        }
+        if (!legacySave.exists()) return;
+        if (!legacySave.isFile()) {
+            throw new IOException("O save antigo não é um arquivo regular; migração interrompida.");
+        }
+        // The canonical save wins if it already exists: never replace newer progress
+        // with an older copy found in the runtime directory.
+        if (canonicalSave.exists()) return;
+
+        File staging = new File(getContext().getFilesDir(), "save.bin.migrating");
+        if (isSymbolicLink(staging) || staging.exists()) {
+            if (!staging.delete()) {
+                throw new IOException("Não foi possível limpar o save temporário de uma migração anterior.");
+            }
+        }
+
+        long expectedLength = legacySave.length();
+        long copied = 0;
+        try (InputStream input = new FileInputStream(legacySave);
+             FileOutputStream output = new FileOutputStream(staging, false)) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+                copied += count;
+            }
+            output.flush();
+            output.getFD().sync();
+            if (copied != expectedLength) {
+                throw new IOException("O save antigo mudou durante a migração; a versão anterior foi preservada.");
+            }
+        } catch (IOException error) {
+            if (!isSymbolicLink(staging)) staging.delete();
+            throw error;
+        }
+
+        if (isSymbolicLink(canonicalSave)) {
+            staging.delete();
+            throw new IOException("O destino do save tornou-se um link simbólico durante a migração.");
+        }
+        if (canonicalSave.exists()) {
+            if (!staging.delete()) {
+                throw new IOException("O save canônico foi criado, mas o temporário da migração não pôde ser removido.");
+            }
+            return;
+        }
+        if (!staging.renameTo(canonicalSave)) {
+            if (canonicalSave.exists() && !isSymbolicLink(canonicalSave)) {
+                if (!staging.delete()) {
+                    throw new IOException("O save canônico já existe, mas não foi possível limpar a cópia temporária.");
+                }
+                return;
+            }
+            throw new IOException(
+                    "Não foi possível instalar o save migrado; a cópia antiga continua em "
+                            + legacySave.getAbsolutePath());
+        }
     }
 
     private boolean isSymbolicLink(File file) {
