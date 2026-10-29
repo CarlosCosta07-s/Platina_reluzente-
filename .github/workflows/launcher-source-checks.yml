@@ -1,0 +1,35 @@
+name: Launcher source checks
+
+concurrency:
+  group: launcher-source-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "launcher-app/**"
+      - ".github/workflows/launcher-source-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launcher-tests:
+    name: Launcher syntax, tests and web bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - name: Install launcher dependencies
+        working-directory: launcher-app
+        run: npm install --no-audit --no-fund
+      - name: Run launcher checks and regression tests
+        working-directory: launcher-app
+        run: npm test
