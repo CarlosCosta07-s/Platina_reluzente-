@@ -81,21 +81,25 @@ async function readImportedBlackRom() {
   }
 }
 
-async function readBlackRuntimeSelection() {
-  const paths = blackPaths({ platform: process.platform, env: process.env });
+function blackRuntimeDirectory() {
+  // The runtime is an internal resource of this app. It is never selected by
+  // the player and is not launched through an external file picker.
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'black-runtime')
+    : path.join(__dirname, '..', 'black-runtime');
+}
+async function readBundledBlackRuntime() {
   try {
-    const stat = await fs.promises.lstat(paths.runtimeSelectionPath);
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      return { runtime: null, error: 'O arquivo de configuração do runtime Black não é um arquivo regular.' };
-    }
-    const saved = JSON.parse(await fs.promises.readFile(paths.runtimeSelectionPath, 'utf8'));
-    const runtime = await inspectBlackRuntime(saved.directory, process.platform);
+    const runtime = await inspectBlackRuntime(blackRuntimeDirectory(), process.platform);
     return { runtime, error: '' };
   } catch (error) {
     if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
-      return { runtime: null, error: '' };
+      return {
+        runtime: null,
+        error: 'O runtime nativo de Pokémon Black ainda não está integrado ao pacote único. A integração depende de uma base distribuível legalmente.'
+      };
     }
-    return { runtime: null, error: 'O runtime Eidos salvo não está disponível: ' + error.message };
+    return { runtime: null, error: 'O runtime interno de Pokémon Black não passou na validação: ' + error.message };
   }
 }
 
@@ -190,48 +194,18 @@ ipcMain.handle('platina:import-rom', async () => {
 });
 
 ipcMain.handle('platina:black-status', async () => {
-  const [rom, selectedRuntime] = await Promise.all([
+  const [rom, bundledRuntime] = await Promise.all([
     readImportedBlackRom(),
-    readBlackRuntimeSelection()
+    readBundledBlackRuntime()
   ]);
   return {
-    runtimeAvailable: Boolean(selectedRuntime.runtime),
-    runtimeDirectory: selectedRuntime.runtime ? selectedRuntime.runtime.directory : '',
-    executableName: selectedRuntime.runtime ? selectedRuntime.runtime.executableName : '',
+    runtimeAvailable: Boolean(bundledRuntime.runtime),
     romImported: Boolean(rom),
     romName: rom ? rom.name : '',
     romSize: rom ? rom.size : 0,
-    error: selectedRuntime.error || '',
+    error: bundledRuntime.error || '',
     platform: process.platform
   };
-});
-
-ipcMain.handle('platina:select-black-runtime', async () => {
-  const selection = await dialog.showOpenDialog({
-    title: 'Selecionar pasta do build local Eidos (Pokémon Black)',
-    properties: ['openDirectory']
-  });
-  if (selection.canceled || selection.filePaths.length === 0) return { canceled: true };
-
-  const directory = selection.filePaths[0];
-  try {
-    const runtime = await inspectBlackRuntime(directory, process.platform);
-    const paths = blackPaths({ platform: process.platform, env: process.env });
-    await ensureBlackDirectories(paths);
-    await fs.promises.writeFile(paths.runtimeSelectionPath, JSON.stringify({
-      directory: runtime.directory,
-      executableName: runtime.executableName,
-      selectedAt: new Date().toISOString()
-    }, null, 2), { encoding: 'utf8', mode: 0o600 });
-    return {
-      canceled: false,
-      ok: true,
-      executableName: runtime.executableName,
-      runtimeDirectory: runtime.directory
-    };
-  } catch (error) {
-    return { canceled: false, ok: false, message: error.message };
-  }
 });
 
 ipcMain.handle('platina:import-black-rom', async () => {
@@ -283,18 +257,18 @@ ipcMain.handle('platina:launch-black-game', async () => {
     return { ok: false, message: 'Importe uma ROM compatível de Pokémon Black antes de iniciar.' };
   }
 
-  const selectedRuntime = await readBlackRuntimeSelection();
-  if (!selectedRuntime.runtime) {
+  const bundledRuntime = await readBundledBlackRuntime();
+  if (!bundledRuntime.runtime) {
     return {
       ok: false,
-      message: selectedRuntime.error || 'Selecione primeiro uma pasta de build Eidos local, compilada a partir das revisões documentadas.'
+      message: bundledRuntime.error || 'O runtime nativo de Pokémon Black ainda não está integrado ao pacote único.'
     };
   }
 
   try {
     await ensureBlackDirectories(paths);
     const spec = createBlackLaunchSpec({
-      runtime: selectedRuntime.runtime,
+      runtime: bundledRuntime.runtime,
       paths,
       romPath: rom.filePath,
       romSha256: rom.sha256,
