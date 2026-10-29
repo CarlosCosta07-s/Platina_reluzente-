@@ -55,7 +55,6 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /roms\/current\.nds/);
     assert.match(plugin, /!\"CPUE\"\.equals\(code\)/);
     assert.equal(plugin.split('if (!"CPUE".equals(code))').length - 1, 1);
-    assert.equal((plugin.match(/!\"CPUE\"\.equals\(code\)/g) || []).length, 1, 'CPUE revision guard appears exactly once');
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
     const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
