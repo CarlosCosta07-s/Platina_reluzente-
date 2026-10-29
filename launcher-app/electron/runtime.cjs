@@ -43,8 +43,10 @@ function validateNdsHeader(header, fileSize) {
       || fileSize > 512 * 1024 * 1024) return false;
   const title = header.subarray(0, 12).toString('ascii').replace(/\0/g, '').trim();
   const code = header.subarray(0x0c, 0x10).toString('ascii');
+  const romVersion = header[0x1e];
   // This native build is compiled for Pokémon Platinum USA Rev. 1 (CPUE).
-  // Reject other DS games/regions before storing a ROM the runtime cannot use.
-  return title.length > 0 && code === 'CPUE';
+  // The game code alone does not distinguish a revision, so verify the NDS
+  // header's ROM-version byte as well.
+  return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
 module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, validateNdsHeader };
