@@ -71,6 +71,89 @@ test('failed desktop ROM staging leaves the last committed ROM and metadata unto
   await assert.rejects(fs.access(store.metadataPath + '.importing'));
 });
 
+test('metadata commit failure restores both the prior desktop ROM and its metadata', async (t) => {
+  const store = await makeStore(t);
+  const oldRom = Buffer.from('previous-valid-rom');
+  const oldMetadata = {
+    name: 'previous.nds', size: oldRom.length,
+    sha256: crypto.createHash('sha256').update(oldRom).digest('hex'),
+    storedName: 'current.nds', importedAt: 'previous-time'
+  };
+  const sourcePath = path.join(store.root, 'selected.nds');
+  await fs.mkdir(store.romDir, { recursive: true });
+  await fs.writeFile(store.destinationPath, oldRom);
+  await fs.writeFile(store.metadataPath, JSON.stringify(oldMetadata));
+  await fs.writeFile(sourcePath, Buffer.from('new-rom-with-more-bytes'));
+
+  const originalRename = fs.rename;
+  fs.rename = async (from, to) => {
+    if (from === store.metadataPath + '.importing' && to === store.metadataPath) {
+      throw new Error('simulated metadata commit failure');
+    }
+    return originalRename(from, to);
+  };
+  try {
+    await assert.rejects(commitDesktopRom({
+      sourcePath,
+      destinationPath: store.destinationPath,
+      metadataPath: store.metadataPath,
+      metadata: { name: 'selected.nds', size: (await fs.stat(sourcePath)).size, importedAt: 'new-time' }
+    }), /simulated metadata commit failure/);
+  } finally {
+    fs.rename = originalRename;
+  }
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), oldRom);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), oldMetadata);
+  await assert.rejects(fs.access(store.destinationPath + '.previous'));
+  await assert.rejects(fs.access(store.metadataPath + '.previous'));
+});
+
+test('backup cleanup failure does not report a committed ROM import as failed', async (t) => {
+  const store = await makeStore(t);
+  const oldRom = Buffer.from('previous-valid-rom');
+  const oldMetadata = {
+    name: 'previous.nds', size: oldRom.length,
+    sha256: crypto.createHash('sha256').update(oldRom).digest('hex'),
+    storedName: 'current.nds', importedAt: 'previous-time'
+  };
+  const sourcePath = path.join(store.root, 'selected.nds');
+  await fs.mkdir(store.romDir, { recursive: true });
+  await fs.writeFile(store.destinationPath, oldRom);
+  await fs.writeFile(store.metadataPath, JSON.stringify(oldMetadata));
+  const newRom = Buffer.from('new-rom-with-more-bytes');
+  await fs.writeFile(sourcePath, newRom);
+
+  const originalRm = fs.rm;
+  fs.rm = async (target, options) => {
+    if (target === store.destinationPath + '.previous'
+        || target === store.metadataPath + '.previous') {
+      throw new Error('simulated stale-backup cleanup failure');
+    }
+    return originalRm(target, options);
+  };
+  let metadata;
+  try {
+    metadata = await commitDesktopRom({
+      sourcePath,
+      destinationPath: store.destinationPath,
+      metadataPath: store.metadataPath,
+      metadata: { name: 'selected.nds', size: newRom.length, importedAt: 'new-time' }
+    });
+  } finally {
+    fs.rm = originalRm;
+  }
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), newRom);
+  assert.equal(metadata.sha256, await digest(store.destinationPath));
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
+  assert.deepEqual(await fs.readFile(store.destinationPath + '.previous'), oldRom);
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(store.metadataPath + '.previous', 'utf8')),
+    oldMetadata
+  );
+});
+
 test('desktop ROM recovery restores a matching backup after an interrupted metadata commit', async (t) => {
   const store = await makeStore(t);
   await fs.mkdir(store.romDir, { recursive: true });
