@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py tools/tests/test_prepare_native_runtime.py
+        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py scripts/stage_black_runtime.py tools/tests/test_prepare_native_runtime.py tools/tests/test_stage_black_runtime.py
 
       - name: Run unit tests
         run: |
