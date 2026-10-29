@@ -27,7 +27,7 @@ Os caminhos acima são o contrato proposto para a integração futura, não uma 
 ## Descoberta do runtime local
 
 - O desenvolvedor seleciona a pasta que contém o executável host que ele compilou a partir das revisões fixadas. O executável esperado é `eidos.exe` no Windows e `eidos` no Linux, no diretório `build64/host` do build descrito em [POKEMON_BLACK_LOCAL_BUILD.md](POKEMON_BLACK_LOCAL_BUILD.md).
-- No Windows, verificar a presença de `SDL3.dll` junto ao executável, conforme a configuração host upstream. Não presumir que uma DLL ausente possa ser suprida pelo runtime de Platinum.
+- No Windows, verificar a presença de `SDL3.dll` junto ao executável, conforme a configuração host upstream. Não presumir que uma DLL ausente possa ser suprida pelo runtime de Platinum. Rejeitar também `portable.txt` ao lado do executável, porque o modo portátil do Eidos redireciona os saves para a pasta do próprio runtime e ignora o `APPDATA` isolado.
 - No Linux, verificar que o binário é executável e documentar as dependências dinâmicas requeridas pelo build local; não reutilizar AppImage, bibliotecas nem executáveis do porte de Platinum como substitutos.
 - Recusar um caminho que esteja ausente, seja diretório, seja link simbólico inesperado ou não contenha o executável correto da plataforma. Não adivinhar executáveis diferentes.
 - Persistir apenas o caminho selecionado e a identidade/versão do build local em metadados privados do launcher. Nunca copiar o binário Eidos automaticamente para dentro do pacote público.
