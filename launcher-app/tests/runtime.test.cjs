@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('../electron/runtime.cjs');
+const crypto = require('node:crypto');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('../electron/runtime.cjs');
 
 test('runtime resolves under Electron resources when packaged', () => {
   assert.equal(resolveRuntimeDirectory(true, '/app/resources', '/app'), path.join('/app/resources', 'runtime'));
@@ -98,10 +99,28 @@ test('runtime rejects symlinked executables and required game assets', (t) => {
 });
 
 
-function makeRuntimeFixture(directory, platform = 'linux', buildId = 'test-build') {
+function writeRuntimeManifest(directory, platform = 'linux') {
+  const executableName = platform === 'win32' ? 'main.exe' : 'main';
+  const executablePath = path.join(directory, executableName);
+  const stat = fs.statSync(executablePath);
+  const sha256 = crypto.createHash('sha256').update(fs.readFileSync(executablePath)).digest('hex');
+  const manifestHash = crypto.createHash('sha256');
+  manifestHash.update(executableName + '\0' + sha256 + '\n');
+  const buildId = manifestHash.digest('hex');
+  fs.writeFileSync(path.join(directory, 'launcher-runtime-manifest.json'), JSON.stringify({
+    schemaVersion: 1,
+    platform: platform === 'win32' ? 'windows' : platform,
+    buildId,
+    files: [{ path: executableName, size: stat.size, sha256 }]
+  }, null, 2) + '\n');
+  fs.writeFileSync(path.join(directory, 'launcher-runtime-version.txt'), buildId + '\n');
+  return buildId;
+}
+
+function makeRuntimeFixture(directory, platform = 'linux', label = 'test-build') {
   fs.mkdirSync(directory, { recursive: true });
   const executable = path.join(directory, platform === 'win32' ? 'main.exe' : 'main');
-  fs.writeFileSync(executable, 'fake native executable');
+  fs.writeFileSync(executable, 'fake native executable:' + label);
   fs.chmodSync(executable, 0o755);
   for (const relative of [
     'header.bin',
@@ -113,7 +132,7 @@ function makeRuntimeFixture(directory, platform = 'linux', buildId = 'test-build
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, 'fixture:' + relative);
   }
-  fs.writeFileSync(path.join(directory, 'launcher-runtime-version.txt'), buildId + '\n');
+  return writeRuntimeManifest(directory, platform);
 }
 
 test('prepares a writable runtime, preserves local game data and refreshes bundled files', () => {
@@ -121,11 +140,11 @@ test('prepares a writable runtime, preserves local game data and refreshes bundl
   const source = path.join(temp, 'bundled-runtime');
   const destination = path.join(temp, 'user-data', 'runtime');
   try {
-    makeRuntimeFixture(source, 'linux', 'build-1');
+    const buildOneId = makeRuntimeFixture(source, 'linux', 'build-1');
     const first = prepareWritableRuntime(source, destination, 'linux');
     assert.equal(first.root, destination);
     assert.equal(first.executable, path.join(destination, 'main'));
-    assert.equal(first.buildId, 'build-1');
+    assert.equal(first.buildId, buildOneId);
     assert.equal(first.reused, false);
     assert.equal(fs.existsSync(path.join(destination, 'header.bin')), true);
 
@@ -331,5 +350,35 @@ test('horizontal layout refuses a symlinked config file', (t) => {
     assert.equal(fs.readFileSync(target, 'utf8'), '[General]\nScreenLayout=vertical\n');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
+test('runtime integrity check refuses a tampered native executable even when the old marker remains', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-manifest-tamper-'));
+  const source = path.join(temp, 'bundled-runtime');
+  const destination = path.join(temp, 'user-data', 'runtime');
+  try {
+    makeRuntimeFixture(source, 'linux', 'known-build');
+    const first = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(verifyRuntimeManifest(destination, 'linux'), true);
+
+    fs.writeFileSync(path.join(destination, 'main'), 'altered executable with the same marker');
+    assert.equal(verifyRuntimeManifest(destination, 'linux'), false);
+    assert.equal(isRuntimeUsable(destination, 'linux'), false);
+
+    // Startup preparation repairs only the app-managed native payload from
+    // the trusted bundled copy and preserves local saves/config/extracted data.
+    fs.writeFileSync(path.join(destination, 'save.bin'), 'user save');
+    fs.writeFileSync(path.join(destination, 'sim_config.ini'), 'user config');
+    const repaired = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(repaired.reused, false);
+    assert.equal(verifyRuntimeManifest(destination, 'linux'), true);
+    assert.equal(fs.readFileSync(path.join(destination, 'main'), 'utf8'), 'fake native executable:known-build');
+    assert.equal(fs.readFileSync(path.join(destination, 'save.bin'), 'utf8'), 'user save');
+    assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user config');
+    assert.equal(first.buildId, repaired.buildId);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
   }
 });
