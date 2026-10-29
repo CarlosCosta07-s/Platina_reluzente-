@@ -98,9 +98,9 @@ O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e ex
 Linux:
 
 ```sh
-EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home" \\
-  ./build64/host/eidos \\
-  --rom "/caminho/local/Pokemon Black.nds" \\
+EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home" \
+  ./build64/host/eidos \
+  --rom "/caminho/local/Pokemon Black.nds" \
   --data-root "$HOME/.local/share/platina-reluzente/pokemon-black/extract"
 ```
 
