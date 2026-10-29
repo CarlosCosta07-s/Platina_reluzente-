@@ -82,9 +82,22 @@ ipcMain.handle('platina:import-rom', async () => {
 
   const sourceFile = await fs.promises.open(source, 'r');
   const header = Buffer.alloc(0x200);
-  try { await sourceFile.read(header, 0, header.length, 0); }
-  finally { await sourceFile.close(); }
-  if (!validateNdsHeader(header, stat.size)) {
+  let headerBytesRead = 0;
+  try {
+    while (headerBytesRead < header.length) {
+      const { bytesRead } = await sourceFile.read(
+        header,
+        headerBytesRead,
+        header.length - headerBytesRead,
+        headerBytesRead
+      );
+      if (bytesRead === 0) break;
+      headerBytesRead += bytesRead;
+    }
+  } finally {
+    await sourceFile.close();
+  }
+  if (headerBytesRead !== header.length || !validateNdsHeader(header, stat.size)) {
     return { canceled: false, ok: false, message: 'Esta compilação exige Pokémon Platinum USA Rev. 1 (código CPUE e campo ROM version 0x1E igual a 1). A ROM selecionada não corresponde à versão configurada.' };
   }
 
