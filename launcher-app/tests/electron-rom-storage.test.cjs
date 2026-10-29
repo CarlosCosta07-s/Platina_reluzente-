@@ -219,16 +219,48 @@ test('desktop recovery validates the ROM SHA-256 even when no temporary files re
   await fs.writeFile(store.destinationPath, corruptedRom);
   await fs.writeFile(store.metadataPath, JSON.stringify(metadata));
 
-  await assert.rejects(
-    recoverDesktopRom({
+  assert.equal(
+    await recoverDesktopRom({
       destinationPath: store.destinationPath,
       metadataPath: store.metadataPath
     }),
-    /não foi possível identificar com segurança/
+    false
   );
 
   assert.deepEqual(await fs.readFile(store.destinationPath), corruptedRom);
   assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
+});
+
+test('explicit ROM import can replace an unverified prior pair after staging a valid source', async (t) => {
+  const store = await makeStore(t);
+  await fs.mkdir(store.romDir, { recursive: true });
+  const expectedOldRom = Buffer.from('valid-ROM-content');
+  const corruptOldRom = Buffer.from('wrong-ROM-content');
+  const oldMetadata = {
+    name: 'old.nds',
+    size: expectedOldRom.length,
+    sha256: crypto.createHash('sha256').update(expectedOldRom).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'old-time'
+  };
+  const sourcePath = path.join(store.root, 'replacement.nds');
+  const newRom = Buffer.from('new-valid-rom-source');
+  await fs.writeFile(store.destinationPath, corruptOldRom);
+  await fs.writeFile(store.metadataPath, JSON.stringify(oldMetadata));
+  await fs.writeFile(sourcePath, newRom);
+
+  const metadata = await commitDesktopRom({
+    sourcePath,
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath,
+    metadata: { name: 'replacement.nds', size: newRom.length, importedAt: 'new-time' }
+  });
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), newRom);
+  assert.equal(metadata.sha256, await digest(store.destinationPath));
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
+  await assert.rejects(fs.access(store.destinationPath + '.previous'));
+  await assert.rejects(fs.access(store.metadataPath + '.previous'));
 });
 
 test('desktop recovery propagates permission errors instead of treating protected files as absent', async (t) => {
