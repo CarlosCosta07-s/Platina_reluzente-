@@ -46,6 +46,57 @@ test('runtime data status rejects missing or empty required game assets', () => 
   }
 });
 
+test('runtime rejects symlinked executables and required game assets', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-symlink-'));
+  const outsideFile = path.join(directory, 'outside.bin');
+  const outsideDirectory = path.join(directory, 'outside-data');
+  const runtime = path.join(directory, 'runtime');
+  fs.mkdirSync(runtime);
+  fs.writeFileSync(outsideFile, 'outside runtime file');
+  fs.chmodSync(outsideFile, 0o755);
+
+  try {
+    try {
+      fs.symlinkSync(outsideFile, path.join(runtime, 'main'), 'file');
+    } catch (error) {
+      if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+        t.skip('This platform does not permit creating symlinks for tests.');
+        return;
+      }
+      throw error;
+    }
+
+    assert.equal(findBundledExecutable(runtime, 'linux'), null);
+    fs.unlinkSync(path.join(runtime, 'main'));
+
+    const required = [
+      'header.bin',
+      'firmware.bin',
+      'wazaeffect/we.arc',
+      'battle/skill/waza_seq.narc'
+    ];
+    for (const relative of required) {
+      const destination = path.join(runtime, relative);
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.writeFileSync(destination, 'fixture');
+    }
+
+    fs.unlinkSync(path.join(runtime, 'header.bin'));
+    fs.symlinkSync(outsideFile, path.join(runtime, 'header.bin'), 'file');
+    assert.equal(hasRequiredRuntimeData(runtime), false);
+
+    fs.unlinkSync(path.join(runtime, 'header.bin'));
+    fs.writeFileSync(path.join(runtime, 'header.bin'), 'fixture');
+    fs.mkdirSync(outsideDirectory);
+    fs.writeFileSync(path.join(outsideDirectory, 'we.arc'), 'outside archive');
+    fs.rmSync(path.join(runtime, 'wazaeffect'), { recursive: true, force: true });
+    fs.symlinkSync(outsideDirectory, path.join(runtime, 'wazaeffect'), 'dir');
+    assert.equal(hasRequiredRuntimeData(runtime), false);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('ROM header validation checks a plausible Nintendo DS title, code and size', () => {
   const header = Buffer.alloc(0x200);
   header.write('POKEMON PLAT', 0, 'ascii');
