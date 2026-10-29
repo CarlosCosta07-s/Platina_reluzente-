@@ -169,6 +169,8 @@ class BlackRuntimeStagingTests(unittest.TestCase):
                 self.assertFalse(_is_windows_system_dll("vcruntime140.dll"))
                 self.assertTrue(_is_windows_system_dll("KERNEL32.DLL"))
                 self.assertTrue(_is_windows_system_dll("api-ms-win-core-file-l1-1-0.dll"))
+                self.assertTrue(_is_windows_system_dll("dbghelp.dll"))
+                self.assertTrue(_is_windows_system_dll("uuid.dll"))
                 self.assertFalse(_is_windows_system_dll("SDL3.dll"))
 
     def test_windows_dependency_closure_is_case_insensitive_across_dlls(self):
