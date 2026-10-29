@@ -15,12 +15,13 @@ const BUILD_INPUT_PATHS = [
 
 function nativeBuildRecipe(workflowText) {
   if (typeof workflowText !== 'string') throw new TypeError('Workflow text is required.');
-  const match = /^on:\s*$/m.exec(workflowText);
-  if (!match) throw new Error('Could not locate the native workflow trigger section.');
+  const lines = workflowText.split(/\r?\n/);
+  const index = lines.findIndex((line) => line.trim() === 'on:');
+  if (index < 0) throw new Error('Could not locate the native workflow trigger section.');
   // Concurrency and queue policy can change without changing the native build.
   // From "on:" onward, keep the workflow exact so the pinned source, toolchain,
   // compile, smoke-test, staging and upload steps must remain identical.
-  return workflowText.slice(match.index);
+  return lines.slice(index).join('\n');
 }
 
 function sameNativeBuildRecipe(candidateWorkflow, currentWorkflow) {
