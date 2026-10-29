@@ -4,7 +4,18 @@ const path = require('node:path');
 
 function fail(message) { throw new Error(message); }
 function copyDirectoryContents(source, destination) {
-  if (!fs.existsSync(source) || !fs.statSync(source).isDirectory()) fail('Expected directory is missing: ' + source);
+  let sourceStat;
+  try {
+    sourceStat = fs.lstatSync(source);
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+      fail('Expected directory is missing: ' + source);
+    }
+    throw error;
+  }
+  if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
+    fail('Expected a regular directory, not a symlink: ' + source);
+  }
   fs.mkdirSync(destination, { recursive: true });
   for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
@@ -36,7 +47,15 @@ function matchingBrace(text, openIndex) {
 }
 function verifyRuntimeManifest(runtimeData, requiredRuntimeFiles) {
   const root = path.resolve(runtimeData);
+  const rootStat = fs.lstatSync(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    fail('Runtime data root must be a regular directory: ' + root);
+  }
   const manifestPath = path.join(root, 'runtime-manifest.txt');
+  const manifestStat = fs.lstatSync(manifestPath);
+  if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
+    fail('Runtime manifest must be a regular file: ' + manifestPath);
+  }
   const raw = fs.readFileSync(manifestPath, 'utf8');
   const lines = raw.split(/\r?\n/);
   if (lines[lines.length - 1] === '') lines.pop();
