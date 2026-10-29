@@ -7,7 +7,7 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 O porte de Black será desenvolvido em paralelo ao de Platinum, sem misturar seus runtimes ou contratos de ROM. A etapa atual é a auditoria das bases públicas [aletheia](https://github.com/Project-Holon/aletheia) e [eidos](https://github.com/Project-Holon/eidos); ainda não há build de Black produzido por este repositório. O plano com dependências, riscos e critérios está em [POKEMON_BLACK_PORT.md](POKEMON_BLACK_PORT.md).
 
 - [x] Auditar as licenças e fixar revisões compatíveis de `aletheia` (`6c2aae879f123bcbc028cf6a8b7f8df614402ac8`) e `eidos` (`b79123f967980d1bb758161891205c03d606dec7`).
-- [ ] Executar o workflow de validação Black sem ROM, corrigir falhas e confirmar builds de host Windows x64/Linux x86-64.
+- [ ] Concluir o workflow de validação Black sem ROM, incluindo fechamento das dependências nativas staged para Windows x64/Linux x86-64; corrigir falhas antes de considerar o marco compilável validado.
 - [ ] Resolver a situação jurídica do código reconstruído de jogo antes de publicar executáveis Black.
 - [ ] Auditar licença, árvore de dependências, commits e condições de build do upstream antes de incorporá-lo.
 - [ ] Confirmar viabilidade de builds nativos Windows x64 e Linux x86-64, incluindo a transição de 32 para 64 bits se necessária.
