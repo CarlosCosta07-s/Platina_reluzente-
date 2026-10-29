@@ -88,7 +88,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           sdl_prefix="$(python3 tools/fetch_sdl.py --locate source --tag linux-x64)"
-          python3 tools/build64.py --build-dir build64 --release \
+          python3 tools/build64.py --build-dir build64 --fast --host-jobs 2 \
             --aletheia-root "$PWD/../aletheia" \
             --data-root "$PWD/no-game-data/extract/data" \
             --sdl3-prefix "$sdl_prefix" \
@@ -187,7 +187,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           gcc_bin="$PWD/.cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin"
-          python tools/build64.py --build-dir build64 --release \
+          python tools/build64.py --build-dir build64 --fast --host-jobs 2 \
             --aletheia-root "$(cygpath -m "$PWD/../aletheia")" \
             --data-root "$(cygpath -m "$PWD/no-game-data/extract/data")" \
             --cc "$gcc_bin/x86_64-w64-mingw32-gcc.exe" \
