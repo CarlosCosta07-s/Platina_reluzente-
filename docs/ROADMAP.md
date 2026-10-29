@@ -31,12 +31,27 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 
 ## Marco 2 — original + PT-BR
 
-- [x] Comparar localmente 462 entradas FAT das ROMs fornecidas.
-- [x] Identificar dez diferenças e separar sete recursos NARC localizados de dois utility.bin e uma entrada FAT não mapeada.
-- [x] Criar allowlist de sete NARC não executáveis para importação local, sem modificar a ROM.
-- [ ] Validar execução com os recursos originais depois de compilar o porte.
-- [ ] Importar os sete NARC PT-BR no diretório local do executável.
-- [ ] Testar acentos, fontes, menus, diálogos, tela de título, batalhas, eventos e save/load.
+### Decisão de arquitetura
+
+- A versão de execução continua sendo a ROM original Pokémon Platinum USA Rev. 1; o jogador não precisa selecionar nem manter uma ROM modificada.
+- O launcher terá um seletor de idioma antes da inicialização: **English (original)** e **Português (Brasil)**. A escolha ficará salva nas configurações locais do aplicativo.
+- A tradução será uma camada/pacote de recursos separado, aplicada a um ambiente de execução local específico para o idioma. A ROM de origem e os recursos-base originais não devem ser alterados.
+- O launcher deverá validar a versão e os hashes do pacote PT-BR, recusar pacotes incompletos/incompatíveis com uma mensagem clara e nunca fingir que o jogo foi traduzido se os recursos não estiverem disponíveis.
+- A alternância de idioma deverá preservar os dados de progresso e os arquivos de configuração compartilhados; isso precisa de teste real de salvar, mudar idioma e carregar.
+- O formato e a distribuição do pacote de tradução serão avaliados legalmente antes de qualquer inclusão em releases. ROMs e arquivos extraídos do jogo não serão colocados no Git ou nos artefatos públicos da CI.
+
+### Inventário e trabalho restante
+
+- [x] Comparar localmente 462 entradas FAT das ROMs de referência usadas na análise.
+- [x] Identificar dez diferenças e separar sete recursos NARC localizados de dois utility.bin e uma entrada FAT sem caminho conhecido.
+- [x] Definir allowlist dos sete recursos NARC não executáveis; os binários fora dessa lista continuam excluídos.
+- [ ] Refatorar o importador atual, que ainda espera uma fonte PT-BR e substitui arquivos no runtime, para criar/validar uma camada de tradução isolada sem modificar a base original.
+- [ ] Definir um manifesto versionado do pacote de idioma, com versão-base compatível, caminho permitido, tamanho e SHA-256 por recurso.
+- [ ] Adicionar ao launcher o seletor English/PT-BR e persistir a preferência em armazenamento local do aplicativo.
+- [ ] Aplicar os recursos PT-BR apenas ao ambiente de execução selecionado; manter intactos a ROM importada e os recursos originais.
+- [ ] Impedir inicialização em PT-BR quando o pacote não estiver instalado, for incompleto ou falhar na validação; apresentar uma mensagem clara em vez de voltar silenciosamente para inglês.
+- [ ] Validar execução com a ROM USA Rev. 1 e recursos originais antes de testar o pacote PT-BR.
+- [ ] Testar fontes, acentos, menus, diálogos, tela de título, batalhas, eventos, salvamento e carregamento; confirmar que alternar idioma não perde progresso.
 - [ ] Investigar separadamente diferenças fora da allowlist sem importar binários desconhecidos.
 
 ## Marco 3 — fidelidade e estabilidade
