@@ -76,6 +76,8 @@ Os testes do importador e do fixador de dependências não precisam de ROM:
 
 O launcher desktop encaminha agora a saída padrão e a saída de erro do executável nativo para um log persistente chamado `native-startup.log`, no diretório privado de dados do aplicativo, dentro de `logs`. O launcher mostra o caminho exato no status depois de iniciar o processo. Se nenhuma janela do jogo aparecer, abra esse log e procure mensagens de inicialização do SDL/OpenGL, arquivos ausentes ou falhas do runtime.
 
+Se o runtime precisar de um arquivo local que ainda não existe, a preparação nativa usa a ROM importada (`PLATINA_IMPORTED_ROM`) para tentar uma extração local **uma única vez**; em seguida tenta abrir o arquivo novamente. Se ele continuar ausente, a abertura falha e o log registra o caminho, em vez de abrir outro seletor de ROM ou repetir a chamada indefinidamente. A extração apenas prepara arquivos locais para o runtime; o jogo continua sendo o C/C++ nativo compilado e não executa um interpretador nem uma CPU DS emulada.
+
 A mensagem de sucesso do launcher significa somente que o sistema operacional criou o processo nativo; ela não comprova a tela de título nem a jogabilidade. A confirmação exige executar o jogo com a ROM USA Rev. 1 compatível e verificar a tela inicial e uma sessão mínima de jogo.
 
 ### Teste pré-ROM da interface no Linux
