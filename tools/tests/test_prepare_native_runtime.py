@@ -206,7 +206,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             source = self.make_source(root)
             original_main = source.read_text(encoding="utf-8")
             config = source.parent / "config" / "sim_config.c"
-            config.write_text("unknown upstream config implementation\\n", encoding="utf-8")
+            config.write_text("unknown upstream config implementation\n", encoding="utf-8")
 
             with self.assertRaises(RuntimePreparationError):
                 prepare_native_runtime(root)
@@ -214,6 +214,6 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(source.read_text(encoding="utf-8"), original_main)
             self.assertEqual(
                 config.read_text(encoding="utf-8"),
-                "unknown upstream config implementation\\n",
+                "unknown upstream config implementation\n",
             )
 

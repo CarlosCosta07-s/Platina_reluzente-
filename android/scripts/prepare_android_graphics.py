@@ -75,7 +75,7 @@ SHADER_PROLOGUE = (
 )
 CHECKED_DESKTOP_GL_LOADER = r'''#ifndef SDK_BUILD_ANDROID
   if (!gladLoadGLLoader(SDL_GL_GetProcAddress)) {
-    fprintf(stderr, "OpenGL function loader initialization failed.\\n");
+    fprintf(stderr, "OpenGL function loader initialization failed.\n");
     SDL_GL_DeleteContext(context);
     SDL_DestroyWindow(window);
     context = NULL;
