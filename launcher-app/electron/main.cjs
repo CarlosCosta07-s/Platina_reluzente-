@@ -88,9 +88,11 @@ async function readImportedBlackRom() {
 function blackRuntimeDirectory() {
   // The runtime is an internal resource of this app. It is never selected by
   // the player and is not launched through an external file picker.
+  // Keep runtime files in a child folder so staging never replaces the
+  // tracked README that documents this reserved resource slot.
   return app.isPackaged
-    ? path.join(process.resourcesPath, 'black-runtime')
-    : path.join(__dirname, '..', 'black-runtime');
+    ? path.join(process.resourcesPath, 'black-runtime', 'runtime')
+    : path.join(__dirname, '..', 'black-runtime', 'runtime');
 }
 async function readBundledBlackRuntime() {
   try {
