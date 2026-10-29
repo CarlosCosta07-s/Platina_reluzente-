@@ -108,8 +108,12 @@ ipcMain.handle('platina:launch-game', async () => {
   if (!rom) return { ok: false, message: 'Importe primeiro a ROM .nds.' };
   const root = runtimeRoot();
   const exe = findBundledExecutable(root, process.platform);
-  if (!exe) {
-    return { ok: false, message: 'Este pacote não contém o executável nativo. Baixe o pacote desktop completo mais recente.' };
+  const runtimeDataAvailable = hasRequiredRuntimeData(root);
+  if (!exe || !runtimeDataAvailable) {
+    return {
+      ok: false,
+      message: 'Este pacote desktop está incompleto: o executável nativo ou os recursos obrigatórios do jogo estão ausentes. Baixe o pacote completo mais recente.'
+    };
   }
   return new Promise((resolve) => {
     const child = spawn(exe, [], {
