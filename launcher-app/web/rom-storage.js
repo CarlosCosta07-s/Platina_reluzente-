@@ -27,8 +27,16 @@ export async function persistRomAtomically({
     try {
       await filesystem.stat(options(path));
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      const message = String(error && error.message ? error.message : error);
+      // A missing path is expected during first import and interrupted-write
+      // recovery. Permission, I/O, and other failures must not be mistaken for
+      // absence, otherwise replacement could proceed without protecting the
+      // existing valid ROM or backup.
+      if (/\\bENOENT\\b|no such file|file (?:does not exist|not found)|path (?:does not exist|not found)/i.test(message)) {
+        return false;
+      }
+      throw error;
     }
   }
 
