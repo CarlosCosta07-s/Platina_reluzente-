@@ -77,7 +77,7 @@ const NativeGame = registerPlugin('PlatinaGame');
       if (!result || result.canceled) return;
       if (!result.ok) throw new Error(result.message || 'Não foi possível importar a ROM.');
       state.romName = result.name; state.romSize = result.size; state.romImported = true;
-      localStorage.setItem('platinaRom', JSON.stringify({ name: result.name, size: result.size, sha256: result.sha256 }));
+      localStorage.setItem('platinaRom', JSON.stringify({ name: result.name, size: result.size, storedPath: result.path }));
       renderRom();
       setStatus('ROM validada e copiada para os dados privados do aplicativo.');
     } catch (error) { setStatus('Falha ao importar ROM: ' + error.message, true); }
