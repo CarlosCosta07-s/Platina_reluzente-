@@ -47,8 +47,11 @@ const NativeGame = registerPlugin('PlatinaGame');
     const header = new Uint8Array(await file.slice(0, 0x20).arrayBuffer());
     const title = String.fromCharCode(...header.slice(0, 12)).replace(/\0/g, '').trim();
     const code = String.fromCharCode(...header.slice(0x0c, 0x10));
+    const romVersion = header[0x1e];
     if (!title || !/^[A-Z0-9]{4}$/.test(code)) throw new Error('O cabeçalho não parece ser de uma ROM Nintendo DS válida.');
-    if (code !== 'CPUE') throw new Error('Esta compilação espera Pokémon Platinum USA (código CPUE). A ROM selecionada não corresponde ao jogo configurado.');
+    if (code !== 'CPUE' || romVersion !== 1) {
+      throw new Error('Esta compilação exige Pokémon Platinum USA Rev. 1 (código CPUE e campo ROM version 0x1E igual a 1). A ROM selecionada não corresponde à versão configurada.');
+    }
     if (header[0x1e] !== 1) throw new Error('Esta compilação exige Pokémon Platinum USA Rev. 1: o campo ROM version no cabeçalho (0x1E) deve ser 1.');
   }
   function toBase64(buffer) {
