@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch the pinned libntr simulator to read the ROM imported through the launcher."""
+"""Prepare the pinned native runtime, filesystem fallback, configuration and save path."""
 from __future__ import annotations
 
 import argparse
@@ -576,20 +576,40 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
             BACKUP_SAVE_PATH_INCLUDE_ORIGINAL, BACKUP_SAVE_PATH_INCLUDE_PATCHED, 1
         )
 
-    if current.count('fopen("save.bin",') != 5:
+    original_open_count = current.count('fopen("save.bin",')
+    previous_patch_open_count = current.count("fopen(CARDI_BACKUP_SAVE_FILE,")
+    if original_open_count == 5 and previous_patch_open_count == 0:
+        body_replacements = (
+            (BACKUP_READ_BODY_ORIGINAL, BACKUP_READ_BODY_PATCHED, "CARDi_ReadBackup"),
+            (BACKUP_WRITE_BODY_ORIGINAL, BACKUP_WRITE_BODY_PATCHED, "CARDi_WriteBackup"),
+            (BACKUP_WRITE_VERIFY_BODY_ORIGINAL, BACKUP_WRITE_VERIFY_BODY_PATCHED, "CARDi_WriteAndVerifyBackup"),
+        )
+    elif original_open_count == 0 and previous_patch_open_count == 5:
+        # Upgrade a checkout prepared by the earlier save-path-only patcher.
+        macro_read = BACKUP_READ_BODY_ORIGINAL.replace(
+            'fopen("save.bin",', "fopen(CARDI_BACKUP_SAVE_FILE,"
+        )
+        macro_write = BACKUP_WRITE_BODY_ORIGINAL.replace(
+            'fopen("save.bin",', "fopen(CARDI_BACKUP_SAVE_FILE,"
+        )
+        macro_write_verify = BACKUP_WRITE_VERIFY_BODY_ORIGINAL.replace(
+            'fopen("save.bin",', "fopen(CARDI_BACKUP_SAVE_FILE,"
+        )
+        body_replacements = (
+            (macro_read, BACKUP_READ_BODY_PATCHED, "CARDi_ReadBackup"),
+            (macro_write, BACKUP_WRITE_BODY_PATCHED, "CARDi_WriteBackup"),
+            (macro_write_verify, BACKUP_WRITE_VERIFY_BODY_PATCHED, "CARDi_WriteAndVerifyBackup"),
+        )
+    else:
         raise RuntimePreparationError(
-            "Expected exactly five original save.bin fopen call sites before backup I/O hardening."
+            "Expected five consistent save.bin call sites (upstream or previous save-path patch); "
+            f"found {original_open_count} upstream and {previous_patch_open_count} patched calls."
         )
 
-    replacements = (
-        (BACKUP_READ_BODY_ORIGINAL, BACKUP_READ_BODY_PATCHED, "CARDi_ReadBackup"),
-        (BACKUP_WRITE_BODY_ORIGINAL, BACKUP_WRITE_BODY_PATCHED, "CARDi_WriteBackup"),
-        (BACKUP_WRITE_VERIFY_BODY_ORIGINAL, BACKUP_WRITE_VERIFY_BODY_PATCHED, "CARDi_WriteAndVerifyBackup"),
-    )
-    for expected, hardened, label in replacements:
+    for expected, hardened, label in body_replacements:
         if current.count(expected) != 1:
             raise RuntimePreparationError(
-                f"Expected exactly one upstream {label} body in backup.h; refusing uncertain I/O patch."
+                f"Expected exactly one recognized {label} body in backup.h; refusing uncertain I/O patch."
             )
         current = current.replace(expected, hardened, 1)
 
@@ -739,9 +759,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         changed = prepare_native_runtime(args.source_root)
     except (OSError, RuntimePreparationError) as exc:
-        print(f"Native ROM-header preparation failed: {exc}", file=sys.stderr)
+        print(f"Native runtime preparation failed: {exc}", file=sys.stderr)
         return 2
-    print("ROM-header handoff patched." if changed else "ROM-header handoff already patched.")
+    print("Native runtime preparation patches applied." if changed else "Native runtime preparation already applied.")
     return 0
 
 
