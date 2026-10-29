@@ -274,10 +274,40 @@ def extract_localization(
                 )
             selected.append((relative_path, entry, effective_size))
 
+    if destination.is_symlink():
+        raise RomFormatError(f"Diretório de destino não pode ser link simbólico: {destination}.")
+    if destination.exists() and not destination.is_dir():
+        raise RomFormatError(f"Destino existe e não é diretório: {destination}.")
+
     output_paths = [
         (destination.joinpath(*path.parts), path, entry, effective_size)
         for path, entry, effective_size in selected
     ]
+
+    # Validate existing targets without creating any directories. A rejected
+    # ROM must not leave a new runtime directory or mutate paths through links.
+    if destination.exists():
+        for target, relative_path, _entry, _effective_size in output_paths:
+            current = destination
+            for component in relative_path.parts[:-1]:
+                current = current / component
+                if current.is_symlink():
+                    raise RomFormatError(
+                        f"Diretório de destino não pode ser link simbólico: {current}."
+                    )
+                if current.exists() and not current.is_dir():
+                    raise RomFormatError(
+                        f"Componente do destino não é diretório: {current}."
+                    )
+            if target.is_symlink():
+                raise RomFormatError(
+                    f"Arquivo de destino não pode ser link simbólico: {target}."
+                )
+            if target.exists() and not target.is_file():
+                raise RomFormatError(
+                    f"Destino já existe e não é arquivo regular: {target}."
+                )
+
     existing = [
         str(target)
         for target, _relative, _entry, _size in output_paths
@@ -289,50 +319,21 @@ def extract_localization(
             + "\n  ".join(existing)
         )
 
-    # Prepare every archive before touching the live runtime. If a write or
-    # replacement fails midway, restore all previously installed files so the
-    # game cannot be left with a mixture of old and new localization resources.
-    destination.mkdir(parents=True, exist_ok=True)
-
-    for target, relative_path, _entry, _effective_size in output_paths:
-        current = destination
-        for component in relative_path.parts[:-1]:
-            current = current / component
-            if current.is_symlink():
-                raise RomFormatError(
-                    f"Diretório de destino não pode ser link simbólico: {current}."
-                )
-            if current.exists():
-                if not current.is_dir():
-                    raise RomFormatError(
-                        f"Componente do destino não é diretório: {current}."
-                    )
-            else:
-                current.mkdir()
-        if target.is_symlink():
-            raise RomFormatError(
-                f"Arquivo de destino não pode ser link simbólico: {target}."
-            )
-        if target.exists() and not target.is_file():
-            raise RomFormatError(
-                f"Destino já existe e não é arquivo regular: {target}."
-            )
-
-    # Check once more after validating all paths so the force flag never
-    # silently overwrites files created by another process during validation.
-    existing = [str(target) for target, _relative, _entry, _size in output_paths if target.exists()]
-    if existing and not force:
-        raise FileExistsError(
-            "Arquivos de destino já existem; nada foi substituído. Use --force para sobrescrevê-los:\n  "
-            + "\n  ".join(existing)
-        )
-
-    transaction_root = Path(tempfile.mkdtemp(prefix=".ptbr-localization-", dir=destination))
+    # Stage beside the destination so every final rename remains on the same
+    # filesystem, but keep all staged bytes outside the live runtime tree.
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
+        raise RomFormatError(f"Destino deixou de ser um diretório seguro: {destination}.")
+    transaction_root = Path(
+        tempfile.mkdtemp(prefix=".ptbr-localization-", dir=destination.parent)
+    )
     staged_root = transaction_root / "staged"
     backup_root = transaction_root / "backup"
     written: list[dict[str, str | int | bool]] = []
     moved_backups: list[tuple[Path, Path]] = []
     installed_targets: list[Path] = []
+    created_directories: list[Path] = []
+    destination_created = False
 
     try:
         with rom_path.open("rb") as source:
@@ -371,17 +372,53 @@ def extract_localization(
                     "sha256": digest_text,
                 })
 
-        # Recheck the destinations immediately before the transaction starts.
+        # Validate and make the destination only after all bytes and hashes pass.
+        if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
+            raise RomFormatError(f"Destino deixou de ser um diretório seguro: {destination}.")
+        if not destination.exists():
+            destination.mkdir()
+            destination_created = True
+            created_directories.append(destination)
+
         for target, relative_path, _entry, _size in output_paths:
-            if target.is_symlink() or (target.exists() and not target.is_file()):
-                raise RomFormatError(f"Destino deixou de ser um arquivo regular: {target}.")
-            if target.exists() and not force:
-                raise FileExistsError(
-                    f"O destino foi criado durante a importação; nada foi substituído: {target}"
+            current = destination
+            for component in relative_path.parts[:-1]:
+                current = current / component
+                if current.is_symlink():
+                    raise RomFormatError(
+                        f"Diretório de destino não pode ser link simbólico: {current}."
+                    )
+                if current.exists():
+                    if not current.is_dir():
+                        raise RomFormatError(
+                            f"Componente do destino não é diretório: {current}."
+                        )
+                else:
+                    current.mkdir()
+                    created_directories.append(current)
+            if target.is_symlink():
+                raise RomFormatError(
+                    f"Arquivo de destino não pode ser link simbólico: {target}."
+                )
+            if target.exists() and not target.is_file():
+                raise RomFormatError(
+                    f"Destino já existe e não é arquivo regular: {target}."
                 )
 
-        # Back up all old files first, then install all staged files. Every
-        # rename stays under destination, keeping it on the same filesystem.
+        # Recheck destinations at the last responsible moment; another process
+        # must not cause --force-free imports to overwrite newly created files.
+        existing = [
+            str(target)
+            for target, _relative, _entry, _size in output_paths
+            if target.exists()
+        ]
+        if existing and not force:
+            raise FileExistsError(
+                "Arquivos de destino apareceram durante a importação; nada foi substituído:\n  "
+                + "\n  ".join(existing)
+            )
+
+        # Back up all prior files first, then install the fully validated set.
         for target, relative_path, _entry, _size in output_paths:
             if target.exists():
                 backup_target = backup_root.joinpath(*relative_path.parts)
@@ -421,6 +458,13 @@ def extract_localization(
             ) from install_error
 
         shutil.rmtree(transaction_root, ignore_errors=True)
+        # A failed first install should restore the filesystem to its prior
+        # shape too, including empty folders created solely for this import.
+        for directory in reversed(created_directories):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
         raise
 
     shutil.rmtree(transaction_root, ignore_errors=True)

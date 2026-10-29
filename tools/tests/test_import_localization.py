@@ -233,6 +233,28 @@ class LocalizationImportTests(unittest.TestCase):
                 _extract_synthetic(rom, destination, file_ids, file_data)
             self.assertFalse(destination.exists())
 
+    def test_destination_root_symlink_is_rejected_without_touching_external_directory(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            outside = root / "outside-runtime"
+            destination = root / "runtime-link"
+            rom.write_bytes(rom_data)
+            outside.mkdir()
+            sentinel = outside / "keep.txt"
+            sentinel.write_bytes(b"do not touch")
+            try:
+                destination.symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+
+            with self.assertRaisesRegex(RomFormatError, "link simbólico"):
+                _extract_synthetic(rom, destination, file_ids, file_data)
+
+            self.assertEqual(sentinel.read_bytes(), b"do not touch")
+            self.assertTrue(destination.is_symlink())
+
     def test_wrong_localization_hash_fails_before_writing(self) -> None:
         rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
