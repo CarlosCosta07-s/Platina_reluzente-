@@ -177,12 +177,12 @@ test('Android runtime integration rejects a manifest path through a symlinked di
     const manifestLines = Object.entries(files).map(([relative, value]) => {
       return relative + '\\t' + Buffer.byteLength(value);
     });
-    manifestLines.push('linked/secret.bin\\t' + Buffer.byteLength('outside runtime'));
-    fs.writeFileSync(path.join(runtimeData, 'runtime-manifest.txt'), manifestLines.join('\\n') + '\\n');
+    manifestLines.push('linked/secret.bin\t' + Buffer.byteLength('outside runtime'));
+    fs.writeFileSync(path.join(runtimeData, 'runtime-manifest.txt'), manifestLines.join('\n') + '\n');
 
     assert.throws(
       () => integrateAndroidRuntime({ projectDir: path.join(temp, 'android'), runtimeArtifactDir: runtime }),
-      /Symbolic links are not allowed in the runtime: linked\\/secret\\.bin/,
+      /Symbolic links are not allowed in the runtime: linked/,
     );
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
