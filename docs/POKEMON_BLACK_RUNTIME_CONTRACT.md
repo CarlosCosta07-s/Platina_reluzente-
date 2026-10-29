@@ -8,7 +8,7 @@
 2. **Identidade própria do jogo.** O identificador interno é `pokemon-black`; não reutilizar `ORIGINAL_ROM_SHA1`, os caminhos `roms/current.nds`, `runtime/` ou qualquer estado de Platinum.
 3. **Validar a ROM antes de executar.** O alvo documentado no par de commits fixados é Pokémon Black USA/Europe NDSi Enhanced, SHA-1 `26ad0b9967aa279c4a266ee69f52b9b2332399a5`, tamanho `268435456` bytes. A validação deve comparar o hash SHA-1 integral da imagem importada, além de checar extensão, tamanho e leitura. O runtime Eidos também valida a imagem durante `--rom`; a verificação do launcher não substitui essa validação.
 4. **Não abrir dois seletores.** Depois de o launcher importar e validar a ROM, passe o caminho privado da cópia importada por `--rom`. O Eidos tem seu próprio fluxo de primeira execução, mas `--rom` permite que o runtime faça a extração sem pedir que o usuário selecione o mesmo arquivo de novo.
-5. **Dados isolados.** Passe explicitamente `--data-root` para uma pasta de extração dedicada ao Black e defina `EIDOS_HOME` para uma pasta de configuração também dedicada. Não usar a pasta de trabalho, o diretório de dados do Platinum ou o diretório do pacote como destino de dados do jogo.
+5. **Dados e saves isolados.** Passe explicitamente `--data-root` para uma pasta de extração dedicada ao Black e defina `EIDOS_HOME` para a configuração do Eidos. Isso, sozinho, não isola os saves: a revisão fixada usa `APPDATA\eidos\saves` no Windows e `XDG_DATA_HOME/eidos/saves` no Linux. Ao iniciar o processo filho, defina `APPDATA` (Windows) ou `XDG_DATA_HOME` (Linux) para uma raiz privada do Black.
 6. **Não confundir `spawn` com prontidão.** Criar o processo só confirma que o sistema operacional conseguiu iniciá-lo. O estado “jogo iniciado” não deve afirmar que a tela de título apareceu sem um sinal de prontidão ou validação visual.
 7. **Logs sem dados protegidos.** Guardar stdout/stderr num log específico do Black. Logs de erro podem mostrar caminhos locais; revisar/redigir esses caminhos antes de compartilhar. Nunca anexar ROM, saves ou recursos extraídos ao relatório.
 
@@ -18,7 +18,8 @@
 |---|---|---|
 | ROM privada importada | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\roms\current.nds` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/roms/current.nds` (ou `~/.local/share/platina-reluzente/pokemon-black/roms/current.nds`) |
 | Dados extraídos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\extract` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/extract` (ou `~/.local/share/platina-reluzente/pokemon-black/extract`) |
-| Home/config Eidos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\eidos-home` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/eidos-home` (ou `~/.local/share/platina-reluzente/pokemon-black/eidos-home`) |
+| Home/config Eidos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\eidos-home` | `$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home` |
+| Saves Eidos (diretório privado do processo) | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\process-appdata\eidos\saves` | `$HOME/.local/share/platina-reluzente/pokemon-black/process-data/eidos/saves` |
 | Log do launcher | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\logs\native-startup.log` | `$XDG_STATE_HOME/platina-reluzente/pokemon-black/native-startup.log` ou pasta de logs dos dados locais |
 
 Os caminhos acima são o contrato proposto para a integração futura, não uma afirmação de que o launcher já os cria. Resolver e normalizar os caminhos uma vez, validar permissões e diretórios antes de importar, e não escrever nada na raiz do repositório.
@@ -38,6 +39,7 @@ A chamada do processo segue este formato, após a validação da ROM e a criaç�
 Windows (PowerShell):
 ```powershell
 $env:EIDOS_HOME = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\eidos-home"
+$env:APPDATA = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\process-appdata"
 $eidosArgs = @(
   "--rom", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\roms\current.nds"),
   "--data-root", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\extract")
@@ -48,12 +50,13 @@ $eidosArgs = @(
 Linux:
 ```sh
 export EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home"
+export XDG_DATA_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/process-data"
 ./build64/host/eidos \
   --rom "$HOME/.local/share/platina-reluzente/pokemon-black/roms/current.nds" \
   --data-root "$HOME/.local/share/platina-reluzente/pokemon-black/extract"
 ```
 
-No launcher Electron, use `spawn(executable, args, { cwd, env, shell: false, stdio })`, passando os argumentos como array (nunca concatenando uma linha de shell). Defina `cwd` para uma pasta adequada ao runtime local e mantenha o log de Black separado. Um caminho de ROM com espaços deve funcionar sem aspas manuais dentro dos argumentos.
+Na revisão Eidos fixada, `EIDOS_HOME` controla a configuração e a instalação padrão, mas o código de saves usa variáveis separadas (`sdk/plat_save.c`). No launcher Electron, crie e valide também as raízes `APPDATA`/`XDG_DATA_HOME` antes de `spawn(executable, args, { cwd, env, shell: false, stdio })`. Passe argumentos como array, defina `cwd` para uma pasta adequada ao runtime local e mantenha o log de Black separado. Um caminho de ROM com espaços deve funcionar sem aspas manuais dentro dos argumentos.
 
 ## Critérios antes de habilitar o cartão Black
 
