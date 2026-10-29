@@ -395,7 +395,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertNotIn(CARD_IDENTIFY_BACKUP_ORIGINAL, card_content)
             self.assertIn("CARDi_IdentifyBackupCore2(type);", CARD_IDENTIFY_BACKUP_PATCHED)
             self.assertIn("CARDi_EndTask(&cardi_common);", CARD_IDENTIFY_BACKUP_PATCHED)
-            self.assertIn("#else\\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertIn("#else\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
