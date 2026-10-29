@@ -148,7 +148,7 @@ test('Android runtime integration rejects a runtime asset with the wrong manifes
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
-test('Android runtime integration rejects a manifest path through a symlinked directory', () => {
+test('Android runtime integration rejects a manifest path through a symlinked directory', (t) => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-android-symlink-manifest-'));
   try {
     const runtime = path.join(temp, 'native-artifact');
@@ -172,7 +172,15 @@ test('Android runtime integration rejects a manifest path through a symlinked di
       fs.writeFileSync(path.join(runtimeData, relative), value);
     }
     fs.writeFileSync(path.join(external, 'secret.bin'), 'outside runtime');
-    fs.symlinkSync(external, path.join(runtimeData, 'linked'), 'dir');
+    try {
+      fs.symlinkSync(external, path.join(runtimeData, 'linked'), 'dir');
+    } catch (error) {
+      if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+        t.skip('This platform does not permit creating symlinks for tests.');
+        return;
+      }
+      throw error;
+    }
 
     const manifestLines = Object.entries(files).map(([relative, value]) => {
       return relative + '\\t' + Buffer.byteLength(value);
