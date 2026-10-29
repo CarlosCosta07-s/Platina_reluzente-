@@ -60,7 +60,7 @@ npm install
 npm run build:windows
 ```
 
-O staging lê o runtime local em `vendor/pokeplatinum-native/build_linux/pokeplatinum` ou `build_win64/pokeplatinum`, valida os arquivos essenciais e cria `launcher-app/runtime`. Não inclui ROMs, patches, saves ou configurações pessoais. O diretório gerado fica ignorado pelo Git; não o adicione manualmente ao repositório nem o publique como artefato. A compilação de uma plataforma não gera um executável para a outra.
+O staging lê o build em `vendor/pokeplatinum-native/build_linux/pokeplatinum` ou `build_win64/pokeplatinum` e cria `launcher-app/runtime` com apenas o executável portátil e bibliotecas: a AppImage nativa renomeada para `main` no Linux, ou `main.exe` mais DLLs no Windows. Os arquivos de jogo extraídos, firmware, NARC, ROMs, patches, saves e configurações pessoais não são incluídos. Na primeira execução, com uma ROM Rev. 1 importada pelo launcher, o runtime extrai os recursos necessários para a pasta gravável privada do usuário. O diretório gerado fica ignorado pelo Git. A compilação de uma plataforma não gera um executável para a outra.
 
 ## Testes de manutenção
 
