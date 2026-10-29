@@ -67,8 +67,14 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
     fs.readFileSync(path.join(destinationRoot, 'launcher-runtime-version.txt'), 'utf8').trim(),
     result.buildId
   );
-  assert.notEqual(result.buildId, '');
+  assert.match(result.buildId, /^[a-f0-9]{64}$/);
   assert.notEqual(fs.statSync(path.join(destinationRoot, 'main')).mode & 0o111, 0);
+  const manifest = JSON.parse(fs.readFileSync(path.join(destinationRoot, 'launcher-runtime-manifest.json'), 'utf8'));
+  assert.equal(manifest.schemaVersion, 1);
+  assert.equal(manifest.platform, 'linux');
+  assert.equal(manifest.buildId, result.buildId);
+  assert.deepEqual(manifest.files.map((entry) => entry.path), ['main']);
+  assert.equal(manifest.files[0].sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(destinationRoot, 'main'))).digest('hex'));
 });
 
 test('stages a Windows runtime with main.exe without requiring Unix executable bits', (t) => {
@@ -85,6 +91,10 @@ test('stages a Windows runtime with main.exe without requiring Unix executable b
   assert.equal(fs.existsSync(path.join(destinationRoot, 'SDL2.dll')), true);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'header.bin')), false);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'wazaeffect', 'we.arc')), false);
+  const manifest = JSON.parse(fs.readFileSync(path.join(destinationRoot, 'launcher-runtime-manifest.json'), 'utf8'));
+  assert.equal(manifest.platform, 'windows');
+  assert.equal(manifest.buildId, result.buildId);
+  assert.deepEqual(manifest.files.map((entry) => entry.path), ['SDL2.dll', 'main.exe']);
 });
 
 test('refuses to stage a Windows runtime that contains a ROM or patch and preserves the previous destination', (t) => {
