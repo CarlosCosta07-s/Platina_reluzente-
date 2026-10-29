@@ -249,7 +249,7 @@ public class PlatinaGamePlugin extends Plugin {
 
     private boolean isSafeRuntimePath(String relativePath) {
         if (relativePath == null || relativePath.isEmpty() || relativePath.startsWith("/")
-                || relativePath.contains("\\\\") || relativePath.indexOf((char) 0) >= 0) {
+                || relativePath.indexOf((char) 92) >= 0 || relativePath.indexOf((char) 0) >= 0) {
             return false;
         }
         for (String component : relativePath.split("/", -1)) {
