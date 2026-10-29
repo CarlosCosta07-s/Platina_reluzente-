@@ -116,7 +116,6 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
 const GAME_DATA_PATHS_FILE = 'platinum-data-paths.txt';
 const REQUIRED_EXTRACTED_PATHS = [
   'header.bin',
-  'firmware.bin',
   'wazaeffect/we.arc',
   'battle/skill/waza_seq.narc'
 ];
