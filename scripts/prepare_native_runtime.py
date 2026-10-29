@@ -162,11 +162,65 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     if (manifest.bad() || paths.size() != expectedCount) return false;
 
     const std::vector<std::string> requiredRootFiles = {
-      "header.bin", "wazaeffect/we.arc", "battle/skill/waza_seq.narc"
+      "header.bin", "arm9.bin", "arm7.bin", "arm9ovt.bin", "arm7ovt.bin",
+      "banner.bin", "fnt.bin", "fat.bin", "rsasig.bin",
+      "wazaeffect/we.arc", "battle/skill/waza_seq.narc"
     };
     for (const std::string &required : requiredRootFiles) {
       if (!std::binary_search(paths.begin(), paths.end(), required)) return false;
     }
+    return true;
+  };
+
+  // The extractor also writes ARM7/ARM9 overlay files whose exact numeric
+  // names are recorded inside the imported ROM, not in filesys.csv. Include
+  // every discovered overlay in the integrity cache, and require both groups
+  // after a successful extraction. A partial cache then fails by entry count.
+  const auto collectOverlayPaths = [&](std::vector<std::string> &paths, bool requireAll) {
+    const auto isOverlayFileName = [](const std::string &name, const std::string &prefix) {
+      const std::string stem = prefix + "_";
+      if (name.compare(0, stem.size(), stem) != 0 ||
+          name.size() <= stem.size() + 4 ||
+          name.compare(name.size() - 4, 4, ".bin") != 0) return false;
+      const std::size_t digitsEnd = name.size() - 4;
+      for (std::size_t index = stem.size(); index < digitsEnd; ++index) {
+        if (name[index] < '0' || name[index] > '9') return false;
+      }
+      return digitsEnd > stem.size();
+    };
+
+    const auto collectOne = [&](const std::string &directoryName,
+                                const std::string &prefix) {
+      std::error_code directoryError;
+      const auto directoryStatus = std::filesystem::symlink_status(
+          std::filesystem::path(directoryName), directoryError);
+      if (directoryError == std::errc::no_such_file_or_directory) return !requireAll;
+      if (directoryError || std::filesystem::is_symlink(directoryStatus) ||
+          !std::filesystem::is_directory(directoryStatus)) return false;
+
+      std::error_code iteratorError;
+      std::filesystem::directory_iterator iterator(directoryName, iteratorError);
+      const std::filesystem::directory_iterator end;
+      if (iteratorError) return false;
+      std::size_t count = 0;
+      for (; iterator != end; iterator.increment(iteratorError)) {
+        if (iteratorError) return false;
+        const std::string name = iterator->path().filename().string();
+        if (!isOverlayFileName(name, prefix)) return false;
+        const std::string relativeName = directoryName + "/" + name;
+        std::uint64_t fileSize = 0;
+        std::uint32_t crc32 = 0;
+        if (!inspectFileCrc32(relativeName, fileSize, crc32) || fileSize == 0) return false;
+        paths.push_back(relativeName);
+        ++count;
+      }
+      if (iteratorError) return false;
+      return !requireAll || count > 0;
+    };
+
+    if (!collectOne("overlay9", "overlay9") ||
+        !collectOne("overlay7", "overlay7")) return false;
+    std::sort(paths.begin(), paths.end());
     return true;
   };
 
@@ -180,10 +234,18 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       }
       std::error_code sizeError;
       const std::uintmax_t fileSize = std::filesystem::file_size(path, sizeError);
+      const bool requiredCoreFileIsEmpty =
+          ((relativeName == "arm9.bin" || relativeName == "arm7.bin" ||
+            relativeName == "arm9ovt.bin" || relativeName == "arm7ovt.bin" ||
+            relativeName == "banner.bin" || relativeName == "fnt.bin" ||
+            relativeName == "fat.bin" || relativeName == "rsasig.bin") && fileSize == 0);
       if (sizeError ||
           (relativeName == "header.bin" && fileSize < 0x4000) ||
+          requiredCoreFileIsEmpty ||
           (relativeName == "wazaeffect/we.arc" && fileSize == 0) ||
-          (relativeName == "battle/skill/waza_seq.narc" && fileSize == 0)) {
+          (relativeName == "battle/skill/waza_seq.narc" && fileSize == 0) ||
+          ((relativeName.rfind("overlay9/", 0) == 0 ||
+            relativeName.rfind("overlay7/", 0) == 0) && fileSize == 0)) {
         if (missingPath != NULL) *missingPath = relativeName + " (tamanho inválido)";
         return false;
       }
@@ -430,9 +492,14 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     }
     const std::string romSha256(managedRomSha256);
 
-    std::vector<std::string> expectedDataPaths;
-    if (!loadExpectedDataPaths(expectedDataPaths)) {
+    std::vector<std::string> baseDataPaths;
+    if (!loadExpectedDataPaths(baseDataPaths)) {
       fprintf(stderr, "[Platina] The packaged Platinum data-path manifest is missing or invalid. Rebuild the desktop package.\n");
+      return 4;
+    }
+    std::vector<std::string> expectedDataPaths = baseDataPaths;
+    if (!collectOverlayPaths(expectedDataPaths, false)) {
+      fprintf(stderr, "[Platina] The local overlay directories contain unsafe or unexpected entries.\n");
       return 4;
     }
 
@@ -455,6 +522,11 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
         return 3;
       }
 
+      expectedDataPaths = baseDataPaths;
+      if (!collectOverlayPaths(expectedDataPaths, true)) {
+        fprintf(stderr, "[Platina] Extraction did not produce valid ARM7/ARM9 overlay files.\n");
+        return 4;
+      }
       std::string missingDataPath;
       if (!validateExtractedData(expectedDataPaths, &missingDataPath)) {
         fprintf(stderr, "[Platina] Extractor returned success, but required local data is missing/corrupted: %s\n",
