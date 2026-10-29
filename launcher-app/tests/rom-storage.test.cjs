@@ -88,6 +88,26 @@ test('does not mistake a storage permission error for a missing previous ROM', a
   assert.equal(filesystem.writeOptions.length, 0);
 });
 
+test('allows a first import when the ROM directory does not exist yet', async () => {
+  const { persistRomAtomically } = await loadPersistence();
+  const filesystem = memoryFilesystem();
+  const originalStat = filesystem.stat.bind(filesystem);
+  filesystem.stat = async (options) => {
+    if (options.path === 'roms/current.nds') {
+      throw new Error('Directory does not exist: roms');
+    }
+    return originalStat(options);
+  };
+
+  const rom = Buffer.from('new-rom-data');
+  const result = await persistRomAtomically({
+    ...common, filesystem, file: makeFile(rom)
+  });
+
+  assert.equal(result.path, 'roms/current.nds');
+  assert.deepEqual(filesystem.files.get('roms/current.nds'), rom);
+});
+
 test('writes Base64 chunks as binary and replaces the ROM only after completion', async () => {
   const { persistRomAtomically } = await loadPersistence();
   const oldRom = Buffer.from('previous-valid-rom');
