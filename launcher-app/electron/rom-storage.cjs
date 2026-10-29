@@ -30,14 +30,18 @@ async function cleanupBestEffort(paths) {
   await Promise.allSettled(paths.map((filePath) => removeIfPresent(filePath)));
 }
 
-function sha256File(filePath) {
+function hashFile(filePath, algorithm) {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
+    const hash = crypto.createHash(algorithm);
     const stream = createReadStream(filePath);
     stream.on('data', (chunk) => hash.update(chunk));
     stream.once('error', reject);
     stream.once('end', () => resolve(hash.digest('hex')));
   });
+}
+
+function sha256File(filePath) {
+  return hashFile(filePath, 'sha256');
 }
 
 async function matchesMetadata(romPath, metadataPath) {
@@ -155,9 +159,13 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
   );
 }
 
-async function commitDesktopRom({ sourcePath, destinationPath, metadataPath, metadata }) {
+async function commitDesktopRom({ sourcePath, destinationPath, metadataPath, metadata, expectedSha1 }) {
   if (!sourcePath || !destinationPath || !metadataPath || !metadata || typeof metadata.name !== 'string') {
     throw new TypeError('Origem, destino, metadados e nome da ROM são obrigatórios.');
+  }
+  if (expectedSha1 !== undefined
+      && (typeof expectedSha1 !== 'string' || !/^[a-f0-9]{40}$/i.test(expectedSha1))) {
+    throw new TypeError('O SHA-1 esperado deve conter exatamente 40 dígitos hexadecimais.');
   }
 
   const romDirectory = path.dirname(destinationPath);
@@ -179,17 +187,28 @@ async function commitDesktopRom({ sourcePath, destinationPath, metadataPath, met
     }
 
     await fs.copyFile(sourcePath, romStaging);
-    const [stagedStat, sourceHash, stagedHash] = await Promise.all([
-      fs.stat(romStaging), sha256File(sourcePath), sha256File(romStaging)
+    const [stagedStat, sourceHash, stagedHash, stagedSha1] = await Promise.all([
+      fs.stat(romStaging),
+      sha256File(sourcePath),
+      sha256File(romStaging),
+      expectedSha1 !== undefined ? hashFile(romStaging, 'sha1') : Promise.resolve(null)
     ]);
     if (!stagedStat.isFile() || stagedStat.size !== sourceStat.size || sourceHash !== stagedHash) {
       throw new Error('A cópia temporária da ROM não corresponde ao arquivo de origem.');
+    }
+    if (expectedSha1 !== undefined && stagedSha1 !== expectedSha1.toLowerCase()) {
+      throw new Error(
+        'A imagem não corresponde à ROM original esperada. SHA-1 esperado: '
+        + expectedSha1.toLowerCase() + '; recebido: ' + stagedSha1
+        + '. Nenhuma ROM foi instalada.'
+      );
     }
 
     const committedMetadata = {
       ...metadata,
       size: stagedStat.size,
       sha256: stagedHash,
+      ...(stagedSha1 ? { sha1: stagedSha1 } : {}),
       storedName: path.basename(destinationPath)
     };
     await fs.writeFile(metadataStaging, JSON.stringify(committedMetadata, null, 2), 'utf8');
