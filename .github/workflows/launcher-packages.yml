@@ -120,10 +120,13 @@ jobs:
           run-id: ${{ needs.verify-platform-builds.outputs.desktop_run_id }}
           name: platina-reluzente-windows-x64
           path: launcher-app/runtime
-      - name: Verify included executable
+      - name: Verify executable and stamp runtime version
         shell: pwsh
+        env:
+          RUNTIME_BUILD_ID: ${{ needs.verify-platform-builds.outputs.head_sha }}
         run: |
           if (-not (Test-Path 'launcher-app/runtime/main.exe')) { throw 'main.exe missing; refusing to package a launcher that asks users to select an executable.' }
+          Set-Content -NoNewline -Encoding ascii -Path 'launcher-app/runtime/launcher-runtime-version.txt' -Value $env:RUNTIME_BUILD_ID
       - name: Install launcher dependencies
         working-directory: launcher-app
         run: npm install --no-audit --no-fund
@@ -167,6 +170,7 @@ jobs:
           test -s launcher-app/runtime/main
           chmod +x launcher-app/runtime/main
           test -x launcher-app/runtime/main
+          printf '%s\n' '${{ needs.verify-platform-builds.outputs.head_sha }}' > launcher-app/runtime/launcher-runtime-version.txt
       - name: Install launcher dependencies
         working-directory: launcher-app
         run: npm install --no-audit --no-fund

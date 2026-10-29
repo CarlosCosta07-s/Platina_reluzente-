@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, validateNdsHeader } = require('./runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, prepareWritableRuntime, validateNdsHeader } = require('./runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
 
@@ -128,15 +128,28 @@ ipcMain.handle('platina:launch-game', async () => {
       message: 'Este pacote desktop está incompleto: o executável nativo ou os recursos obrigatórios do jogo estão ausentes. Baixe o pacote completo mais recente.'
     };
   }
+  let writableRuntime;
+  try {
+    writableRuntime = prepareWritableRuntime(
+      root,
+      path.join(app.getPath('userData'), 'runtime'),
+      process.platform
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message: 'Não foi possível preparar a pasta gravável do jogo: ' + error.message
+    };
+  }
   return new Promise((resolve) => {
-    const child = spawn(exe, [], {
-      cwd: root, detached: true, stdio: 'ignore', shell: false, windowsHide: false,
+    const child = spawn(writableRuntime.executable, [], {
+      cwd: writableRuntime.root, detached: true, stdio: 'ignore', shell: false, windowsHide: false,
       env: { ...process.env, PLATINA_IMPORTED_ROM: rom.filePath }
     });
     child.once('error', (error) => resolve({ ok: false, message: 'Falha ao iniciar o executável nativo: ' + error.message }));
     child.once('spawn', () => {
       child.unref();
-      resolve({ ok: true, message: 'O executável nativo incluído no pacote foi iniciado.' });
+      resolve({ ok: true, message: 'O executável nativo foi iniciado a partir do armazenamento gravável do usuário.' });
     });
   });
 });

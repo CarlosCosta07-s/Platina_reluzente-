@@ -69,6 +69,175 @@ function hasRequiredRuntimeData(runtimeRoot) {
   return true;
 }
 
+
+const RUNTIME_VERSION_FILE = 'launcher-runtime-version.txt';
+
+function runtimeBuildId(runtimeRoot, platform) {
+  const versionPath = path.join(runtimeRoot, RUNTIME_VERSION_FILE);
+  try {
+    const stat = fs.lstatSync(versionPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error('Runtime build marker is not a regular file: ' + versionPath);
+    }
+    const value = fs.readFileSync(versionPath, 'utf8').trim();
+    if (!value) throw new Error('Runtime build marker is empty: ' + versionPath);
+    return value;
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error;
+    const executable = findBundledExecutable(runtimeRoot, platform);
+    if (!executable) throw new Error('Cannot fingerprint a runtime without its native executable.');
+    const stat = fs.lstatSync(executable);
+    return 'local-' + platform + '-' + stat.size + '-' + Math.trunc(stat.mtimeMs);
+  }
+}
+
+function assertRuntimeTreeHasNoSymlinks(root) {
+  const absoluteRoot = path.resolve(root);
+  const rootStat = fs.lstatSync(absoluteRoot);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    throw new Error('Runtime root must be a real directory: ' + absoluteRoot);
+  }
+
+  function visit(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const fullPath = path.join(directory, entry.name);
+      const stat = fs.lstatSync(fullPath);
+      if (stat.isSymbolicLink()) {
+        throw new Error('Symbolic links are not allowed in the runtime tree: ' + fullPath);
+      }
+      if (stat.isDirectory()) visit(fullPath);
+      else if (!stat.isFile()) {
+        throw new Error('Unsupported entry in runtime tree: ' + fullPath);
+      }
+    }
+  }
+
+  visit(absoluteRoot);
+}
+
+function runtimeIsUsable(runtimeRoot, platform) {
+  try {
+    assertRuntimeTreeHasNoSymlinks(runtimeRoot);
+    return Boolean(findBundledExecutable(runtimeRoot, platform) && hasRequiredRuntimeData(runtimeRoot));
+  } catch {
+    return false;
+  }
+}
+
+function copyRuntimeTreeContents(source, destination) {
+  fs.mkdirSync(destination, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name);
+    const to = path.join(destination, entry.name);
+    const stat = fs.lstatSync(from);
+    if (stat.isSymbolicLink()) {
+      throw new Error('Symbolic links are not allowed in the runtime tree: ' + from);
+    }
+    if (stat.isDirectory()) {
+      copyRuntimeTreeContents(from, to);
+      fs.utimesSync(to, stat.atime, stat.mtime);
+    } else if (stat.isFile()) {
+      fs.copyFileSync(from, to);
+      fs.chmodSync(to, stat.mode & 0o777);
+      fs.utimesSync(to, stat.atime, stat.mtime);
+    } else {
+      throw new Error('Unsupported entry in runtime tree: ' + from);
+    }
+  }
+}
+
+/**
+ * Copy the bundled runtime into per-user writable storage before launch.
+ * The native engine extracts assets and stores configuration relative to its
+ * current working directory, which may be read-only inside an AppImage or an
+ * application installed under a protected system directory.
+ */
+function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.platform) {
+  const source = path.resolve(sourceRoot);
+  const destination = path.resolve(destinationRoot);
+  if (source === destination) {
+    throw new Error('Bundled and writable runtime directories must be different.');
+  }
+
+  assertRuntimeTreeHasNoSymlinks(source);
+  const sourceExecutable = findBundledExecutable(source, platform);
+  if (!sourceExecutable || !hasRequiredRuntimeData(source)) {
+    throw new Error('The bundled runtime is missing its executable or required game assets.');
+  }
+  const sourceBuildId = runtimeBuildId(source, platform);
+  const parent = path.dirname(destination);
+  const staging = destination + '.staging';
+  const previous = destination + '.previous';
+  fs.mkdirSync(parent, { recursive: true });
+
+  // Recover the last committed copy before starting another replacement.
+  if (fs.existsSync(previous)) {
+    if (!fs.existsSync(destination)) {
+      fs.renameSync(previous, destination);
+    } else if (runtimeIsUsable(destination, platform)) {
+      fs.rmSync(previous, { recursive: true, force: true });
+    } else {
+      fs.rmSync(destination, { recursive: true, force: true });
+      fs.renameSync(previous, destination);
+    }
+  }
+  if (fs.existsSync(staging)) fs.rmSync(staging, { recursive: true, force: true });
+
+  if (runtimeIsUsable(destination, platform)) {
+    try {
+      if (runtimeBuildId(destination, platform) === sourceBuildId) {
+        return {
+          root: destination,
+          executable: path.join(destination, path.basename(sourceExecutable)),
+          buildId: sourceBuildId,
+          reused: true
+        };
+      }
+    } catch {
+      // A malformed local marker requires a clean staged copy.
+    }
+  }
+
+  // Start from the old writable copy when present so game-created settings and
+  // save files survive runtime upgrades; then overlay the exact bundled files.
+  if (fs.existsSync(destination)) {
+    assertRuntimeTreeHasNoSymlinks(destination);
+    copyRuntimeTreeContents(destination, staging);
+  } else {
+    fs.mkdirSync(staging, { recursive: true });
+  }
+  copyRuntimeTreeContents(source, staging);
+  fs.writeFileSync(path.join(staging, RUNTIME_VERSION_FILE), sourceBuildId + '\n', 'utf8');
+  const stagedExecutable = path.join(staging, path.basename(sourceExecutable));
+  const executableMode = fs.lstatSync(sourceExecutable).mode & 0o777;
+  fs.chmodSync(stagedExecutable, executableMode);
+
+  assertRuntimeTreeHasNoSymlinks(staging);
+  if (!findBundledExecutable(staging, platform) || !hasRequiredRuntimeData(staging)
+      || runtimeBuildId(staging, platform) !== sourceBuildId) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    throw new Error('The writable runtime copy failed its post-copy validation.');
+  }
+
+  if (fs.existsSync(destination)) fs.renameSync(destination, previous);
+  try {
+    fs.renameSync(staging, destination);
+  } catch (error) {
+    if (fs.existsSync(previous) && !fs.existsSync(destination)) {
+      fs.renameSync(previous, destination);
+    }
+    throw error;
+  }
+  fs.rmSync(previous, { recursive: true, force: true });
+
+  return {
+    root: destination,
+    executable: path.join(destination, path.basename(sourceExecutable)),
+    buildId: sourceBuildId,
+    reused: false
+  };
+}
+
 function validateNdsHeader(header, fileSize) {
   if (!Buffer.isBuffer(header) || header.length < 0x160
       || !Number.isSafeInteger(fileSize) || fileSize < 0x200
@@ -81,4 +250,4 @@ function validateNdsHeader(header, fileSize) {
   // header's ROM-version byte as well.
   return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, validateNdsHeader };
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, prepareWritableRuntime, validateNdsHeader };

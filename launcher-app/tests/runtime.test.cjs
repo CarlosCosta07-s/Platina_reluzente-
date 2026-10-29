@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, validateNdsHeader } = require('../electron/runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, prepareWritableRuntime, validateNdsHeader } = require('../electron/runtime.cjs');
 
 test('runtime resolves under Electron resources when packaged', () => {
   assert.equal(resolveRuntimeDirectory(true, '/app/resources', '/app'), path.join('/app/resources', 'runtime'));
@@ -94,6 +94,83 @@ test('runtime rejects symlinked executables and required game assets', (t) => {
     assert.equal(hasRequiredRuntimeData(runtime), false);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
+function makeRuntimeFixture(directory, platform = 'linux', buildId = 'test-build') {
+  fs.mkdirSync(directory, { recursive: true });
+  const executable = path.join(directory, platform === 'win32' ? 'main.exe' : 'main');
+  fs.writeFileSync(executable, 'fake native executable');
+  fs.chmodSync(executable, 0o755);
+  for (const relative of [
+    'header.bin',
+    'firmware.bin',
+    'wazaeffect/we.arc',
+    'battle/skill/waza_seq.narc'
+  ]) {
+    const destination = path.join(directory, relative);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, 'fixture:' + relative);
+  }
+  fs.writeFileSync(path.join(directory, 'launcher-runtime-version.txt'), buildId + '\n');
+}
+
+test('prepares a writable runtime, preserves local game data and refreshes bundled files', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-writable-runtime-'));
+  const source = path.join(temp, 'bundled-runtime');
+  const destination = path.join(temp, 'user-data', 'runtime');
+  try {
+    makeRuntimeFixture(source, 'linux', 'build-1');
+    const first = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(first.root, destination);
+    assert.equal(first.executable, path.join(destination, 'main'));
+    assert.equal(first.buildId, 'build-1');
+    assert.equal(first.reused, false);
+    assert.equal(fs.existsSync(path.join(destination, 'header.bin')), true);
+
+    fs.writeFileSync(path.join(destination, 'sim_config.ini'), 'user settings');
+    fs.writeFileSync(path.join(destination, 'save.bin'), 'local save');
+    const reused = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(reused.reused, true);
+    assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user settings');
+
+    fs.writeFileSync(path.join(source, 'launcher-runtime-version.txt'), 'build-2\n');
+    fs.writeFileSync(path.join(source, 'main'), 'updated native executable');
+    const refreshed = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(refreshed.buildId, 'build-2');
+    assert.equal(refreshed.reused, false);
+    assert.equal(fs.readFileSync(path.join(destination, 'main'), 'utf8'), 'updated native executable');
+    assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user settings');
+    assert.equal(fs.readFileSync(path.join(destination, 'save.bin'), 'utf8'), 'local save');
+    assert.equal(fs.existsSync(destination + '.previous'), false);
+    assert.equal(fs.existsSync(destination + '.staging'), false);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('writable runtime preparation rejects a linked bundled runtime tree', (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-writable-runtime-symlink-'));
+  const source = path.join(temp, 'bundled-runtime');
+  const outside = path.join(temp, 'outside');
+  const destination = path.join(temp, 'user-data', 'runtime');
+  try {
+    makeRuntimeFixture(source);
+    fs.mkdirSync(outside);
+    try {
+      fs.symlinkSync(outside, path.join(source, 'external-link'), 'dir');
+    } catch (error) {
+      if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+        t.skip('This platform does not permit creating symlinks for tests.');
+        return;
+      }
+      throw error;
+    }
+    assert.throws(() => prepareWritableRuntime(source, destination, 'linux'), /Symbolic links are not allowed/);
+    assert.equal(fs.existsSync(destination), false);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
   }
 });
 
