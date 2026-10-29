@@ -34,10 +34,18 @@ def replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
 
 def check_pin(root: Path, expected: str, label: str) -> None:
     if (root / ".git").exists():
-        r = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                           capture_output=True, text=True, check=False)
-        if r.returncode == 0 and r.stdout.strip() != expected:
-            raise PatchError(f"{label} revision mismatch: {r.stdout.strip()}")
+        r = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if r.returncode != 0:
+            detail = r.stderr.strip() or "git rev-parse failed"
+            raise PatchError(f"{label} revision could not be verified: {detail}")
+        actual = r.stdout.strip()
+        if actual != expected:
+            raise PatchError(f"{label} revision mismatch: expected {expected}, found {actual}")
 
 
 def add_target_option(path: Path) -> bool:
