@@ -101,19 +101,6 @@ def _linux_dependencies(executable: Path, dependency_dirs: list[Path]) -> dict[s
     if search_dirs:
         env["LD_LIBRARY_PATH"] = ":".join(search_dirs)
 
-    result = subprocess.run(
-        ["ldd", str(executable)],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    if result.returncode != 0:
-        raise RuntimeStageError(
-            "Não foi possível inspecionar as dependências do runtime Linux: "
-            + (result.stderr.strip() or result.stdout.strip() or f"ldd saiu com {result.returncode}")
-        )
-
     collected: dict[str, Path] = {}
     inspected: set[Path] = set()
     pending: list[Path] = [executable.resolve()]
