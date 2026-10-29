@@ -12,6 +12,15 @@
 /local-data/
 /.local-data/
 
+# Runtime inputs for local packaging and user-generated save/config files.
+# These may contain game-derived data and must never be committed or released.
+/launcher-app/runtime/
+/android-native-artifact/
+save.bin
+sim_config.ini
+runtime-manifest.txt
+launcher-runtime-version.txt
+
 # Build outputs and Python cache.
 build/
 build_*/
