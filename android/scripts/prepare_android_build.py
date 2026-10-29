@@ -92,8 +92,48 @@ def stage_android_copy_script(root: Path, staged: Path) -> None:
     shutil.copy2(source, target)
 
 
+def patch_android_trainer_ai_asm_macro_case(root: Path) -> list[str]:
+    """Normalize two legacy macro names for Clang's case-sensitive assembler.
+
+    GNU as accepts case-insensitive macro invocations, while Clang's integrated
+    assembler requires the declaration spelling to match each call site. Only
+    the disposable Android source tree is patched.
+    """
+    path = root / "asm" / "macros" / "aicmd.inc"
+    if not path.is_file():
+        raise PatchError(f"Trainer AI assembler macros are missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    updated = original
+    replacements = (
+        (
+            ".macro IfLoadedinTable table:req, jump:req",
+            ".macro IfLoadedInTable table:req, jump:req",
+        ),
+        (
+            ".macro IfLoadedNotinTable table:req, jump:req",
+            ".macro IfLoadedNotInTable table:req, jump:req",
+        ),
+    )
+    for old, new in replacements:
+        if new in updated:
+            if updated.count(new) != 1 or old in updated:
+                raise PatchError(f"Trainer AI macro case patch is partial or duplicated: {new}")
+            continue
+        if updated.count(old) != 1:
+            raise PatchError(
+                f"Trainer AI macro case patch expected exactly one declaration: {old}"
+            )
+        updated = updated.replace(old, new, 1)
+
+    if updated == original:
+        return []
+    path.write_text(updated, encoding="utf-8")
+    return ["Android assembler: match trainer AI macro names to case-sensitive Clang"]
+
+
 def patch_root(root: Path) -> list[str]:
-    changes = []
+    changes = patch_android_trainer_ai_asm_macro_case(root)
     if add_target_option(root / "meson.options"):
         changes.append("parent Meson: add android target")
 
