@@ -5,6 +5,7 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
+    "start": "electron .",
     "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/black-runtime.cjs && node --check electron/rom-storage.cjs && node --check electron/native-process.cjs && node --check scripts/stage-native-runtime.cjs && node --check scripts/create-data-path-manifest.cjs && node --check web/app.js",
     "test": "npm run check && node --test tests/electron-rom-storage.test.cjs tests/native-process.test.cjs tests/runtime.test.cjs tests/black-runtime.test.cjs tests/stage-native-runtime.test.cjs tests/game-library.test.cjs && npm run build:web",
     "stage:runtime:windows": "node scripts/stage-native-runtime.cjs windows",
