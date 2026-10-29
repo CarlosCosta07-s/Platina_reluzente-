@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 function resolveRuntimeDirectory(isPackaged, resourcesPath, appDirectory) {
   return isPackaged ? path.join(resourcesPath, 'runtime') : path.join(appDirectory, 'runtime');
@@ -71,6 +72,79 @@ function hasRequiredRuntimeData(runtimeRoot) {
 
 
 const RUNTIME_VERSION_FILE = 'launcher-runtime-version.txt';
+const RUNTIME_MANIFEST_FILE = 'launcher-runtime-manifest.json';
+
+function sha256FileSync(filePath) {
+  const hash = crypto.createHash('sha256');
+  const descriptor = fs.openSync(filePath, 'r');
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    let bytesRead;
+    while ((bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * Verify the immutable payload manifest emitted by stage-native-runtime.cjs.
+ * Extracted game assets, saves and user settings are intentionally outside the
+ * manifest; only the shipped native executable and libraries are fingerprinted.
+ */
+function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
+  const expectedPlatform = platform === 'win32' ? 'windows' : platform;
+  try {
+    const root = path.resolve(runtimeRoot);
+    const rootStat = fs.lstatSync(root);
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return false;
+
+    const markerPath = path.join(root, RUNTIME_VERSION_FILE);
+    const manifestPath = path.join(root, RUNTIME_MANIFEST_FILE);
+    const markerStat = fs.lstatSync(markerPath);
+    const manifestStat = fs.lstatSync(manifestPath);
+    if (markerStat.isSymbolicLink() || !markerStat.isFile()
+        || manifestStat.isSymbolicLink() || !manifestStat.isFile()) return false;
+
+    const marker = fs.readFileSync(markerPath, 'utf8').trim();
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (manifest.schemaVersion !== 1 || manifest.platform !== expectedPlatform
+        || typeof manifest.buildId !== 'string'
+        || !/^[a-f0-9]{64}$/i.test(manifest.buildId)
+        || manifest.buildId !== marker
+        || !Array.isArray(manifest.files) || manifest.files.length === 0) return false;
+
+    const seen = new Set();
+    const fingerprint = crypto.createHash('sha256');
+    let previousPath = '';
+    for (const entry of manifest.files) {
+      if (!entry || typeof entry.path !== 'string' || !entry.path
+          || entry.path.includes('\\') || path.posix.isAbsolute(entry.path)
+          || entry.path.split('/').some((part) => !part || part === '.' || part === '..')
+          || !Number.isSafeInteger(entry.size) || entry.size <= 0
+          || typeof entry.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(entry.sha256)
+          || seen.has(entry.path) || (previousPath && entry.path < previousPath)) return false;
+      seen.add(entry.path);
+      previousPath = entry.path;
+
+      const filePath = path.join(root, ...entry.path.split('/'));
+      const stat = fs.lstatSync(filePath);
+      if (stat.isSymbolicLink() || !stat.isFile() || stat.size !== entry.size) return false;
+      const actualSha256 = sha256FileSync(filePath);
+      if (actualSha256 !== entry.sha256.toLowerCase()) return false;
+      fingerprint.update(entry.path + '\0' + entry.sha256.toLowerCase() + '\n');
+    }
+
+    const calculatedBuildId = fingerprint.digest('hex');
+    const expectedExecutable = platform === 'win32' ? 'main.exe' : 'main';
+    if (!seen.has(expectedExecutable)) return false;
+    return calculatedBuildId === marker;
+  } catch {
+    return false;
+  }
+}
 
 function runtimeBuildId(runtimeRoot, platform) {
   const versionPath = path.join(runtimeRoot, RUNTIME_VERSION_FILE);
@@ -118,7 +192,8 @@ function assertRuntimeTreeHasNoSymlinks(root) {
 function runtimeIsUsable(runtimeRoot, platform) {
   try {
     assertRuntimeTreeHasNoSymlinks(runtimeRoot);
-    return Boolean(findBundledExecutable(runtimeRoot, platform));
+    return Boolean(findBundledExecutable(runtimeRoot, platform)
+      && verifyRuntimeManifest(runtimeRoot, platform));
   } catch {
     return false;
   }
@@ -163,6 +238,9 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
   const sourceExecutable = findBundledExecutable(source, platform);
   if (!sourceExecutable) {
     throw new Error('The bundled runtime is missing its native executable.');
+  }
+  if (!verifyRuntimeManifest(source, platform)) {
+    throw new Error('The bundled runtime manifest is missing or failed integrity validation. Rebuild the launcher package.');
   }
   const sourceBuildId = runtimeBuildId(source, platform);
   const parent = path.dirname(destination);
@@ -214,6 +292,7 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
 
   assertRuntimeTreeHasNoSymlinks(staging);
   if (!findBundledExecutable(staging, platform)
+      || !verifyRuntimeManifest(staging, platform)
       || runtimeBuildId(staging, platform) !== sourceBuildId) {
     fs.rmSync(staging, { recursive: true, force: true });
     throw new Error('The writable runtime copy failed its post-copy validation.');
@@ -309,4 +388,4 @@ function validateNdsHeader(header, fileSize) {
   // header's ROM-version byte as well.
   return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader };
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader };
