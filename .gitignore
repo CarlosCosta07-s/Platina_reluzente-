@@ -15,6 +15,7 @@
 # Runtime inputs for local packaging and user-generated save/config files.
 # These may contain game-derived data and must never be committed or released.
 /launcher-app/runtime/
+/launcher-app/black-runtime/
 /android-native-artifact/
 save.bin
 sim_config.ini
