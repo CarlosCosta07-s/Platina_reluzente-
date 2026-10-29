@@ -25,7 +25,7 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 - [ ] Executar o jogo com a ROM local USA Rev. 1, confirmar extração dos dados, tela de título e início de uma nova partida; a execução atual da CI não fornece ROM.
 - [x] Testar o AppImage Linux em diretório temporário vazio: a janela `libntr Application` foi encontrada e o processo permaneceu ativo por 15 segundos na execução [40691585390](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40691585390). Isso só cobre a interface pré-ROM.
 - [x] Automatizar o staging do launcher para incluir somente o executável nativo portátil e bibliotecas necessárias, recusando ROMs, patches, saves, links simbólicos e entradas especiais; os recursos do jogo são extraídos localmente da ROM importada no primeiro início.
-- [x] Testar staging binário-only para Linux/Windows: AppImage portátil ou executável+DLLs, sem NARC/firmware/arquivos do jogo, e preservação do destino anterior quando o executável falta. A suíte de regressão passou no workflow de Launcher source checks em 29/10/2026.
+- [x] Testar staging binário-only para Linux/Windows: AppImage portátil ou executável+DLLs, sem NARC/firmware/arquivos do jogo, e preservação do destino anterior quando o executável falta. Os 27 testes da suíte do launcher passaram na execução [40890820802](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40890820802), em 29/10/2026.
 - [ ] Reproduzir as instruções numa máquina limpa.
 - [ ] Gerar e validar os launchers integrados Windows/Linux na CI, com o executável já incluído e artefatos sem recursos do jogo.
 - [ ] Reproduzir o primeiro carregamento com uma cópia local válida da ROM USA Rev. 1 e verificar os erros de extração/carregamento.
