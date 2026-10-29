@@ -329,6 +329,16 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
 
   const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
                                          const std::string &romSha256) {
+    bool hasOverlay9 = false;
+    bool hasOverlay7 = false;
+    for (const std::string &relativeName : paths) {
+      if (relativeName.rfind("overlay9/overlay9_", 0) == 0) hasOverlay9 = true;
+      if (relativeName.rfind("overlay7/overlay7_", 0) == 0) hasOverlay7 = true;
+    }
+    // Old or interrupted cache markers without both overlay groups are not
+    // complete, even if the static paths and previous marker still match.
+    if (!hasOverlay9 || !hasOverlay7) return false;
+
     const char *cachePath = "platina-rom-extraction.manifest";
     if (!isRegularFileWithoutSymlinks(std::filesystem::path(cachePath))) return false;
     std::ifstream cache(cachePath);
