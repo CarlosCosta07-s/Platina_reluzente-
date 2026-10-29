@@ -15,7 +15,7 @@ function createFilesysCsv(root, entries = 340) {
     const name = 'file-' + String(index).padStart(3, '0') + '.bin';
     lines.push('res/prebuilt/data/' + name + ',/data/' + name);
   }
-  fs.writeFileSync(file, lines.join('\\n') + '\\n');
+  fs.writeFileSync(file, lines.join('\n') + '\n');
   return file;
 }
 
@@ -68,7 +68,7 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
   const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux', dataManifestPath });
   assert.equal(result.platform, 'linux');
   assert.equal(result.destination, destinationRoot);
-  assert.equal(result.files, 3);
+  assert.equal(result.files, 2);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main')), true);
   assert.equal(fs.readFileSync(path.join(destinationRoot, 'main'), 'utf8'), 'portable-linux-appimage');
   assert.equal(fs.existsSync(path.join(destinationRoot, 'msgdata', 'pl_msg.narc')), false);
@@ -87,7 +87,7 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
   assert.equal(manifest.platform, 'linux');
   assert.equal(manifest.buildId, result.buildId);
   assert.deepEqual(manifest.files.map((entry) => entry.path), ['main', 'platinum-data-paths.txt']);
-  const dataPaths = fs.readFileSync(path.join(destinationRoot, 'platinum-data-paths.txt'), 'utf8').split('\\n');
+  const dataPaths = fs.readFileSync(path.join(destinationRoot, 'platinum-data-paths.txt'), 'utf8').split('\n');
   assert.equal(dataPaths[0], 'PLATINA_DATA_PATHS_V1');
   assert.equal(Number(dataPaths[1]), dataPaths.slice(2).filter(Boolean).length);
   assert.ok(dataPaths.includes('wazaeffect/we.arc'));
@@ -106,7 +106,7 @@ test('stages a Windows runtime with main.exe without requiring Unix executable b
 
   const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'windows', dataManifestPath });
   assert.equal(result.executable, path.join(destinationRoot, 'main.exe'));
-  assert.equal(result.files, 2);
+  assert.equal(result.files, 3);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main.exe')), true);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'SDL2.dll')), true);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'header.bin')), false);
@@ -183,7 +183,7 @@ test('extracted path manifest rejects truncated, duplicated and traversing paths
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const csv = createFilesysCsv(root, 340);
   const content = createExtractedPathManifest(csv);
-  assert.match(content, /^PLATINA_DATA_PATHS_V1\\n\\d+\\n/);
+  assert.match(content, /^PLATINA_DATA_PATHS_V1\n\d+\n/);
   assert.ok(content.includes('wazaeffect/we.arc'));
   assert.ok(content.includes('battle/skill/waza_seq.narc'));
 
@@ -201,6 +201,6 @@ test('extracted path manifest rejects truncated, duplicated and traversing paths
     rows.push('res/file-' + index + '.bin,/data/file-' + index + '.bin');
   }
   rows[1] = 'res/escape.bin,/data/../outside.bin';
-  fs.writeFileSync(unsafe, rows.join('\\n') + '\\n');
+  fs.writeFileSync(unsafe, rows.join('\n') + '\n');
   assert.throws(() => createExtractedPathManifest(unsafe), /Caminho inseguro/);
 });
