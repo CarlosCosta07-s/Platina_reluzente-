@@ -7,6 +7,9 @@ const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, validateNdsHeader } = require('./runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
+// Native runtime and generated assets are pinned to this exact retail image.
+// Header fields alone do not prove that the imported ROM is the expected revision.
+const ORIGINAL_ROM_SHA1 = '0862ec35b24de5c7e2dcb88c9eea0873110d755c';
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -98,8 +101,22 @@ ipcMain.handle('platina:import-rom', async () => {
   } finally {
     await sourceFile.close();
   }
-  if (headerBytesRead !== header.length || !validateNdsHeader(header, stat.size)) {
-    return { canceled: false, ok: false, message: 'Esta compilação exige Pokémon Platinum USA Rev. 1 (código CPUE e campo ROM version 0x1E igual a 1). A ROM selecionada não corresponde à versão configurada.' };
+  if (headerBytesRead !== header.length) {
+    return { canceled: false, ok: false, message: 'Não foi possível ler o cabeçalho completo da ROM selecionada.' };
+  }
+  if (header.subarray(0x0c, 0x10).toString('ascii') === 'CPUE' && header[0x1e] === 0) {
+    return {
+      canceled: false,
+      ok: false,
+      message: 'A ROM selecionada é Pokémon Platinum USA Rev. 0. Este build nativo foi preparado para USA Rev. 1; use uma cópia original Rev. 1 ou aguarde uma implementação específica e validada para Rev. 0.'
+    };
+  }
+  if (!validateNdsHeader(header, stat.size)) {
+    return {
+      canceled: false,
+      ok: false,
+      message: 'Esta compilação exige Pokémon Platinum USA Rev. 1 (código CPUE e campo ROM version 0x1E igual a 1). A ROM selecionada não corresponde à versão configurada.'
+    };
   }
 
   const romDir = path.join(app.getPath('userData'), 'roms');
@@ -112,7 +129,8 @@ ipcMain.handle('platina:import-rom', async () => {
       name: path.basename(source),
       size: stat.size,
       importedAt: new Date().toISOString()
-    }
+    },
+    expectedSha1: ORIGINAL_ROM_SHA1
   });
   return { canceled: false, ok: true, name: metadata.name, size: metadata.size, sha256: metadata.sha256 };
 });
