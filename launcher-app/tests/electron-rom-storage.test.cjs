@@ -154,6 +154,77 @@ test('backup cleanup failure does not report a committed ROM import as failed', 
   );
 });
 
+test('desktop recovery finishes a first import interrupted after installing the ROM but before metadata', async (t) => {
+  const store = await makeStore(t);
+  await fs.mkdir(store.romDir, { recursive: true });
+  const rom = Buffer.from('first-import-rom-data');
+  const metadata = {
+    name: 'first-import.nds',
+    size: rom.length,
+    sha256: crypto.createHash('sha256').update(rom).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'first-import-time'
+  };
+  await fs.writeFile(store.destinationPath, rom);
+  await fs.writeFile(store.metadataPath + '.importing', JSON.stringify(metadata));
+
+  await recoverDesktopRom({
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath
+  });
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), rom);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
+  await assert.rejects(fs.access(store.metadataPath + '.importing'));
+});
+
+test('desktop recovery completes a verified first-import staging pair', async (t) => {
+  const store = await makeStore(t);
+  await fs.mkdir(store.romDir, { recursive: true });
+  const rom = Buffer.from('staged-first-import-rom-data');
+  const metadata = {
+    name: 'first-import.nds',
+    size: rom.length,
+    sha256: crypto.createHash('sha256').update(rom).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'first-import-time'
+  };
+  await fs.writeFile(store.destinationPath + '.importing', rom);
+  await fs.writeFile(store.metadataPath + '.importing', JSON.stringify(metadata));
+
+  await recoverDesktopRom({
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath
+  });
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), rom);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
+  await assert.rejects(fs.access(store.destinationPath + '.importing'));
+  await assert.rejects(fs.access(store.metadataPath + '.importing'));
+});
+
+test('desktop recovery propagates permission errors instead of treating protected files as absent', async (t) => {
+  const store = await makeStore(t);
+  const originalAccess = fs.access;
+  fs.access = async (filePath, ...args) => {
+    if (filePath === store.destinationPath) {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    }
+    return originalAccess.call(fs, filePath, ...args);
+  };
+  try {
+    await assert.rejects(
+      recoverDesktopRom({
+        destinationPath: store.destinationPath,
+        metadataPath: store.metadataPath
+      }),
+      { code: 'EACCES' }
+    );
+  } finally {
+    fs.access = originalAccess;
+  }
+});
+
 test('desktop ROM recovery restores a matching backup after an interrupted metadata commit', async (t) => {
   const store = await makeStore(t);
   await fs.mkdir(store.romDir, { recursive: true });
