@@ -20,6 +20,7 @@ from scripts.prepare_native_runtime import (
     KEYDOWN_PATCHED,
     MAIN_RENDER_HANDOFF_PATCHED,
     NVRAM_FILE_READ_PATCHED,
+    SIM_AUDIO_OPEN_PATCHED,
     ORIGINAL_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
     ROM_PREFLIGHT_ENTRY_PATCHED,
@@ -29,6 +30,17 @@ from scripts.prepare_native_runtime import (
     SIM_ROM_EXTRACTOR_PATCHED,
     prepare_native_runtime,
 )
+
+UPSTREAM_SIM_AUDIO = r'''#include <stdio.h>
+#include <SDL2/SDL.h>
+void SIM_Audio_Init(int aAudioFrequency) {
+    SDL_AudioSpec s_requestedAudioSpec;
+    s_requestedAudioSpec.callback = SIM_Audio_Callback;
+    if(SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
+        printf("SDL Error %s\n", SDL_GetError());
+    }
+    SDL_PauseAudio(0);
+}'''
 
 UPSTREAM_NVRAM_INSTRUCTION = r'''#include <stdio.h>
 typedef unsigned int u32;
@@ -298,6 +310,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         nvram_source = root / "subprojects/libntr/libraries/sim7/src/spi/nvram/nvram_instruction.c"
         nvram_source.parent.mkdir(parents=True, exist_ok=True)
         nvram_source.write_text(UPSTREAM_NVRAM_INSTRUCTION, encoding="utf-8")
+        audio_source = root / "subprojects/libntr/libraries/sim/src/sim_audio.cpp"
+        audio_source.write_text(UPSTREAM_SIM_AUDIO, encoding="utf-8")
         return source
 
     def test_uses_imported_rom_header_and_hardens_desktop_runtime(self):
@@ -369,6 +383,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             nvram_content = (root / "subprojects/libntr/libraries/sim7/src/spi/nvram/nvram_instruction.c").read_text(encoding="utf-8")
             self.assertIn(NVRAM_FILE_READ_PATCHED, nvram_content)
             self.assertIn('fopen(NVRAM_FILE_PATH, "rb")', nvram_content)
+            audio_content = (root / "subprojects/libntr/libraries/sim/src/sim_audio.cpp").read_text(encoding="utf-8")
+            self.assertIn(SIM_AUDIO_OPEN_PATCHED, audio_content)
+            self.assertIn('SDL_AudioInit("dummy")', audio_content)
             self.assertIn("buf[i] = 0xFF;", nvram_content)
             self.assertNotIn('fseek(s_nvramFilePtr, address, SEEK_SET);', nvram_content)
             self.assertFalse(prepare_native_runtime(root))
@@ -387,6 +404,12 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("inspectFileCrc32", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("platina-rom-extraction.manifest", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("required local data is missing/corrupted", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("collectOverlayPaths", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("overlay9_", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("overlay7_", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('"arm9.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('"arm7.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertNotIn('"firmware.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertNotIn('std::filesystem::path("msgdata/msg.narc")', ROM_PREFLIGHT_ENTRY_PATCHED)
 
     def test_desktop_first_launch_can_start_without_a_rom_header(self):
