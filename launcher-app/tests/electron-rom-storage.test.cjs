@@ -225,6 +225,55 @@ test('desktop recovery propagates permission errors instead of treating protecte
   }
 });
 
+test('first import recovery finishes a verified staged ROM and metadata pair', async (t) => {
+  const store = await makeStore(t);
+  const stagedRom = Buffer.from('first-import-staged-rom');
+  const stagedMetadata = {
+    name: 'selected.nds',
+    size: stagedRom.length,
+    sha256: crypto.createHash('sha256').update(stagedRom).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'staged-time'
+  };
+  await fs.mkdir(store.romDir, { recursive: true });
+  await fs.writeFile(store.destinationPath + '.importing', stagedRom);
+  await fs.writeFile(store.metadataPath + '.importing', JSON.stringify(stagedMetadata));
+
+  await recoverDesktopRom({
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath
+  });
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), stagedRom);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), stagedMetadata);
+  await assert.rejects(fs.access(store.destinationPath + '.importing'));
+  await assert.rejects(fs.access(store.metadataPath + '.importing'));
+});
+
+test('first import recovery finishes metadata after the ROM was already promoted', async (t) => {
+  const store = await makeStore(t);
+  const stagedRom = Buffer.from('first-import-installed-rom');
+  const stagedMetadata = {
+    name: 'selected.nds',
+    size: stagedRom.length,
+    sha256: crypto.createHash('sha256').update(stagedRom).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'staged-time'
+  };
+  await fs.mkdir(store.romDir, { recursive: true });
+  await fs.writeFile(store.destinationPath, stagedRom);
+  await fs.writeFile(store.metadataPath + '.importing', JSON.stringify(stagedMetadata));
+
+  await recoverDesktopRom({
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath
+  });
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), stagedRom);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), stagedMetadata);
+  await assert.rejects(fs.access(store.metadataPath + '.importing'));
+});
+
 test('desktop ROM recovery restores a matching backup after an interrupted metadata commit', async (t) => {
   const store = await makeStore(t);
   await fs.mkdir(store.romDir, { recursive: true });
