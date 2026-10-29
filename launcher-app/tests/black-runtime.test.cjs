@@ -76,6 +76,9 @@ test('Black runtime discovery requires the expected local executable and Windows
   await fs.writeFile(path.join(windows, 'eidos.exe'), 'local user build');
   await assert.rejects(inspectBlackRuntime(windows, 'win32'), /SDL3\.dll/);
   await fs.writeFile(path.join(windows, 'SDL3.dll'), 'local dependency');
+  await fs.writeFile(path.join(windows, 'portable.txt'), '');
+  await assert.rejects(inspectBlackRuntime(windows, 'win32'), /portable\.txt/);
+  await fs.rm(path.join(windows, 'portable.txt'));
   const winRuntime = await inspectBlackRuntime(windows, 'win32');
   assert.equal(winRuntime.executableName, 'eidos.exe');
   assert.equal(winRuntime.directory, windows);
