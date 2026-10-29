@@ -194,7 +194,8 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       std::error_code directoryError;
       const auto directoryStatus = std::filesystem::symlink_status(
           std::filesystem::path(directoryName), directoryError);
-      if (directoryError == std::errc::no_such_file_or_directory) return !requireAll;
+      if (directoryError == std::errc::no_such_file_or_directory ||
+          (!directoryError && !std::filesystem::exists(directoryStatus))) return !requireAll;
       if (directoryError || std::filesystem::is_symlink(directoryStatus) ||
           !std::filesystem::is_directory(directoryStatus)) return false;
 
