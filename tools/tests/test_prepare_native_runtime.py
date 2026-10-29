@@ -9,6 +9,8 @@ from scripts.prepare_native_runtime import (
     BACKUP_SAVE_PATH_INCLUDE_PATCHED,
     BACKUP_WRITE_BODY_PATCHED,
     BACKUP_WRITE_VERIFY_BODY_PATCHED,
+    CARD_IDENTIFY_BACKUP_ORIGINAL,
+    CARD_IDENTIFY_BACKUP_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
     GL_LOADER_PATCHED,
@@ -182,6 +184,15 @@ void CARDi_RequestWriteSectorCommand(u32 src, u32 dst, u32 len, BOOL verify,
 #endif
 #endif'''
 
+UPSTREAM_CARD_BACKUP_SOURCE = (
+    "#include <nitro.h>\\n"
+    "BOOL CARD_IdentifyBackup(CARDBackupType type)\\n"
+    "{\\n"
+    "#if SDK_VERSION_MAJOR == 5\\n"
+    + CARD_IDENTIFY_BACKUP_ORIGINAL
+    + "\\n#endif\\n}\\n"
+)
+
 UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
 #ifdef SDK_PORT
 #include <string.h>
@@ -310,6 +321,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
         backup_header.parent.mkdir(parents=True, exist_ok=True)
         backup_header.write_text(UPSTREAM_BACKUP_HEADER, encoding="utf-8")
+        card_source = root / "subprojects/libntr/libraries/card/src/card_backup.c"
+        card_source.parent.mkdir(parents=True, exist_ok=True)
+        card_source.write_text(UPSTREAM_CARD_BACKUP_SOURCE, encoding="utf-8")
         nvram_source = root / "subprojects/libntr/libraries/sim7/src/spi/nvram/nvram_instruction.c"
         nvram_source.parent.mkdir(parents=True, exist_ok=True)
         nvram_source.write_text(UPSTREAM_NVRAM_INSTRUCTION, encoding="utf-8")
@@ -376,6 +390,12 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertNotIn('fopen("save.bin",', backup_content)
             self.assertIn('CARDI_BACKUP_SAVE_FILE "save.bin"', backup_content)
             self.assertNotIn("return CARD_RESULT_SUCCESS;", backup_content)
+            card_content = (root / "subprojects/libntr/libraries/card/src/card_backup.c").read_text(encoding="utf-8")
+            self.assertIn(CARD_IDENTIFY_BACKUP_PATCHED, card_content)
+            self.assertNotIn(CARD_IDENTIFY_BACKUP_ORIGINAL, card_content)
+            self.assertIn("CARDi_IdentifyBackupCore2(type);", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertIn("CARDi_EndTask(&cardi_common);", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertIn("#else\\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
@@ -542,6 +562,47 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertNotIn("return CARD_RESULT_SUCCESS;", hardened)
             self.assertFalse(prepare_native_runtime(root))
             self.assertEqual(backup_header.read_text(encoding="utf-8"), hardened)
+
+    def test_card_identification_uses_local_backup_geometry_on_desktop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_source(root)
+            card_source = root / "subprojects/libntr/libraries/card/src/card_backup.c"
+            original = card_source.read_text(encoding="utf-8")
+
+            self.assertTrue(prepare_native_runtime(root))
+            patched = card_source.read_text(encoding="utf-8")
+            self.assertIn(CARD_IDENTIFY_BACKUP_PATCHED, patched)
+            self.assertNotIn(CARD_IDENTIFY_BACKUP_ORIGINAL, patched)
+            self.assertTrue(CARD_IDENTIFY_BACKUP_PATCHED.startswith(
+                "  CARDi_BeginBackupCommand(CARD_ACCESS_LEVEL_NONE, NULL, NULL);"
+            ))
+            self.assertIn("CARDi_IdentifyBackupCore2(type);", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertIn("CARDi_EndTask(&cardi_common);", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertIn("#else\\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(card_source.read_text(encoding="utf-8"), patched)
+            self.assertNotEqual(original, patched)
+
+    def test_unknown_card_backup_implementation_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            card_source = root / "subprojects/libntr/libraries/card/src/card_backup.c"
+            card_source.write_text("unknown card backup implementation\\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(
+                card_source.read_text(encoding="utf-8"),
+                "unknown card backup implementation\\n",
+            )
 
     def test_unknown_backup_header_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:
