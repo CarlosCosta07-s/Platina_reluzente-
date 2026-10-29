@@ -97,6 +97,11 @@ public class PlatinaGamePlugin extends Plugin {
         if (title.isEmpty() || !code.matches("[A-Z0-9]{4}")) {
             throw new IOException("O cabeçalho da ROM importada não parece válido.");
         }
+        if (!"CPUE".equals(code)) {
+            throw new IOException(
+                    "Esta compilação nativa espera Pokémon Platinum USA Rev. 1 (código CPUE). "
+                            + "A ROM selecionada não corresponde à versão de jogo configurada.");
+        }
     }
 
     private void extractRuntimeAssets() throws IOException {
