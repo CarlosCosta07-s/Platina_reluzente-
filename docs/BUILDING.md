@@ -50,6 +50,12 @@ Os testes do importador e do fixador de dependências não precisam de ROM:
 ## Teste com uma cópia local
 
 ### Verificação do pacote gerado
+### Diagnóstico de falhas de inicialização no launcher
+
+O launcher desktop encaminha agora a saída padrão e a saída de erro do executável nativo para um log persistente chamado `native-startup.log`, no diretório privado de dados do aplicativo, dentro de `logs`. O launcher mostra o caminho exato no status depois de iniciar o processo. Se nenhuma janela do jogo aparecer, abra esse log e procure mensagens de inicialização do SDL/OpenGL, arquivos ausentes ou falhas do runtime.
+
+A mensagem de sucesso do launcher significa somente que o sistema operacional criou o processo nativo; ela não comprova a tela de título nem a jogabilidade. A confirmação exige executar o jogo com a ROM USA Rev. 1 compatível e verificar a tela inicial e uma sessão mínima de jogo.
+
 ### Teste pré-ROM da interface no Linux
 
 Na CI, o teste abaixo abre o executável num display X11 virtual com OpenGL por software, a partir de um diretório de trabalho temporário vazio, e exige que uma janela visível `libntr Application` seja criada e que o processo permaneça ativo por 15 segundos:
