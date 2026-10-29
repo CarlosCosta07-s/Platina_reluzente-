@@ -294,5 +294,41 @@ class LocalizationImportTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), b"preserve me")
 
 
+    def test_failed_multi_file_commit_rolls_back_every_localized_archive(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            destination = root / "runtime"
+            rom.write_bytes(rom_data)
+
+            original_bytes: dict[str, bytes] = {}
+            for target in TARGET_FILES:
+                output = destination.joinpath(*target.parts)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                original_bytes[target.as_posix()] = b"old:" + target.as_posix().encode("ascii")
+                output.write_bytes(original_bytes[target.as_posix()])
+
+            real_replace = __import__("os").replace
+            failing_target = destination.joinpath(*TARGET_FILES[1].parts)
+
+            def fail_during_install(source: str | Path, target: str | Path) -> None:
+                source_path = Path(source)
+                target_path = Path(target)
+                if "staged" in source_path.parts and target_path == failing_target:
+                    raise OSError("simulated disk failure during localization install")
+                real_replace(source, target)
+
+            with patch("import_localization.os.replace", side_effect=fail_during_install):
+                with self.assertRaisesRegex(OSError, "simulated disk failure"):
+                    _extract_synthetic(rom, destination, file_ids, file_data, force=True)
+
+            for target in TARGET_FILES:
+                output = destination.joinpath(*target.parts)
+                self.assertEqual(output.read_bytes(), original_bytes[target.as_posix()])
+            self.assertEqual(list(destination.glob(".ptbr-localization-*")), [])
+
+
+
 if __name__ == "__main__":
     unittest.main()
