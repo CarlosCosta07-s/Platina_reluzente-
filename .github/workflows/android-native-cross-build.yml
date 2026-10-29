@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends git cmake ninja-build build-essential python3-pip pkg-config libpng-dev gcc-arm-none-eabi binutils-arm-none-eabi
+          sudo apt-get install -y --no-install-recommends git cmake ninja-build build-essential python3-pip pkg-config libpng-dev glslang-tools gcc-arm-none-eabi binutils-arm-none-eabi
           python -m pip install --user meson==1.12.0 ninja
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Install Android NDK
@@ -131,6 +131,22 @@ jobs:
             --source-root "$NATIVE_SOURCE/subprojects/libntr" \
             --shader-output "$RUNNER_TEMP/android-gles-shaders" \
             --json | tee "$RUNNER_TEMP/android-gles-report.json"
+      - name: Validate GLES shaders before native compilation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shader_count=0
+          for shader in "$RUNNER_TEMP"/android-gles-shaders/*; do
+            case "$shader" in
+              *.vert) stage=vert ;;
+              *.frag) stage=frag ;;
+              *) echo "Unknown or missing GLES shader: $shader" >&2; exit 1 ;;
+            esac
+            echo "Validating $shader as $stage"
+            glslangValidator -S "$stage" "$shader"
+            shader_count=$((shader_count + 1))
+          done
+          test "$shader_count" -eq 4
       - name: Configure NDK cross-build
         shell: bash
         run: |
