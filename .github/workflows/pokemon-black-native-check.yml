@@ -16,7 +16,8 @@ permissions:
 
 concurrency:
   group: pokemon-black-native-check-${{ github.ref }}
-  cancel-in-progress: true
+  # Upstream toolchain builds are expensive; keep the active validation and coalesce newer commits into the pending run.
+  cancel-in-progress: false
 
 env:
   ALETHEIA_COMMIT: 6c2aae879f123bcbc028cf6a8b7f8df614402ac8
