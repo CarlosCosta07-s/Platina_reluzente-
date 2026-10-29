@@ -159,9 +159,9 @@ SIM_ROM_EXTRACTOR_PATCHED = r'''void SIM_ShowRomExtractionDialog() {
     if (managedRomPath != nullptr && managedRomPath[0] != '\0') {
         const int extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
         if (extractionStatus != 0) {
-            std::fprintf(stderr, "[rom-extract] Automatic extraction failed with status %d.\\n", extractionStatus);
+            std::fprintf(stderr, "[rom-extract] Automatic extraction failed with status %d.\n", extractionStatus);
         } else {
-            std::fprintf(stderr, "[rom-extract] Missing runtime data extracted from the imported ROM.\\n");
+            std::fprintf(stderr, "[rom-extract] Missing runtime data extracted from the imported ROM.\n");
         }
         return;
     }
@@ -177,8 +177,8 @@ SIM_ROM_EXTRACTOR_PATCHED = r'''void SIM_ShowRomExtractionDialog() {
     }
 }'''
 
-SIM_ROM_EXTRACTOR_INCLUDE_ORIGINAL = "#include <SDL2/SDL.h>\\n#include <string>"
-SIM_ROM_EXTRACTOR_INCLUDE_PATCHED = "#include <SDL2/SDL.h>\\n#include <cstdio>\\n#include <cstdlib>\\n#include <string>"
+SIM_ROM_EXTRACTOR_INCLUDE_ORIGINAL = "#include <SDL2/SDL.h>\n#include <string>"
+SIM_ROM_EXTRACTOR_INCLUDE_PATCHED = "#include <SDL2/SDL.h>\n#include <cstdio>\n#include <cstdlib>\n#include <string>"
 
 BACKUP_SAVE_PATH_INCLUDE_ORIGINAL = '''#ifdef SDK_PORT
 #include <stdio.h>
