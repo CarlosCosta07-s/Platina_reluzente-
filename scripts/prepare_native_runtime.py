@@ -211,6 +211,41 @@ MAIN_RENDER_HANDOFF_PATCHED = r'''  SIM_RenderInit(NULL);
   G3SIM_DrawInit();'''
 
 
+FS_OPEN_FALLBACK_ORIGINAL = r'''        #if FS_FILE_OPEN_DEBUG
+        char messageBuf[200] = {0};
+        snprintf(messageBuf, 199, "Failed to open file '%s'.", path);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", messageBuf, NULL);
+        #else
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
+        #endif
+
+        SIM_ShowRomExtractionDialog();
+
+        // try again, because the ROM should be extracted at this point
+        // yes, this is recursive, so if the user is dumb enough to keep extracting the wrong ROM and does this enough times, it will crash
+        return FS_OpenFile(p_file, path);'''
+FS_OPEN_FALLBACK_PATCHED = r'''        #ifdef SDK_BUILD_ANDROID
+        OS_Warning("[file-system] Required runtime resource is missing: %s.\\n", path);
+        return FALSE;
+        #else
+        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
+        if (managedRomPath != NULL && managedRomPath[0] != '\\0') {
+            OS_Warning("[file-system] Required runtime resource is missing: %s.\\n", path);
+            return FALSE;
+        }
+        #if FS_FILE_OPEN_DEBUG
+        char messageBuf[200] = {0};
+        snprintf(messageBuf, 199, "Failed to open file '%s'.", path);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", messageBuf, NULL);
+        #else
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
+        #endif
+
+        SIM_ShowRomExtractionDialog();
+
+        // Manual upstream launches may still use the legacy extraction flow.
+        return FS_OpenFile(p_file, path);
+        #endif'''
 CONFIG_SAVE_OPEN_PATCHED = (
     CONFIG_SAVE_OPEN_ORIGINAL
     + "\n    if (configFile == NULL) {\n        return;\n    }"
@@ -290,6 +325,46 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
     return current, current != source
 
 
+def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Avoid a recursive ROM picker when a launcher-managed runtime is incomplete."""
+    fs_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "libraries" / "fs" / "src" / "fs_file.c"
+    )
+    if not fs_path.is_file():
+        raise RuntimePreparationError(f"Simulator filesystem source missing: {fs_path}")
+
+    original = fs_path.read_text(encoding="utf-8")
+    current = original
+
+    if FS_OPEN_FALLBACK_PATCHED in current:
+        if current.count(FS_OPEN_FALLBACK_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate launcher-managed missing-resource guard in fs_file.c.")
+        if FS_OPEN_FALLBACK_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and patched ROM-extraction fallback exist in fs_file.c.")
+        patched = False
+    else:
+        if current.count(FS_OPEN_FALLBACK_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one known ROM-extraction fallback in fs_file.c; refusing uncertain patch."
+            )
+        current = current.replace(FS_OPEN_FALLBACK_ORIGINAL, FS_OPEN_FALLBACK_PATCHED, 1)
+        patched = True
+
+    original_include = "#include <string.h>\\n#include <SDL2/SDL.h>"
+    patched_include = "#include <string.h>\\n#include <stdlib.h>\\n#include <SDL2/SDL.h>"
+    if patched_include in current:
+        if current.count(patched_include) != 1:
+            raise RuntimePreparationError("Duplicate stdlib include in fs_file.c.")
+    else:
+        if current.count(original_include) != 1:
+            raise RuntimePreparationError("Expected exactly one SDK_PORT include block in fs_file.c.")
+        current = current.replace(original_include, patched_include, 1)
+        patched = True
+
+    return fs_path, current, current != original
+
+
 def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
     """Fix known simulator config bugs; reject unknown source rather than patching blindly."""
     if not config_path.is_file():
@@ -356,15 +431,18 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     current, main_changed = _ensure_android_working_directory(current)
     current, renderer_changed = _prepare_renderer_startup(current)
 
-    # Validate both source files before writing either one.
+    # Validate all three source files before writing any of them.
     config_path = path.parent / "config" / "sim_config.c"
     config_updated, config_changed = _prepare_sim_config(config_path)
+    fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
 
-    changed = current != original or config_changed
+    changed = current != original or config_changed or fs_changed
     if current != original:
         path.write_text(current, encoding="utf-8")
     if config_changed:
         config_path.write_text(config_updated, encoding="utf-8")
+    if fs_changed:
+        fs_path.write_text(fs_updated, encoding="utf-8")
     return changed
 
 

@@ -6,6 +6,7 @@ from scripts.prepare_native_runtime import (
     ANDROID_MAIN_INIT,
     CONFIG_ALARM_SECOND_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
+    FS_OPEN_FALLBACK_PATCHED,
     GL_LOADER_PATCHED,
     SDL_INIT_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
@@ -32,6 +33,33 @@ void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
     FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");
     fprintf(configFile, "test=%d\n", aConfig->internalResolutionScale);
     fclose(configFile);
+}'''
+
+UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
+#ifdef SDK_PORT
+#include <string.h>
+#include <SDL2/SDL.h>
+#include <simulator/sim_RomExtractor.h>
+#endif
+
+BOOL FS_OpenFile (FSFile *p_file, const char *path)
+{
+    if (p_file->pcFilePtr == NULL) {
+        #if FS_FILE_OPEN_DEBUG
+        char messageBuf[200] = {0};
+        snprintf(messageBuf, 199, "Failed to open file '%s'.", path);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", messageBuf, NULL);
+        #else
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
+        #endif
+
+        SIM_ShowRomExtractionDialog();
+
+        // try again, because the ROM should be extracted at this point
+        // yes, this is recursive, so if the user is dumb enough to keep extracting the wrong ROM and does this enough times, it will crash
+        return FS_OpenFile(p_file, path);
+    }
+    return TRUE;
 }'''
 
 UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
@@ -79,6 +107,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         config = source_dir / "config" / "sim_config.c"
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(UPSTREAM_SIM_CONFIG, encoding="utf-8")
+        fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+        fs_source.parent.mkdir(parents=True, exist_ok=True)
+        fs_source.write_text(UPSTREAM_FS_FILE, encoding="utf-8")
         return source
 
     def test_uses_imported_rom_header_and_keeps_desktop_only_fallback(self):
@@ -116,6 +147,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('config->osNvramConfig.ncd.alarm.second = atoi(value);', config_content)
             self.assertNotIn('config->osNvramConfig.ncd.alarm.minute = atoi(value);', config_content)
             self.assertIn('if (configFile == NULL) {\n        return;\n    }', config_content)
+            fs_content = (root / "subprojects/libntr/libraries/fs/src/fs_file.c").read_text(encoding="utf-8")
+            self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
+            self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
+            self.assertIn("defined(SDK_BUILD_ANDROID)", fs_content)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
@@ -201,6 +236,23 @@ class NativeRuntimePreparationTests(unittest.TestCase):
 
             self.assertFalse(prepare_native_runtime(root))
             self.assertEqual(config.read_text(encoding="utf-8"), once)
+
+    def test_unknown_fs_fallback_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            fs_source.write_text("unknown filesystem fallback\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), "unknown filesystem fallback\n")
 
     def test_unknown_sim_config_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:
