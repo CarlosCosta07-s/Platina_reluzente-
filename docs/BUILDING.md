@@ -1,6 +1,6 @@
 # Guia de compilação
 
-Este guia compila a base nativa real de Pokémon Platinum. Ele não inclui nem baixa automaticamente uma ROM comercial, firmware ou arquivos de jogo para o repositório. Use apenas uma cópia obtida legalmente e mantenha os dados extraídos localmente.
+Este guia compila a base nativa real de Pokémon Platinum. Ele não inclui nem baixa automaticamente uma ROM comercial, firmware ou arquivos de jogo para o repositório. Use apenas uma cópia obtida legalmente e mantenha os dados extraídos localmente. Este fluxo de build é específico de Platinum e não compila Pokémon Black. O porte paralelo de Black ainda está em auditoria técnica; acompanhe [o plano do projeto](POKEMON_BLACK_PORT.md).
 
 ## Requisitos comuns
 
