@@ -42,7 +42,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
             run_id="${{ github.event.workflow_run.id }}"
           else
-            run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native-desktop.yml/runs?branch=main&status=success&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA)] | first | .id // empty')"
+            run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native-desktop.yml/runs?branch=main&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .conclusion == "success")] | first | .id // empty')"
           fi
           if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
             echo "No successful native build matches this launcher source revision." >&2
