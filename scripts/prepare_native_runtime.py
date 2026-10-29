@@ -340,8 +340,10 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   if (managedRomPath != NULL && managedRomPath[0] != '\0') {
     std::error_code romError;
     const std::filesystem::path importedRom(managedRomPath);
-    if (!std::filesystem::is_regular_file(importedRom, romError) || romError) {
-      fprintf(stderr, "[Platina] Imported ROM is not a readable regular file: %s\n", managedRomPath);
+    const auto importedRomStatus = std::filesystem::symlink_status(importedRom, romError);
+    if (romError || std::filesystem::is_symlink(importedRomStatus)
+        || !std::filesystem::is_regular_file(importedRomStatus)) {
+      fprintf(stderr, "[Platina] Imported ROM is not a safe regular file: %s\n", managedRomPath);
       return 2;
     }
 
