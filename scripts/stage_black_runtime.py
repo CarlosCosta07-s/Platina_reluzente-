@@ -182,6 +182,7 @@ def _windows_dependencies(executable: Path, source_dir: Path,
     pending = [executable]
     inspected: set[Path] = set()
     collected: dict[str, Path] = {}
+    collected_names: set[str] = set()
 
     while pending:
         image = pending.pop()
@@ -202,7 +203,10 @@ def _windows_dependencies(executable: Path, source_dir: Path,
             )
         for name in parse_objdump_imports(result.stdout):
             key = name.casefold()
-            if key in collected:
+            # Windows resolves DLL names case-insensitively. Use a separate
+            # normalized set so imports with different casing never stage two
+            # entries targeting the same destination name.
+            if key in collected_names:
                 continue
             candidate = _find_windows_dll(name, search_dirs)
             if candidate is None:
@@ -213,6 +217,7 @@ def _windows_dependencies(executable: Path, source_dir: Path,
                     "Inclua a pasta que contém essa dependência com --dependency-dir."
                 )
             collected[name] = candidate
+            collected_names.add(key)
             pending.append(candidate)
     return collected
 
