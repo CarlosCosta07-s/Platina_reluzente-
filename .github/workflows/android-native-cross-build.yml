@@ -270,14 +270,53 @@ jobs:
           python "$GITHUB_WORKSPACE/tools/create_runtime_manifest.py" \
             --runtime-dir android-native-artifact/runtime-data
           test -s android-native-artifact/runtime-data/runtime-manifest.txt
+      - name: Set up JDK for integrated APK validation
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Node.js for Capacitor integration
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - name: Build and inspect the integrated Android APK without publishing it
+        id: integrated_android_apk
+        working-directory: launcher-app
+        env:
+          ANDROID_NATIVE_ARTIFACT_DIR: ${{ github.workspace }}/android-native-artifact
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm install --no-audit --no-fund
+          npm run build:web
+          npx cap add android
+          node scripts/integrate-android-runtime.cjs \
+            --project android \
+            --runtime-artifact "$ANDROID_NATIVE_ARTIFACT_DIR"
+          test -x android/gradlew
+          (
+            cd android
+            ./gradlew --no-daemon assembleDebug
+          )
+          apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          unzip -l "$apk" | grep -F 'lib/arm64-v8a/libmain.so'
+          unzip -l "$apk" | grep -F 'assets/pokeplatinum/runtime-manifest.txt'
+          echo "Integrated APK built and inspected at $apk. It remains in this disposable CI job and is not uploaded."
       - name: Write summary
         if: always()
+        env:
+          APK_BUILD_OUTCOME: ${{ steps.integrated_android_apk.outcome }}
         run: |
           {
             echo "## Android native ARM64 cross-build"
             echo
             echo "Expected ABI: arm64-v8a; minimum Android API: 24."
-            echo "This job compiles and validates the native ARM64 target and its temporary runtime-data tree."
-            echo "Runtime binaries and game-derived assets stay in disposable CI storage and are not uploaded."
+            echo "This job compiles the native ARM64 target and assembles an integrated debug APK in disposable CI storage."
+            if [[ "$APK_BUILD_OUTCOME" == "success" ]]; then
+              echo "The APK archive checks passed. No APK or game-derived runtime assets are uploaded."
+            else
+              echo "The integrated APK was not validated successfully; inspect the preceding failed or skipped steps."
+            fi
             echo "Gameplay, touch, audio and saves still require real-device testing."
           } >> "$GITHUB_STEP_SUMMARY"
