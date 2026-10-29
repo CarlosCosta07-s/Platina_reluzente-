@@ -246,6 +246,21 @@ FS_OPEN_FALLBACK_PATCHED = r'''        #ifdef SDK_BUILD_ANDROID
         // Manual upstream launches may still use the legacy extraction flow.
         return FS_OpenFile(p_file, path);
         #endif'''
+BACKUP_SAVE_PATH_INCLUDE_ORIGINAL = '''#ifdef SDK_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#endif'''
+BACKUP_SAVE_PATH_INCLUDE_PATCHED = '''#ifdef SDK_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef SDK_BUILD_ANDROID
+#define CARDI_BACKUP_SAVE_FILE "../save.bin"
+#else
+#define CARDI_BACKUP_SAVE_FILE "save.bin"
+#endif
+#endif'''
 CONFIG_SAVE_OPEN_PATCHED = (
     CONFIG_SAVE_OPEN_ORIGINAL
     + "\n    if (configFile == NULL) {\n        return;\n    }"
@@ -323,6 +338,44 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
             )
         current = current.replace(original, patched, 1)
     return current, current != source
+
+
+def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Keep Android save data beside the replaceable runtime directory."""
+    header_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "include" / "nitro" / "card" / "backup.h"
+    )
+    if not header_path.is_file():
+        raise RuntimePreparationError(f"Card backup header missing: {header_path}")
+
+    original = header_path.read_text(encoding="utf-8")
+    current = original
+    if BACKUP_SAVE_PATH_INCLUDE_PATCHED in current:
+        if current.count(BACKUP_SAVE_PATH_INCLUDE_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate Android save-path macro in backup.h.")
+    else:
+        if current.count(BACKUP_SAVE_PATH_INCLUDE_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one SDK_PORT include block in backup.h; refusing uncertain save-path patch."
+            )
+        current = current.replace(
+            BACKUP_SAVE_PATH_INCLUDE_ORIGINAL, BACKUP_SAVE_PATH_INCLUDE_PATCHED, 1
+        )
+
+    open_call = 'fopen("save.bin",'
+    patched_call = "fopen(CARDI_BACKUP_SAVE_FILE,"
+    if patched_call in current:
+        if current.count(patched_call) != 5 or open_call in current:
+            raise RuntimePreparationError("Backup save-path call sites are only partially patched.")
+    else:
+        if current.count(open_call) != 5:
+            raise RuntimePreparationError(
+                f"Expected exactly five save.bin fopen call sites in backup.h; found {current.count(open_call)}."
+            )
+        current = current.replace(open_call, patched_call)
+
+    return header_path, current, current != original
 
 
 def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path, str, bool]:
@@ -435,14 +488,19 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     config_path = path.parent / "config" / "sim_config.c"
     config_updated, config_changed = _prepare_sim_config(config_path)
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
+    backup_path, backup_updated, backup_changed = _prepare_backup_save_path(source_root)
 
-    changed = current != original or config_changed or fs_changed
+    changed = (
+        current != original or config_changed or fs_changed or backup_changed
+    )
     if current != original:
         path.write_text(current, encoding="utf-8")
     if config_changed:
         config_path.write_text(config_updated, encoding="utf-8")
     if fs_changed:
         fs_path.write_text(fs_updated, encoding="utf-8")
+    if backup_changed:
+        backup_path.write_text(backup_updated, encoding="utf-8")
     return changed
 
 

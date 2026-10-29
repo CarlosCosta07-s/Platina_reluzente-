@@ -5,6 +5,7 @@ from pathlib import Path
 from scripts.prepare_native_runtime import (
     ANDROID_MAIN_INIT,
     CONFIG_ALARM_SECOND_PATCHED,
+    BACKUP_SAVE_PATH_INCLUDE_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
     GL_LOADER_PATCHED,
@@ -34,6 +35,23 @@ void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
     fprintf(configFile, "test=%d\n", aConfig->internalResolutionScale);
     fclose(configFile);
 }'''
+
+UPSTREAM_BACKUP_HEADER = r'''#ifndef NITRO_CARD_BACKUP_H_
+#define NITRO_CARD_BACKUP_H_
+#include <nitro/types.h>
+#ifdef SDK_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#endif
+static void save_fixture(void) {
+    fopen("save.bin", "rb");
+    fopen("save.bin", "wb");
+    fopen("save.bin", "rb");
+    fopen("save.bin", "rb+");
+    fopen("save.bin", "rb+");
+}
+#endif'''
 
 UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
 #ifdef SDK_PORT
@@ -110,6 +128,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
         fs_source.parent.mkdir(parents=True, exist_ok=True)
         fs_source.write_text(UPSTREAM_FS_FILE, encoding="utf-8")
+        backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
+        backup_header.parent.mkdir(parents=True, exist_ok=True)
+        backup_header.write_text(UPSTREAM_BACKUP_HEADER, encoding="utf-8")
         return source
 
     def test_uses_imported_rom_header_and_keeps_desktop_only_fallback(self):
@@ -151,6 +172,11 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
             self.assertIn("#ifdef SDK_BUILD_ANDROID", fs_content)
+            backup_content = (root / "subprojects/libntr/include/nitro/card/backup.h").read_text(encoding="utf-8")
+            self.assertIn(BACKUP_SAVE_PATH_INCLUDE_PATCHED, backup_content)
+            self.assertEqual(5, backup_content.count("fopen(CARDI_BACKUP_SAVE_FILE,"))
+            self.assertNotIn('fopen("save.bin",', backup_content)
+            self.assertIn('CARDI_BACKUP_SAVE_FILE "../save.bin"', backup_content)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
@@ -253,6 +279,29 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(source.read_text(encoding="utf-8"), original_main)
             self.assertEqual(config.read_text(encoding="utf-8"), original_config)
             self.assertEqual(fs_source.read_text(encoding="utf-8"), "unknown filesystem fallback\n")
+
+    def test_unknown_backup_header_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            original_fs = fs_source.read_text(encoding="utf-8")
+            backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
+            backup_header.write_text("unknown backup implementation\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), original_fs)
+            self.assertEqual(
+                backup_header.read_text(encoding="utf-8"),
+                "unknown backup implementation\n",
+            )
 
     def test_unknown_sim_config_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:
