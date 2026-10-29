@@ -17,7 +17,7 @@ ORIGINAL_HEADER_LOAD = r'''  // Read the first 0x160 bytes of the rom and put it
   }'''
 
 # Previous revision. Upgrade it in place so repeated runtime preparation is safe.
-LEGACY_PRIOR_PATCHED_HEADER_LOAD = r'''  // Prefer the ROM selected in the launcher for the cartridge header.
+LEGACY_PATCHED_HEADER_LOAD = r'''  // Prefer the ROM selected in the launcher for the cartridge header.
   // Use the packaged header.bin as a safe fallback for direct/manual launches.
   const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
   FILE *romFile = NULL;
@@ -30,48 +30,6 @@ LEGACY_PRIOR_PATCHED_HEADER_LOAD = r'''  // Prefer the ROM selected in the launc
   if (romFile != NULL) {
     fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
     fclose(romFile);
-  }'''
-
-PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
-  // Windows/Linux receive the file path from the launcher; Android uses SDL's
-  // private app-storage path, matching Capacitor Filesystem Directory.Data.
-  FILE *romFile = NULL;
-#if defined(__ANDROID__)
-  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
-  std::string importedRomPath;
-  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
-    importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
-    romFile = fopen(importedRomPath.c_str(), "rb");
-  }
-  if (romFile == NULL) {
-    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
-            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
-    return 1;
-  }
-#else
-  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
-  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
-    romFile = fopen(importedRomPath, "rb");
-    if (romFile == NULL) {
-      fprintf(stderr, "Unable to open imported desktop ROM: %s\n", importedRomPath);
-      return 1;
-    }
-  } else {
-    // The desktop UI must be able to start before the user imports a ROM.
-    // header.bin remains a compatibility fallback for manual/legacy launches.
-    romFile = fopen("header.bin", "rb");
-  }
-#endif
-  // A first desktop launch without a selected ROM is valid: the UI will offer
-  // the import/extraction flow after the window has initialized. If a header
-  // is present, however, it must be complete. Android always requires a ROM.
-  if (romFile != NULL) {
-    const size_t headerBytesRead = fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
-    fclose(romFile);
-    if (headerBytesRead != 0x160) {
-      fprintf(stderr, "Incomplete ROM header: expected 352 bytes, read %zu\n", headerBytesRead);
-      return 1;
-    }
   }'''
 
 ANDROID_SYSTEM_INCLUDES = r'''#if defined(__ANDROID__)
@@ -149,7 +107,7 @@ PREVIOUS_PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all pl
   }'''
 
 
-PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
+PRIOR_PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
   // Windows/Linux receive the file path from the launcher; Android uses SDL's
   // private app-storage path, matching Capacitor Filesystem Directory.Data.
   FILE *romFile = NULL;
@@ -183,6 +141,48 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
   if (headerBytesRead != 0x160) {
     fprintf(stderr, "Incomplete ROM header: expected 352 bytes, read %zu\n", headerBytesRead);
     return 1;
+  }'''
+
+PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
+  // Windows/Linux receive the file path from the launcher; Android uses SDL's
+  // private app-storage path, matching Capacitor Filesystem Directory.Data.
+  FILE *romFile = NULL;
+#if defined(__ANDROID__)
+  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
+  std::string importedRomPath;
+  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
+    importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
+    romFile = fopen(importedRomPath.c_str(), "rb");
+  }
+  if (romFile == NULL) {
+    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
+            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
+    return 1;
+  }
+#else
+  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
+  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
+    romFile = fopen(importedRomPath, "rb");
+    if (romFile == NULL) {
+      fprintf(stderr, "Unable to open imported desktop ROM: %s\n", importedRomPath);
+      return 1;
+    }
+  } else {
+    // The desktop UI must be able to start before the user imports a ROM.
+    // header.bin remains a compatibility fallback for manual/legacy launches.
+    romFile = fopen("header.bin", "rb");
+  }
+#endif
+  // A first desktop launch without a selected ROM is valid: the UI will offer
+  // the import/extraction flow after the window has initialized. If a header
+  // is present, however, it must be complete. Android always requires a ROM.
+  if (romFile != NULL) {
+    const size_t headerBytesRead = fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
+    fclose(romFile);
+    if (headerBytesRead != 0x160) {
+      fprintf(stderr, "Incomplete ROM header: expected 352 bytes, read %zu\n", headerBytesRead);
+      return 1;
+    }
   }'''
 
 
