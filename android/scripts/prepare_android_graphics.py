@@ -73,6 +73,17 @@ SHADER_PROLOGUE = (
     "precision highp int;\n"
     "precision highp sampler2D;"
 )
+CHECKED_DESKTOP_GL_LOADER = r'''#ifndef SDK_BUILD_ANDROID
+  if (!gladLoadGLLoader(SDL_GL_GetProcAddress)) {
+    fprintf(stderr, "OpenGL function loader initialization failed.\\n");
+    SDL_GL_DeleteContext(context);
+    SDL_DestroyWindow(window);
+    context = NULL;
+    window = NULL;
+    return NULL;
+  }
+#endif'''
+
 BORDER_HELPER = """
 #ifdef SDK_BUILD_ANDROID
 #include <SDL2/SDL_video.h>
@@ -176,9 +187,16 @@ def prepare_android_graphics(source_root: str | Path, shader_output: str | Path 
     if changed:
         changes.append("sim_main.cpp: request OpenGL ES 3.2 on Android only")
     loader = "  gladLoadGLLoader(SDL_GL_GetProcAddress);"
-    main, changed = replace_exact(main, loader, "#ifndef SDK_BUILD_ANDROID\n" + loader + "\n#endif", "desktop GL loader")
+    if CHECKED_DESKTOP_GL_LOADER in main:
+        if main.count(CHECKED_DESKTOP_GL_LOADER) != 1:
+            raise AndroidGraphicsPatchError("desktop GL loader: duplicate checked loader block")
+        changed = False
+    else:
+        main, changed = replace_exact(
+            main, loader, CHECKED_DESKTOP_GL_LOADER, "checked desktop GL loader"
+        )
     if changed:
-        changes.append("sim_main.cpp: skip desktop GL loader on Android")
+        changes.append("sim_main.cpp: check desktop GL loader and skip it on Android")
     staged[main_path] = main
 
     draw_path = root / "libraries/sim/src/g3_draw.cpp"

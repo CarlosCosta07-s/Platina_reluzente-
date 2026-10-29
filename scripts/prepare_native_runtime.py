@@ -153,6 +153,56 @@ CONFIG_ALARM_SECOND_PATCHED = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
         config->osNvramConfig.ncd.alarm.second = atoi(value);
     }'''
 CONFIG_SAVE_OPEN_ORIGINAL = '    FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");'
+SDL_INIT_ORIGINAL = r'''  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
+           SDL_INIT_JOYSTICK);
+  SIM_Audio_Init(44100);'''
+SDL_INIT_PATCHED = r'''  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
+               SDL_INIT_JOYSTICK) != 0) {
+    fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
+    return NULL;
+  }
+  SIM_Audio_Init(44100);'''
+
+SDL_WINDOW_CONTEXT_ORIGINAL = r'''  window = SDL_CreateWindow(
+      windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
+      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+  context = SDL_GL_CreateContext(window);'''
+SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
+      windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
+      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+  if (window == NULL) {
+    fprintf(stderr, "SDL window creation failed: %s\n", SDL_GetError());
+    return NULL;
+  }
+  context = SDL_GL_CreateContext(window);
+  if (context == NULL) {
+    fprintf(stderr, "SDL GL context creation failed: %s\n", SDL_GetError());
+    SDL_DestroyWindow(window);
+    window = NULL;
+    return NULL;
+  }'''
+
+GL_LOADER_ORIGINAL = "  gladLoadGLLoader(SDL_GL_GetProcAddress);"
+GL_LOADER_PATCHED = r'''#ifndef SDK_BUILD_ANDROID
+  if (!gladLoadGLLoader(SDL_GL_GetProcAddress)) {
+    fprintf(stderr, "OpenGL function loader initialization failed.\n");
+    SDL_GL_DeleteContext(context);
+    SDL_DestroyWindow(window);
+    context = NULL;
+    window = NULL;
+    return NULL;
+  }
+#endif'''
+
+MAIN_RENDER_HANDOFF_ORIGINAL = "  SIM_RenderInit(NULL);\n  G3SIM_DrawInit();"
+MAIN_RENDER_HANDOFF_PATCHED = r'''  SIM_RenderInit(NULL);
+  if (window == NULL || context == NULL) {
+    fprintf(stderr, "Native renderer initialization failed; aborting startup.\n");
+    return 1;
+  }
+  G3SIM_DrawInit();'''
+
+
 CONFIG_SAVE_OPEN_PATCHED = (
     CONFIG_SAVE_OPEN_ORIGINAL
     + "\n    if (configFile == NULL) {\n        return;\n    }"
@@ -203,6 +253,28 @@ def _ensure_android_working_directory(source: str) -> tuple[str, bool]:
     if source.count(legacy_entry) > 1 or source.count(main_entry) != 1:
         raise RuntimePreparationError("Expected exactly one simulator main entrypoint for Android working-directory setup.")
     return source.replace(main_entry, patched_entry + "\n", 1), True
+
+
+def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
+    """Fail cleanly when SDL or the desktop OpenGL loader cannot initialize."""
+    current = source
+    blocks = (
+        (SDL_INIT_ORIGINAL, SDL_INIT_PATCHED, "SDL_Init result check"),
+        (SDL_WINDOW_CONTEXT_ORIGINAL, SDL_WINDOW_CONTEXT_PATCHED, "SDL window/context checks"),
+        (GL_LOADER_ORIGINAL, GL_LOADER_PATCHED, "desktop OpenGL loader check"),
+        (MAIN_RENDER_HANDOFF_ORIGINAL, MAIN_RENDER_HANDOFF_PATCHED, "renderer startup handoff check"),
+    )
+    for original, patched, label in blocks:
+        if patched in current:
+            if current.count(patched) != 1:
+                raise RuntimePreparationError(f"Duplicate {label} patch detected.")
+            continue
+        if current.count(original) != 1:
+            raise RuntimePreparationError(
+                f"Expected exactly one known upstream marker for {label}; refusing uncertain patch."
+            )
+        current = current.replace(original, patched, 1)
+    return current, current != source
 
 
 def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
@@ -269,6 +341,7 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     current, entrypoint_changed = _ensure_android_sdl_entrypoint(current)
     current, include_changed = _ensure_android_system_includes(current)
     current, main_changed = _ensure_android_working_directory(current)
+    current, renderer_changed = _prepare_renderer_startup(current)
 
     # Validate both source files before writing either one.
     config_path = path.parent / "config" / "sim_config.c"

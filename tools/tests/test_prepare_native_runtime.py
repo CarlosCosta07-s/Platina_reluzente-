@@ -6,6 +6,10 @@ from scripts.prepare_native_runtime import (
     ANDROID_MAIN_INIT,
     CONFIG_ALARM_SECOND_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
+    GL_LOADER_PATCHED,
+    SDL_INIT_PATCHED,
+    SDL_WINDOW_CONTEXT_PATCHED,
+    MAIN_RENDER_HANDOFF_PATCHED,
     LEGACY_ANDROID_MAIN_INIT,
     LEGACY_PATCHED_HEADER_LOAD,
     ORIGINAL_HEADER_LOAD,
@@ -33,6 +37,18 @@ void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
 UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 
+void *SIM_RenderInit(void *arg) {
+  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
+           SDL_INIT_JOYSTICK);
+  SIM_Audio_Init(44100);
+  window = SDL_CreateWindow(
+      windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
+      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+  context = SDL_GL_CreateContext(window);
+  gladLoadGLLoader(SDL_GL_GetProcAddress);
+  return NULL;
+}
+
 int main(int argc, char *argv[]) {
 #ifdef SDK_BUILD_NX
   // platform-specific setup
@@ -46,6 +62,8 @@ int main(int argc, char *argv[]) {
     fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
     fclose(romFile);
   }
+  SIM_RenderInit(NULL);
+  G3SIM_DrawInit();
   return 0;
 }'''
 
@@ -96,6 +114,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('config->osNvramConfig.ncd.alarm.second = atoi(value);', config_content)
             self.assertNotIn('config->osNvramConfig.ncd.alarm.minute = atoi(value);', config_content)
             self.assertIn('if (configFile == NULL) {\n        return;\n    }', config_content)
+            self.assertIn(SDL_INIT_PATCHED, content)
+            self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
+            self.assertIn(GL_LOADER_PATCHED, content)
+            self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
             self.assertFalse(prepare_native_runtime(root))
 
     def test_android_rom_open_failure_does_not_fall_back_to_packaged_header(self):

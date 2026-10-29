@@ -60,6 +60,8 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertIn("SDL_GL_CONTEXT_PROFILE_ES", main)
             self.assertIn("GLES3/gl32.h", main)
             self.assertIn("#ifndef SDK_BUILD_ANDROID", main)
+            self.assertIn("OpenGL function loader initialization failed.", main)
+            self.assertIn("SDL_GL_DeleteContext(context);", main)
             handler = (root / "include/simulator/g3_handler.h").read_text(encoding="utf-8")
             self.assertIn("GLES3/gl32.h", handler)
             handler_cpp = (root / "libraries/sim/src/g3_handler.cpp").read_text(encoding="utf-8")
