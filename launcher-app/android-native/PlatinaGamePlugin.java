@@ -195,7 +195,8 @@ public class PlatinaGamePlugin extends Plugin {
     private boolean isCompleteRuntime(File directory, String expectedVersion) {
         if (!directory.isDirectory()) return false;
         for (String relativePath : REQUIRED_RUNTIME_FILES) {
-            if (!new File(directory, relativePath).isFile()) return false;
+            File required = new File(directory, relativePath);
+            if (!required.isFile() || required.length() <= 0) return false;
         }
         File stamp = new File(directory, "build-version.txt");
         try {
@@ -224,8 +225,11 @@ public class PlatinaGamePlugin extends Plugin {
         }
     }
     private boolean assetExists(String assetPath) {
-        try (InputStream ignored = getContext().getAssets().open(assetPath)) { return true; }
-        catch (IOException error) { return false; }
+        try (InputStream input = getContext().getAssets().open(assetPath)) {
+            return input.read() != -1;
+        } catch (IOException error) {
+            return false;
+        }
     }
     private String readAssetText(String assetPath) throws IOException {
         try (InputStream input = getContext().getAssets().open(assetPath);
