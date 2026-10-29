@@ -415,14 +415,25 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("required local data is missing/corrupted", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("collectOverlayPaths", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('const std::string stem = prefix + "_";', ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn('collectOne("overlay9", "overlay9")', ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn('collectOne("overlay7", "overlay7")', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('collectOne("overlay9", "overlay9", requireAll)', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('collectOne("overlay7", "overlay7", false)', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("hasOverlay9", ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn("hasOverlay7", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("if (!hasOverlay9) return false;", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertNotIn("if (!hasOverlay9 || !hasOverlay7)", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("the group may be empty", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('"arm9.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('"arm7.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertNotIn('"firmware.bin"', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertNotIn('std::filesystem::path("msgdata/msg.narc")', ROM_PREFLIGHT_ENTRY_PATCHED)
+
+    def test_valid_rom_extraction_does_not_require_separate_arm7_overlay_files(self):
+        self.assertIn(
+            'if (!collectOne("overlay9", "overlay9", requireAll) ||',
+            ROM_PREFLIGHT_ENTRY_PATCHED,
+        )
+        self.assertIn('!collectOne("overlay7", "overlay7", false)', ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("ARM7's static", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("if (!hasOverlay9) return false;", ROM_PREFLIGHT_ENTRY_PATCHED)
 
     def test_desktop_first_launch_can_start_without_a_rom_header(self):
         self.assertIn('romFile = fopen("header.bin", "rb");', PATCHED_HEADER_LOAD)
