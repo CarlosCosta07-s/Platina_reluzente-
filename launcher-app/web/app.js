@@ -52,7 +52,6 @@ const NativeGame = registerPlugin('PlatinaGame');
     if (code !== 'CPUE' || romVersion !== 1) {
       throw new Error('Esta compilação exige Pokémon Platinum USA Rev. 1 (código CPUE e campo ROM version 0x1E igual a 1). A ROM selecionada não corresponde à versão configurada.');
     }
-    if (header[0x1e] !== 1) throw new Error('Esta compilação exige Pokémon Platinum USA Rev. 1: o campo ROM version no cabeçalho (0x1E) deve ser 1.');
   }
   function toBase64(buffer) {
     const bytes = new Uint8Array(buffer), chunks = [], chunkSize = 0x8000;
@@ -80,7 +79,7 @@ const NativeGame = registerPlugin('PlatinaGame');
       if (!result || result.canceled) return;
       if (!result.ok) throw new Error(result.message || 'Não foi possível importar a ROM.');
       state.romName = result.name; state.romSize = result.size; state.romImported = true;
-      localStorage.setItem('platinaRom', JSON.stringify({ name: result.name, size: result.size, storedPath: result.path }));
+      localStorage.setItem('platinaRom', JSON.stringify({ name: result.name, size: result.size, sha256: result.sha256 }));
       renderRom();
       setStatus('ROM validada e copiada para os dados privados do aplicativo.');
     } catch (error) { setStatus('Falha ao importar ROM: ' + error.message, true); }
