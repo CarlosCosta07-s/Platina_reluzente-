@@ -65,21 +65,24 @@ jobs:
           run-id: ${{ steps.native_artifact.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare binary-only native runtime
+      - name: Prepare binary-only native runtime and required path list
         shell: bash
         run: |
           set -Eeuo pipefail
           mapfile -t appimages < <(find "$RUNNER_TEMP/native-engine" -maxdepth 2 -type f -name '*.AppImage' -print)
-          if [[ "${#appimages[@]}" -ne 1 ]]; then
-            echo "Expected one verified native AppImage; found ${#appimages[@]}." >&2
+          mapfile -t path_manifests < <(find "$RUNNER_TEMP/native-engine" -maxdepth 2 -type f -name 'platinum-data-paths.txt' -print)
+          if [[ "${#appimages[@]}" -ne 1 || "${#path_manifests[@]}" -ne 1 ]]; then
+            echo "Expected one verified native AppImage and one path-only manifest; found ${#appimages[@]} AppImage(s), ${#path_manifests[@]} manifest(s)." >&2
             find "$RUNNER_TEMP/native-engine" -maxdepth 2 -type f -print || true
             exit 1
           fi
           runtime_dir="$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux/pokeplatinum"
           mkdir -p "$runtime_dir"
           install -m 0755 "${appimages[0]}" "$runtime_dir/pokeplatinum.AppImage"
+          install -m 0644 "${path_manifests[0]}" "$runtime_dir/platinum-data-paths.txt"
           test -x "$runtime_dir/pokeplatinum.AppImage"
-          echo "Prepared native AppImage only; no ROM or extracted data is included."
+          test -s "$runtime_dir/platinum-data-paths.txt"
+          echo "Prepared native AppImage and path-only manifest; no ROM or extracted data is included."
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
