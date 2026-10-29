@@ -117,7 +117,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       fflush(stdout);
     }
   }
-#ifdef SDK_BUILD_NX''
+#ifdef SDK_BUILD_NX'''
 
 CONFIG_ALARM_SECOND_ORIGINAL = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
         config->osNvramConfig.ncd.alarm.minute = atoi(value);
