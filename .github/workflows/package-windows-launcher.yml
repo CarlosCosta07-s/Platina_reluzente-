@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   package-windows:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     name: Build integrated Windows x64 launcher
     runs-on: windows-latest
     timeout-minutes: 35
@@ -32,43 +32,15 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Select native Windows executable from the matching successful build
+      - name: Select a successful compatible native Windows build
         id: native_artifact
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NATIVE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
         run: |
-          $headers = @{
-            Accept = "application/vnd.github+json"
-            Authorization = "Bearer $env:GITHUB_TOKEN"
-            "X-GitHub-Api-Version" = "2022-11-28"
-          }
-          if ($env:GITHUB_EVENT_NAME -eq "workflow_run") {
-            $runId = [string]"${{ github.event.workflow_run.id }}"
-          } else {
-            $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/workflows/native-desktop.yml/runs?branch=main&per_page=100"
-            $runsResponse = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $matchingRuns = @($runsResponse.workflow_runs |
-              Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq "success" } |
-              Sort-Object { [DateTime]$_.updated_at } -Descending |
-              Select-Object -First 1)
-            if ($matchingRuns.Count -ne 1) {
-              throw "No successful native build matches this launcher source revision."
-            }
-            $runId = [string]$matchingRuns[0].id
-          }
-          if ($runId -notmatch '^\d+$') {
-            throw "The native build workflow run ID is invalid: $runId"
-          }
-          $artifactUri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$runId/artifacts?per_page=100"
-          $artifactResponse = Invoke-RestMethod -Method Get -Uri $artifactUri -Headers $headers
-          $matchingArtifacts = @($artifactResponse.artifacts |
-            Where-Object { $_.name -eq "Platina-Reluzente-Windows-x64-native" -and -not $_.expired })
-          if ($matchingArtifacts.Count -lt 1) {
-            throw "The matching native build run has no unexpired Windows executable artifact."
-          }
-          "run_id=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          Write-Host "Selected native Windows artifact from matching successful run $runId."
+          node (Join-Path $env:GITHUB_WORKSPACE "launcher-app/scripts/select-compatible-native-build.cjs") windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download verified native Windows executable package
         uses: actions/download-artifact@v4
