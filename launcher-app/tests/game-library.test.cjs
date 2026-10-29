@@ -9,6 +9,7 @@ const appRoot = path.join(__dirname, '..');
 const webRoot = path.join(appRoot, 'web');
 const html = fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8');
 const appJs = fs.readFileSync(path.join(webRoot, 'app.js'), 'utf8');
+const css = fs.readFileSync(path.join(webRoot, 'styles.css'), 'utf8');
 const electronMain = fs.readFileSync(path.join(appRoot, 'electron', 'main.cjs'), 'utf8');
 const preload = fs.readFileSync(path.join(appRoot, 'electron', 'preload.cjs'), 'utf8');
 const packageConfig = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8'));
@@ -25,6 +26,10 @@ test('Platinum and Black are presented in one selectable launcher library', () =
   assert.match(appJs, /platinumDetail\.hidden = blackSelected/);
   assert.match(appJs, /blackDetail\.hidden = !blackSelected/);
   assert.match(html, /aria-label="Escolher jogo"/);
+  assert.match(css, /\.game-card\.selected/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 560px\)/);
+  assert.match(css, /prefers-reduced-motion/);
 });
 
 test('Black import and launch use an internal runtime slot; no external runtime picker exists', () => {
