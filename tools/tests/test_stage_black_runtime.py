@@ -62,11 +62,11 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             def fake_objdump(args, **kwargs):
                 image_name = Path(args[-1]).name.casefold()
                 if image_name == "eidos.exe":
-                    output = "  DLL Name: SDL3.dll\\n  DLL Name: Helper.dll\\n"
+                    output = "  DLL Name: SDL3.dll\n  DLL Name: Helper.dll\n"
                 elif image_name == "sdl3.dll":
-                    output = "  DLL Name: HELPER.DLL\\n"
+                    output = "  DLL Name: HELPER.DLL\n"
                 elif image_name == "helper.dll":
-                    output = "  DLL Name: KERNEL32.dll\\n"
+                    output = "  DLL Name: KERNEL32.dll\n"
                 else:
                     raise AssertionError("Unexpected dependency inspected: " + image_name)
                 return SimpleNamespace(returncode=0, stdout=output, stderr="")
