@@ -93,7 +93,7 @@ O arquivo esperado é `build64/host/eidos.exe`. Os nomes exatos de pacotes e pr�
 
 ## 5. Testar o contrato de inicialização sem um segundo seletor de ROM
 
-O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados. A seleção da ROM pelo launcher poderá ser reaproveitada sem abrir um segundo seletor. Importante: `EIDOS_HOME` isola a configuração, mas **não** redireciona a pasta de saves na revisão fixada. Por isso, também isole `APPDATA` no Windows ou `XDG_DATA_HOME` no Linux no ambiente do processo.
+O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados. O launcher já importa a ROM uma única vez e passa o caminho interno ao runtime pelo argumento `--rom`, sem exigir um segundo seletor de ROM. Importante: `EIDOS_HOME` isola a configuração, mas **não** redireciona a pasta de saves na revisão fixada. Por isso, também isole `APPDATA` no Windows ou `XDG_DATA_HOME` no Linux no ambiente do processo.
 
 Linux:
 
@@ -118,7 +118,7 @@ $eidosArgs = @(
 ```
 
 Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Estes comandos são somente para testes locais de desenvolvimento com um runtime compilado por você; eles não fazem parte do fluxo normal do usuário. O launcher unificado não permite escolher esse executável externo: ele reserva um recurso interno para Black e mantém a ação Iniciar bloqueada enquanto o runtime não puder ser distribuído legalmente. O início de um processo local não comprova que a tela de título apareceu. Não há pacote Black redistribuível aprovado.
-## 6. Validação mínima antes de pensar na integração
+## 6. Validação mínima do runtime local e próximo passo
 
 1. Execute os testes `ctest --test-dir build --output-on-failure` para a configuração de testes que você construiu, quando aplicável.
 2. Execute o binário local com os dados extraídos da própria ROM compatível.
