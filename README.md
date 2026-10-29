@@ -1,10 +1,10 @@
-# Platina Reluzente — porte nativo de Pokémon Platinum
+# Platina Reluzente — biblioteca de portes nativos
 
 > **Projeto comunitário de preservação e estudo, sem fins comerciais.** Não é um produto oficial nem possui vínculo com Nintendo, Game Freak ou The Pokémon Company.
 
-O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em **Windows e Linux**, reutilizando o código C reconstruído pela comunidade a partir do jogo original. O projeto não pretende incluir ROMs, firmware ou arquivos de jogo nos releases.
+O projeto reúne uma biblioteca experimental de portes nativos comunitários para **Windows e Linux**. O desenvolvimento principal continua sendo o porte de **Pokémon Platinum**, que já possui runtimes desktop e um launcher integrado em fase de testes. Em paralelo, iniciamos a pesquisa técnica e o planejamento do porte nativo de **Pokémon Black Version**, usando código reconstruído e compilado para o host — sem emulador de Nintendo DS ou interpretador de instruções ARM. O runtime Black ainda não foi integrado: por enquanto, ele aparece no launcher como projeto em desenvolvimento. Nenhuma ROM, firmware ou recurso protegido do jogo será incluído nos releases.
 
-## Estado real do projeto
+## Projetos da biblioteca\n\n- **Pokémon Platinum** — porte nativo principal em Windows/Linux. O launcher integrado já pode ser compilado, mas tela de título e jogabilidade ainda precisam ser confirmadas com uma cópia local compatível.\n- **Pokémon Black Version** — porte nativo paralelo em fase inicial de auditoria técnica. A entrada informativa já foi adicionada ao launcher; importação, execução e builds Black ainda não estão disponíveis. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md).\n\n## Estado real do projeto
 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
 - **Linux x86-64 e Windows x64:** ambos os alvos passaram na execução [40647214112 do GitHub Actions](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40647214112), em 28 de outubro de 2026. Os testes automatizados também passaram e cada pacote foi validado contra os 340 caminhos do manifesto upstream, incluindo recursos de animação. Isso valida compilação e integridade do pacote, não a inicialização nem a jogabilidade.
@@ -39,7 +39,7 @@ A rota escolhida é:
 
 A camada de compatibilidade recria serviços e chamadas gráficas que o jogo espera, mas **não executa uma CPU de DS emulada nem interpreta o código ARM do jogo durante a partida**: o código recompilado é compilado pelo toolchain do sistema-alvo.
 
-Veja o [guia de compilação](docs/BUILDING.md), a [arquitetura](docs/PORTING_ARCHITECTURE.md), o [roteiro](docs/ROADMAP.md), a [estratégia PT-BR](docs/LOCALIZATION.md) e o [aviso legal](docs/LEGAL.md).
+Veja o [guia de compilação](docs/BUILDING.md), a [arquitetura](docs/PORTING_ARCHITECTURE.md), o [roteiro geral](docs/ROADMAP.md), o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md), a [estratégia PT-BR](docs/LOCALIZATION.md) e o [aviso legal](docs/LEGAL.md).
 
 ## Código de referência e compilação
 
