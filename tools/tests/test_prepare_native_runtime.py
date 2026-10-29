@@ -185,12 +185,12 @@ void CARDi_RequestWriteSectorCommand(u32 src, u32 dst, u32 len, BOOL verify,
 #endif'''
 
 UPSTREAM_CARD_BACKUP_SOURCE = (
-    "#include <nitro.h>\\n"
-    "BOOL CARD_IdentifyBackup(CARDBackupType type)\\n"
-    "{\\n"
-    "#if SDK_VERSION_MAJOR == 5\\n"
+    "#include <nitro.h>\n"
+    "BOOL CARD_IdentifyBackup(CARDBackupType type)\n"
+    "{\n"
+    "#if SDK_VERSION_MAJOR == 5\n"
     + CARD_IDENTIFY_BACKUP_ORIGINAL
-    + "\\n#endif\\n}\\n"
+    + "\n#endif\n}\n"
 )
 
 UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
@@ -579,7 +579,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             ))
             self.assertIn("CARDi_IdentifyBackupCore2(type);", CARD_IDENTIFY_BACKUP_PATCHED)
             self.assertIn("CARDi_EndTask(&cardi_common);", CARD_IDENTIFY_BACKUP_PATCHED)
-            self.assertIn("#else\\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
+            self.assertIn("#else\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
             self.assertFalse(prepare_native_runtime(root))
             self.assertEqual(card_source.read_text(encoding="utf-8"), patched)
             self.assertNotEqual(original, patched)
@@ -592,7 +592,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             config = source.parent / "config" / "sim_config.c"
             original_config = config.read_text(encoding="utf-8")
             card_source = root / "subprojects/libntr/libraries/card/src/card_backup.c"
-            card_source.write_text("unknown card backup implementation\\n", encoding="utf-8")
+            card_source.write_text("unknown card backup implementation\n", encoding="utf-8")
 
             with self.assertRaises(RuntimePreparationError):
                 prepare_native_runtime(root)
@@ -601,7 +601,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(config.read_text(encoding="utf-8"), original_config)
             self.assertEqual(
                 card_source.read_text(encoding="utf-8"),
-                "unknown card backup implementation\\n",
+                "unknown card backup implementation\n",
             )
 
     def test_unknown_backup_header_fails_before_any_source_file_is_written(self):
