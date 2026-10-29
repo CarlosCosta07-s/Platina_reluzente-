@@ -5,11 +5,64 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('../electron/runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec } = require('../electron/runtime.cjs');
 
 test('runtime resolves under Electron resources when packaged', () => {
   assert.equal(resolveRuntimeDirectory(true, '/app/resources', '/app'), path.join('/app/resources', 'runtime'));
 });
+
+test('Platinum launch contract passes the verified ROM and Linux AppImage extraction flag', () => {
+  const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' };
+  const rom = { filePath: '/tmp/private-rom/current.nds', sha256: 'a'.repeat(64) };
+  const spec = createPlatinumLaunchSpec({
+    runtime,
+    rom,
+    logPath: '/tmp/platinum-logs/native-startup.log',
+    platform: 'linux',
+    env: { PATH: '/usr/bin', DISPLAY: ':7' }
+  });
+
+  assert.equal(spec.executable, runtime.executable);
+  assert.deepEqual(spec.args, ['--appimage-extract-and-run']);
+  assert.equal(spec.cwd, runtime.root);
+  assert.equal(spec.env.PLATINA_IMPORTED_ROM, rom.filePath);
+  assert.equal(spec.env.PLATINA_IMPORTED_ROM_SHA256, rom.sha256);
+  assert.equal(spec.env.PATH, '/usr/bin');
+  assert.equal(spec.env.DISPLAY, ':7');
+  assert.equal(spec.logPath, '/tmp/platinum-logs/native-startup.log');
+  assert.equal(spec.romSha256, rom.sha256);
+  assert.equal(spec.platform, 'linux');
+});
+
+test('Platinum launch contract omits Linux-only arguments on Windows', () => {
+  const spec = createPlatinumLaunchSpec({
+    runtime: { root: 'C:\\Platina\\runtime', executable: 'C:\\Platina\\runtime\\main.exe' },
+    rom: { filePath: 'C:\\Users\\tester\\roms\\current.nds', sha256: 'b'.repeat(64) },
+    logPath: 'C:\\Users\\tester\\logs\\native-startup.log',
+    platform: 'win32',
+    env: { PATH: 'C:\\Windows\\System32' }
+  });
+
+  assert.deepEqual(spec.args, []);
+  assert.equal(spec.cwd, 'C:\\Platina\\runtime');
+  assert.equal(spec.env.PATH, 'C:\\Windows\\System32');
+  assert.equal(spec.platform, 'win32');
+});
+
+test('Platinum launch contract rejects missing or malformed ROM identity', () => {
+  const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' };
+  const logPath = '/tmp/platinum-logs/native-startup.log';
+  assert.throws(() => createPlatinumLaunchSpec({
+    runtime, rom: { filePath: '/tmp/rom.nds', sha256: 'invalid' }, logPath, platform: 'linux', env: {}
+  }), /ROM verificada/);
+  assert.throws(() => createPlatinumLaunchSpec({
+    runtime, rom: null, logPath, platform: 'linux', env: {}
+  }), /ROM verificada/);
+  assert.throws(() => createPlatinumLaunchSpec({
+    runtime, rom: { filePath: 'relative.nds', sha256: 'a'.repeat(64) }, logPath, platform: 'linux', env: {}
+  }), /ROM verificada/);
+});
+
 test('runtime finds the included Windows/Linux executable names', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-'));
   try {
