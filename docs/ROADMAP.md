@@ -55,6 +55,7 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 - [x] Comparar os sete NARC allowlisted entre a ROM Rev. 0 enviada e a referência PT-BR: os sete caminhos e IDs FAT coincidem, todos são NARC válidos e a referência traduzida passa nos hashes aprovados.
 - [x] Endurecer o importador do launcher para exigir o SHA-1 integral exato da ROM Rev. 1 antes de instalar a cópia local; teste de regressão mantém a ROM anterior se o hash falhar.
 - [x] Registrar stdout/stderr do runtime nativo em `native-startup.log` e mostrar o caminho no launcher quando o processo é iniciado; a mensagem deixa claro que isso não prova a tela de título.
+- [x] Implementar fallback de extração automática a partir da ROM importada quando faltar um recurso local: tenta uma vez, reabre o recurso e encerra com log se continuar ausente; não chama um seletor de ROM duplicado nem mantém recursão infinita.
 - [ ] Validar o patch Xdelta v1.2.0 contra uma ROM que corresponda à base documentada CRC-32 `1D8A5220`; essa aplicação ainda não foi executada.
 - [ ] Criar e testar o pacote/overlay PT-BR isolado sem modificar a ROM original.
 - [ ] Refatorar o importador atual, que ainda espera uma fonte PT-BR e substitui arquivos no runtime, para criar/validar uma camada de tradução isolada sem modificar a base original.
