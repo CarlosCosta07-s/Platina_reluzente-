@@ -96,6 +96,13 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
     return;
   }
 
+  // No transaction residue remains, but there is no SHA-256-verified ROM pair
+  // to expose. Preserve any files so a later explicit import can replace them
+  // after verifying its staged source.
+  if (![hasRomBackup, hasMetadataBackup, hasRomStaging, hasMetadataStaging].some(Boolean)) {
+    return false;
+  }
+
   // First-import crash after the ROM rename but before the metadata rename.
   // The temporary metadata carries the expected SHA-256, so recover only if
   // it proves that the installed ROM is exactly the staged version.
