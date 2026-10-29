@@ -80,22 +80,22 @@ test('stages a Windows runtime with main.exe without requiring Unix executable b
   assert.equal(fs.existsSync(path.join(destinationRoot, 'wazaeffect', 'we.arc')), false);
 });
 
-test('refuses to stage a runtime that contains a ROM or patch and preserves the previous destination', (t) => {
+test('refuses to stage a Windows runtime that contains a ROM or patch and preserves the previous destination', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-stage-runtime-forbidden-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const sourceRoot = path.join(root, 'build_linux', 'pokeplatinum');
+  const sourceRoot = path.join(root, 'build_win64', 'pokeplatinum');
   const destinationRoot = path.join(root, 'launcher-app', 'runtime');
-  createRuntime(sourceRoot, 'linux');
+  createRuntime(sourceRoot, 'windows');
   fs.writeFileSync(path.join(sourceRoot, 'local-rom.nds'), 'must never enter the packaged runtime');
   fs.mkdirSync(destinationRoot, { recursive: true });
   fs.writeFileSync(path.join(destinationRoot, 'preserve.txt'), 'previous destination');
 
   assert.throws(
-    () => stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux' }),
+    () => stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'windows' }),
     /ROM\/save\/patch proibido/
   );
   assert.equal(fs.readFileSync(path.join(destinationRoot, 'preserve.txt'), 'utf8'), 'previous destination');
-  assert.equal(fs.existsSync(path.join(destinationRoot, 'main')), false);
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'main.exe')), false);
 });
 
 test('refuses symbolic links in the native runtime source', (t) => {
