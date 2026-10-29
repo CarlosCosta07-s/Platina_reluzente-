@@ -37,7 +37,7 @@ test('Black import and launch use an internal runtime slot; no external runtime 
   assert.match(html, /black-launch-button/);
   assert.doesNotMatch(html, /Selecionar runtime Eidos local|black-runtime-button/i);
   assert.match(electronMain, /function blackRuntimeDirectory\(\)/);
-  assert.match(electronMain, /path\.join\(process\.resourcesPath, 'black-runtime'\)/);
+  assert.match(electronMain, /path\.join\(process\.resourcesPath, 'black-runtime', 'runtime'\)/);
   assert.match(electronMain, /ipcMain\.handle\('platina:black-status'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:import-black-rom'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:launch-black-game'/);
