@@ -71,6 +71,9 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /input\.read\(\) != -1/);
     assert.match(plugin, /!required\.isFile\(\) \|\| required\.length\(\) <= 0/);
     assert.match(plugin, /runtime-manifest\.txt/);
+    assert.match(plugin, /Os\.lstat\(file\.getAbsolutePath\(\)\)/);
+    assert.match(plugin, /isRegularFileWithoutSymlinks\(directory, fields\[0\]\)/);
+    assert.match(plugin, /if \(isSymbolicLink\(file\)\) return file\.delete\(\)/);
     assert.match(plugin, /listedFile\.length\(\) != expectedSize/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
     const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');

@@ -1,6 +1,10 @@
 package org.carloscostaxavier.platinareluzentelauncher;
 
 import android.app.Activity;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+import android.system.StructStat;
 import android.content.Intent;
 import android.content.res.AssetManager;
 import com.getcapacitor.JSObject;
@@ -200,16 +204,49 @@ public class PlatinaGamePlugin extends Plugin {
         deleteRecursively(previous);
     }
 
+    private boolean isSymbolicLink(File file) {
+        try {
+            StructStat stat = Os.lstat(file.getAbsolutePath());
+            return (stat.st_mode & OsConstants.S_IFMT) == OsConstants.S_IFLNK;
+        } catch (ErrnoException error) {
+            // A missing entry is not a symlink. Permission/I/O failures are
+            // treated as unsafe so validation and cleanup never follow an
+            // entry whose type could not be established.
+            return error.errno != OsConstants.ENOENT && error.errno != OsConstants.ENOTDIR;
+        }
+    }
+
+    private boolean isRegularFileWithoutSymlinks(File root, String relativePath) {
+        if (!isSafeRuntimePath(relativePath) || isSymbolicLink(root) || !root.isDirectory()) {
+            return false;
+        }
+        String[] components = relativePath.split("/");
+        File current = root;
+        for (int index = 0; index < components.length; index++) {
+            current = new File(current, components[index]);
+            if (isSymbolicLink(current)) return false;
+            if (index < components.length - 1) {
+                if (!current.isDirectory()) return false;
+            } else if (!current.isFile()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean isCompleteRuntime(File directory, String expectedVersion) {
-        if (!directory.isDirectory()) return false;
+        if (isSymbolicLink(directory) || !directory.isDirectory()) return false;
         for (String relativePath : REQUIRED_RUNTIME_FILES) {
+            if (!isRegularFileWithoutSymlinks(directory, relativePath)) return false;
             File required = new File(directory, relativePath);
-            if (!required.isFile() || required.length() <= 0) return false;
+            if (required.length() <= 0) return false;
         }
 
         File stamp = new File(directory, "build-version.txt");
         File manifest = new File(directory, "runtime-manifest.txt");
         try {
+            if (!isRegularFileWithoutSymlinks(directory, "build-version.txt")
+                    || !isRegularFileWithoutSymlinks(directory, "runtime-manifest.txt")) return false;
             if (!expectedVersion.equals(readFileText(stamp).trim())) return false;
 
             Set<String> listedFiles = new HashSet<>();
@@ -230,7 +267,8 @@ public class PlatinaGamePlugin extends Plugin {
                     if (expectedSize < 0) return false;
 
                     File listedFile = new File(directory, fields[0]);
-                    if (!listedFile.isFile() || listedFile.length() != expectedSize
+                    if (!isRegularFileWithoutSymlinks(directory, fields[0])
+                            || listedFile.length() != expectedSize
                             || !listedFiles.add(fields[0])) return false;
                 }
             }
@@ -302,6 +340,9 @@ public class PlatinaGamePlugin extends Plugin {
         }
     }
     private boolean deleteRecursively(File file) {
+        // lstat the entry first: File.isDirectory() follows symlinks and would
+        // otherwise recurse into an unrelated directory before deleting it.
+        if (isSymbolicLink(file)) return file.delete();
         if (!file.exists()) return true;
         if (file.isDirectory()) {
             File[] children = file.listFiles();
