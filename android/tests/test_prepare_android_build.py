@@ -354,13 +354,20 @@ endif
 
             meson.write_text(
                 "if(build_target == 'arm')\n"
-                "    ppwlobby_c_args = ['-wrap:sdk', '2.0/sp2p3', '-nothumb']\n"
+                "    ppwlobby_c_args = [\n"
+                "        '-wrap:sdk', '2.0/sp2p3',\n"
+                "        '-nothumb'\n"
+                "    ]\n"
                 "    ppwlobby_cpp_args = ppwlobby_c_args\n"
                 "elif(build_target == 'android')\n"
+                "    # These are C sources; C++ flags make Clang reject the Android build.\n"
                 "    ppwlobby_c_args = ['-std=c99']\n"
                 "    ppwlobby_cpp_args = ['-fpermissive', '-std=c++03']\n"
                 "else\n"
-                "    ppwlobby_c_args = ['-fpermissive', '-std=c++03']\n"
+                "    ppwlobby_c_args = [\n"
+                "        '-fpermissive',\n"
+                "        '-std=c++03'\n"
+                "    ]\n"
                 "    ppwlobby_cpp_args = ppwlobby_c_args\n"
                 "endif\n",
                 encoding="utf-8",
