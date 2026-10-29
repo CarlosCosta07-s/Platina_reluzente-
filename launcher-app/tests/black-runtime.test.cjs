@@ -111,7 +111,7 @@ test('Black launch spec keeps ROM, extraction, config and save paths separate', 
     romPath: paths.romPath,
     romSha256: 'b'.repeat(64),
     platform: 'linux',
-    env: { PATH: '/usr/bin' }
+    env: { PATH: '/usr/bin', LD_LIBRARY_PATH: '/opt/custom/lib:/opt/another/lib' }
   });
   assert.deepEqual(spec.args, ['--rom', paths.romPath, '--data-root', paths.extractDir]);
   assert.equal(spec.cwd, runtime.directory);
@@ -120,5 +120,9 @@ test('Black launch spec keeps ROM, extraction, config and save paths separate', 
   assert.equal(spec.logPath, paths.logPath);
   assert.equal(spec.romSha256, 'b'.repeat(64));
   assert.equal(spec.env.PATH, '/usr/bin');
+  assert.equal(
+    spec.env.LD_LIBRARY_PATH,
+    [runtime.directory, '/opt/custom/lib', '/opt/another/lib'].join(':')
+  );
   assert.equal(spec.env.APPDATA, undefined);
 });
