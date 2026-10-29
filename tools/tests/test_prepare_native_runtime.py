@@ -369,6 +369,46 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(config.read_text(encoding="utf-8"), original_config)
             self.assertEqual(fs_source.read_text(encoding="utf-8"), "unknown filesystem fallback\n")
 
+    def test_backup_io_hardening_upgrades_the_earlier_save_path_only_patch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_source(root)
+            backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
+            content = backup_header.read_text(encoding="utf-8")
+            original_include = """#ifdef SDK_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#endif"""
+            legacy_include = """#ifdef SDK_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef SDK_BUILD_ANDROID
+#define CARDI_BACKUP_SAVE_FILE "../save.bin"
+#else
+#define CARDI_BACKUP_SAVE_FILE "save.bin"
+#endif
+#endif"""
+            self.assertEqual(content.count(original_include), 1)
+            self.assertEqual(content.count('fopen("save.bin",'), 5)
+            content = content.replace(original_include, legacy_include, 1)
+            content = content.replace(
+                'fopen("save.bin",', "fopen(CARDI_BACKUP_SAVE_FILE,"
+            )
+            backup_header.write_text(content, encoding="utf-8")
+
+            self.assertTrue(prepare_native_runtime(root))
+            hardened = backup_header.read_text(encoding="utf-8")
+            self.assertIn(BACKUP_FILE_IO_HELPERS_PATCHED, hardened)
+            self.assertIn(BACKUP_READ_BODY_PATCHED, hardened)
+            self.assertIn(BACKUP_WRITE_BODY_PATCHED, hardened)
+            self.assertIn(BACKUP_WRITE_VERIFY_BODY_PATCHED, hardened)
+            self.assertNotIn('fopen("save.bin",', hardened)
+            self.assertNotIn("return CARD_RESULT_SUCCESS;", hardened)
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(backup_header.read_text(encoding="utf-8"), hardened)
+
     def test_unknown_backup_header_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
