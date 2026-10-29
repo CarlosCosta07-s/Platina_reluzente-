@@ -29,6 +29,17 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     fs.mkdirSync(path.join(runtimeData, 'battle', 'skill'), { recursive: true });
     fs.writeFileSync(path.join(runtimeData, 'wazaeffect', 'we.arc'), 'waza-effect archive');
     fs.writeFileSync(path.join(runtimeData, 'battle', 'skill', 'waza_seq.narc'), 'move-animation archive');
+    const runtimeManifestFiles = [
+      'header.bin',
+      'firmware.bin',
+      'build-version.txt',
+      'wazaeffect/we.arc',
+      'battle/skill/waza_seq.narc',
+    ];
+    const runtimeManifest = runtimeManifestFiles.map((relative) => (
+      relative + '\t' + fs.statSync(path.join(runtimeData, relative)).size
+    ));
+    fs.writeFileSync(path.join(runtimeData, 'runtime-manifest.txt'), runtimeManifest.join('\n') + '\n');
     fs.writeFileSync(path.join(sdl, 'SDLActivity.java'), 'package org.libsdl.app; public class SDLActivity {}\n');
 
     const result = integrateAndroidRuntime({ projectDir: project, runtimeArtifactDir: runtime });
@@ -47,6 +58,7 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'build-version.txt')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'wazaeffect', 'we.arc')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'battle', 'skill', 'waza_seq.narc')));
+    assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'assets', 'pokeplatinum', 'runtime-manifest.txt')));
     assert.ok(fs.existsSync(path.join(app, 'src', 'main', 'java', 'org', 'libsdl', 'app', 'SDLActivity.java')));
     assert.match(mainActivity, /registerPlugin\(PlatinaGamePlugin\.class\)/);
     assert.match(plugin, /startActivity\(intent\)/);
@@ -58,6 +70,8 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /input\.read\(\) != -1/);
     assert.match(plugin, /!required\.isFile\(\) \|\| required\.length\(\) <= 0/);
+    assert.match(plugin, /runtime-manifest\.txt/);
+    assert.match(plugin, /listedFile\.length\(\) != expectedSize/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
     const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
     assert.match(plugin, /romVersion != 1/);
@@ -100,6 +114,40 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
   }
 });
 
+test('Android runtime integration rejects a runtime asset with the wrong manifest size', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-android-bad-manifest-'));
+  try {
+    const runtime = path.join(temp, 'native-artifact');
+    const runtimeData = path.join(runtime, 'runtime-data');
+    fs.mkdirSync(path.join(runtimeData, 'wazaeffect'), { recursive: true });
+    fs.mkdirSync(path.join(runtimeData, 'battle', 'skill'), { recursive: true });
+    for (const name of ['libmain.so', 'libSDL2.so', 'libc++_shared.so']) {
+      fs.writeFileSync(path.join(runtime, name), Buffer.from('binary ' + name));
+    }
+    const files = {
+      'header.bin': 'header',
+      'firmware.bin': 'firmware',
+      'build-version.txt': 'test-build\n',
+      'wazaeffect/we.arc': 'waza-effect archive',
+      'battle/skill/waza_seq.narc': 'move-animation archive',
+    };
+    for (const [relative, value] of Object.entries(files)) {
+      fs.writeFileSync(path.join(runtimeData, relative), value);
+    }
+    const manifestLines = Object.entries(files).map(([relative, value]) => {
+      const expectedSize = relative === 'header.bin' ? 999 : Buffer.byteLength(value);
+      return relative + '\t' + expectedSize;
+    });
+    fs.writeFileSync(path.join(runtimeData, 'runtime-manifest.txt'), manifestLines.join('\n') + '\n');
+
+    assert.throws(
+      () => integrateAndroidRuntime({ projectDir: path.join(temp, 'android'), runtimeArtifactDir: runtime }),
+      /Runtime manifest size mismatch or missing regular file: header\.bin/,
+    );
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
 test('Android runtime integration rejects an artifact missing a required game archive', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-android-missing-archive-'));
   try {
