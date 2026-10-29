@@ -2,7 +2,7 @@ name: Package Windows launcher from verified native engine
 
 concurrency:
   group: windows-launcher-package-v2-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 on:
   push:
