@@ -33,7 +33,7 @@ export async function persistRomAtomically({
       // recovery. Permission, I/O, and other failures must not be mistaken for
       // absence, otherwise replacement could proceed without protecting the
       // existing valid ROM or backup.
-      if (/\\bENOENT\\b|no such file|file (?:does not exist|not found)|path (?:does not exist|not found)/i.test(message)) {
+      if (/\\bENOENT\\b|no such (?:file|directory)|(?:file|path|directory) (?:does not exist|not found)/i.test(message)) {
         return false;
       }
       throw error;
