@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101522">
-  <meta name="description" content="Launcher de teste multiplataforma do projeto Platina Reluzente.">
-  <title>Platina Reluzente — Launcher</title>
+  <meta name="description" content="Biblioteca experimental de portes nativos: Pokémon Platinum e o projeto paralelo de Pokémon Black.">
+  <title>Platina Reluzente — Biblioteca de Ports Nativos</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./app.js" defer></script>
 </head>
@@ -21,12 +21,12 @@
       </div>
       <div class="nav-label">BIBLIOTECA</div>
       <a class="nav-item active" href="#game-library" aria-current="page">
-        <span class="nav-icon">◈</span><span>Meus jogos</span><span class="nav-count">01</span>
+        <span class="nav-icon">◈</span><span>Meus jogos</span><span class="nav-count">02</span>
       </a>
       <div class="sidebar-bottom">
         <div class="sidebar-rule"></div>
         <div class="mini-label">PROJETO</div>
-        <p>Um porte comunitário de código nativo, desenvolvido para testes locais.</p>
+        <p>Uma biblioteca experimental para portes nativos comunitários. Pokémon Black está em desenvolvimento paralelo.</p>
         <a href="https://github.com/CarlosCosta07-s/Platina_reluzente-" target="_blank" rel="noreferrer">Repositório ↗</a>
       </div>
     </aside>
@@ -55,7 +55,7 @@
           <div class="eyebrow"><span class="eyebrow-line"></span> JOGO DA BIBLIOTECA</div>
           <h1>Pokémon Platinum</h1>
           <p class="subtitle">Porte nativo comunitário</p>
-          <p class="description">O pacote completo inclui o runtime nativo da plataforma e os recursos do jogo. Importe sua ROM local (.nds); não é necessário localizar um executável separado.</p>
+          <p class="description">O pacote inclui o executável nativo de Platinum. Importe uma cópia compatível USA Rev. 1 (.nds); recursos ausentes são preparados localmente. Não é necessário escolher um executável separado.</p>
           <div class="tag-row">
             <span class="tag">C / C++ NATIVO</span>
             <span class="tag">BUILD EXPERIMENTAL</span>
@@ -92,11 +92,47 @@
         </div>
       </section>
 
+      <section class="content-section black-project-section" aria-labelledby="black-project-title">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">PORTE PARALELO</div>
+            <h2>Próximo projeto da biblioteca</h2>
+          </div>
+          <span class="section-note">EM DESENVOLVIMENTO</span>
+        </div>
+
+        <article class="black-project-card">
+          <div class="black-project-art" aria-hidden="true">
+            <div class="black-art-grid"></div>
+            <div class="black-art-orbit black-art-orbit-one"></div>
+            <div class="black-art-orbit black-art-orbit-two"></div>
+            <div class="black-art-mark"><span>PORTE NATIVO</span><strong>BLACK</strong><em>VERSION</em></div>
+            <div class="black-art-index">PROJECT 02</div>
+          </div>
+          <div class="black-project-copy">
+            <div class="eyebrow"><span class="eyebrow-line"></span> PROJETO EM FASE INICIAL</div>
+            <h2 id="black-project-title">Pokémon Black Version</h2>
+            <p>Um segundo porte nativo para Windows e Linux será desenvolvido em paralelo ao de Platinum. A direção técnica é compilar código C reconstruído para o computador, sem emulador de Nintendo DS nem interpretador de instruções ARM.</p>
+            <div class="tag-row">
+              <span class="tag">C NATIVO</span>
+              <span class="tag">WINDOWS / LINUX</span>
+              <span class="tag">BASE EM AUDITORIA</span>
+            </div>
+            <div class="black-project-status" role="status">
+              <span class="compat-symbol pending" aria-hidden="true">…</span>
+              <div><strong>Em desenvolvimento</strong><span>Runtime Black ainda não integrado ao launcher.</span></div>
+            </div>
+            <p class="black-project-note">Esta entrada é informativa. Importação de ROM e inicialização estão indisponíveis até existir um runtime próprio, validado e separado de Platinum.</p>
+            <a class="project-doc-link" href="https://github.com/CarlosCosta07-s/Platina_reluzente-/blob/main/docs/POKEMON_BLACK_PORT.md" target="_blank" rel="noreferrer">Ver plano técnico do porte ↗</a>
+          </div>
+        </article>
+      </section>
+
       <section class="content-section bottom-section">
         <div class="section-heading">
           <div>
             <div class="eyebrow">ESTADO DO PROJETO</div>
-            <h2>Compatibilidade</h2>
+            <h2>Platinum — compatibilidade atual</h2>
           </div>
         </div>
         <div class="compat-grid">
@@ -111,7 +147,7 @@
             <span class="compat-state available">DESKTOP</span>
           </div>
         </div>
-        <p class="legal-note">Projeto comunitário não oficial. Não inclui ROMs nem arquivos protegidos do jogo. Use apenas uma cópia que você tenha direito de utilizar.</p>
+        <p class="legal-note">As indicações abaixo referem-se ao runtime de Pokémon Platinum, não ao porte planejado de Black. Projeto comunitário não oficial; nenhum launcher inclui ROMs nem arquivos protegidos do jogo. Use apenas uma cópia que você tenha direito de utilizar.</p>
       </section>
 
       <footer class="footer">
