@@ -1,5 +1,17 @@
 # Versões e localização
 
+## Decisão de produto: idioma no launcher
+
+O jogo deverá ser iniciado com a **ROM original Pokémon Platinum USA Rev. 1**. A experiência final não exigirá uma ROM PT-BR modificada nem substituirá os bytes da ROM importada.
+
+Antes de iniciar, o launcher oferecerá:
+- **English (original):** usa os recursos originais extraídos da ROM USA Rev. 1.
+- **Português (Brasil):** usa um pacote de localização separado, validado e aplicado a um ambiente local isolado do idioma.
+
+A opção escolhida será salva nas configurações privadas do launcher. A base original deverá permanecer intacta; a preparação do ambiente PT-BR não poderá sobrescrever permanentemente os recursos originais. Caso o pacote PT-BR esteja ausente, incompleto ou seja incompatível, o launcher deverá impedir a inicialização nesse idioma e explicar como resolver o problema, sem alternar silenciosamente para inglês.
+
+A estrutura do pacote deve conter somente os recursos aprovados pelo manifesto de localização e informação de compatibilidade/hash. O fluxo atual de importação a partir de uma ROM PT-BR é uma ferramenta provisória de desenvolvimento — não é ainda a experiência final do jogador. A transformação e distribuição do pacote devem passar por revisão legal; ROMs completas e recursos extraídos não serão adicionados ao Git nem publicados como artefatos de CI.
+
 ## Objetivo
 
 Permitir a execução da versão original USA Rev. 1 e investigar compatibilidade com a variante em português brasileiro fornecida pelo usuário, mantendo ROMs e recursos derivados fora do Git.
@@ -47,6 +59,10 @@ O arquivo `tools/import_localization.py`:
 - recusa intervalos sobrepostos a outro arquivo FAT;
 - permite recuperar o tamanho declarado pelo NARC quando o FAT termina antes, apenas quando o intervalo cabe na ROM e não se sobrepõe a outro arquivo FAT;
 - nunca modifica a ROM de origem nem faz upload de dados.
+
+## Fluxo provisório atual de desenvolvimento (não é a UX final do launcher)
+
+O procedimento abaixo documenta o importador atual para análise e testes internos. Ele ainda exige uma ROM PT-BR como fonte e substitui os arquivos allowlisted do destino com a opção --force. Deve ser refatorado para gerar/aplicar uma camada separada antes de ser considerado a implementação final do seletor de idioma.
 
 ## Como importar os recursos PT-BR no diretório local
 
