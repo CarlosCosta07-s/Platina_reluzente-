@@ -105,6 +105,7 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     );
     assert.match(manifest, /android:name="org\.libsdl\.app\.SDLActivity"/);
     assert.match(manifest, /android:exported="false"/);
+    assert.match(manifest, /android:screenOrientation="landscape"/);
     assert.match(manifest, /0x00030002/);
     assert.match(gradle, /abiFilters 'arm64-v8a'/);
     assert.match(gradle, /minSdkVersion 24/);
