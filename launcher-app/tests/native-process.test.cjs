@@ -131,7 +131,7 @@ test('native launcher does not start a second game while the first process is al
   const logPath = path.join(root, 'first.log');
   const first = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "setTimeout(() => process.exit(0), 1500);"],
+    args: ['-e', "setTimeout(() => process.exit(0), 5000);"],
     cwd: root,
     env: process.env,
     logPath,
