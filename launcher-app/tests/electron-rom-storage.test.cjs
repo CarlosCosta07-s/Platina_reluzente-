@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { commitDesktopRom, recoverDesktopRom } = require('../electron/rom-storage.cjs');
+const { commitDesktopRom, recoverDesktopRom, sha1File } = require('../electron/rom-storage.cjs');
 
 async function digest(filePath) {
   const data = await fs.readFile(filePath);
@@ -344,4 +344,68 @@ test('desktop ROM recovery restores a matching backup after an interrupted metad
   assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), previousMetadata);
   await assert.rejects(fs.access(store.destinationPath + '.previous'));
   await assert.rejects(fs.access(store.metadataPath + '.previous'));
+});
+
+test('recovery verifies actual SHA-1, not only editable local metadata and SHA-256 sidecar', async (t) => {
+  const store = await makeStore(t);
+  const sourcePath = path.join(store.root, 'approved.nds');
+  const approved = Buffer.alloc(4096, 0x4a);
+  const tampered = Buffer.from(approved);
+  tampered[2048] ^= 0xff;
+  await fs.writeFile(sourcePath, approved);
+  const expectedSha1 = crypto.createHash('sha1').update(approved).digest('hex');
+
+  await commitDesktopRom({
+    sourcePath,
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath,
+    metadata: { name: 'approved.nds', size: approved.length, importedAt: 'test-time' },
+    expectedSha1
+  });
+  assert.equal(await sha1File(store.destinationPath), expectedSha1);
+
+  // Simulate local file corruption plus a rewritten sidecar. The SHA-1 value
+  // remains the originally approved one, but the ROM bytes no longer match it.
+  await fs.writeFile(store.destinationPath, tampered);
+  const metadata = JSON.parse(await fs.readFile(store.metadataPath, 'utf8'));
+  metadata.sha256 = crypto.createHash('sha256').update(tampered).digest('hex');
+  await fs.writeFile(store.metadataPath, JSON.stringify(metadata));
+
+  assert.equal(await recoverDesktopRom({
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath,
+    expectedSha1
+  }), false);
+  assert.deepEqual(await fs.readFile(store.destinationPath), tampered);
+});
+
+test('recovery refuses symbolic links instead of following them as imported ROMs', async (t) => {
+  const store = await makeStore(t);
+  await fs.mkdir(store.romDir, { recursive: true });
+  const target = path.join(store.root, 'outside.nds');
+  const rom = Buffer.from('file outside the private ROM path');
+  const expectedSha1 = crypto.createHash('sha1').update(rom).digest('hex');
+  await fs.writeFile(target, rom);
+  const metadata = {
+    name: 'outside.nds',
+    size: rom.length,
+    sha1: expectedSha1,
+    sha256: crypto.createHash('sha256').update(rom).digest('hex')
+  };
+  await fs.writeFile(store.metadataPath, JSON.stringify(metadata));
+  try {
+    await fs.symlink(target, store.destinationPath);
+  } catch (error) {
+    if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+      t.skip('This platform does not permit creating symlinks for tests.');
+      return;
+    }
+    throw error;
+  }
+
+  assert.equal(await recoverDesktopRom({
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath,
+    expectedSha1
+  }), false);
 });
