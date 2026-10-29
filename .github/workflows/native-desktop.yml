@@ -2,7 +2,8 @@ name: Native desktop build and localization checks
 
 concurrency:
   group: native-desktop-v4-${{ github.ref }}
-  cancel-in-progress: true
+  # Native builds can take a long time; let the active run finish and keep only the latest pending revision.
+  cancel-in-progress: false
 
 on:
   push:
