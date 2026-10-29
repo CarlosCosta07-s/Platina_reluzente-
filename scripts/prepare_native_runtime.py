@@ -1097,7 +1097,7 @@ static inline BOOL CARDi_VerifyBackupFileRange(u32 offset, const void *expectedB
 
 '''
 
-CARD_IDENTIFY_BACKUP_ORIGINAL = """\tCARDi_BeginBackupCommand(CARD_ACCESS_LEVEL_NONE, NULL, NULL);\n\n\tCARDi_IdentifyBackupCore2(type);\n\n\treturn CARDi_ExecuteOldTypeTask(CARDi_IdentifyBackupCore, FALSE);"""
+CARD_IDENTIFY_BACKUP_ORIGINAL = """ \tCARDi_BeginBackupCommand(CARD_ACCESS_LEVEL_NONE, NULL, NULL);\n\n \tCARDi_IdentifyBackupCore2(type);\n\n \treturn CARDi_ExecuteOldTypeTask(CARDi_IdentifyBackupCore, FALSE);"""
 CARD_IDENTIFY_BACKUP_PATCHED = """  CARDi_BeginBackupCommand(CARD_ACCESS_LEVEL_NONE, NULL, NULL);\n\n  // Desktop Platinum uses the launcher's file-backed save implementation.\n  // The SDK_PORT simulator does not provide an ARM7 card/PXI peer, so asking\n  // the emulated cartridge to identify its backup chip would block forever.\n  // Populate the same backup geometry locally and finish the normal task.\n  CARDi_IdentifyBackupCore2(type);\n#ifdef SDK_PORT\n  const BOOL supported = (cardi_common.cmd->type == type);\n  cardi_common.cmd->result = supported ? CARD_RESULT_SUCCESS : CARD_RESULT_UNSUPPORTED;\n  CARDi_EndTask(&cardi_common);\n  return supported;\n#else\n  return CARDi_ExecuteOldTypeTask(CARDi_IdentifyBackupCore, FALSE);\n#endif"""
 
 CONFIG_SAVE_OPEN_PATCHED = (
