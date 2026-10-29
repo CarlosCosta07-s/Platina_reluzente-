@@ -183,7 +183,7 @@
           blackLaunchStatus.textContent = 'ROM importada e armazenada localmente. A inicialização aguarda o runtime integrado ao launcher.';
         }
       } else if (blackState.romImported) {
-        setBlackStatus('Pokémon Black pronto', 'ROM compatível verificada e runtime interno disponível. O início do processo ainda não comprova a tela de título.', false);
+        setBlackStatus('Runtime e ROM disponíveis', 'A ROM compatível e o runtime nativo foram validados para uma tentativa de inicialização. A tela de título e a jogabilidade ainda não foram confirmadas.', false);
         blackLaunchStatus.textContent = 'O jogo será iniciado pelo mesmo launcher, sem selecionar outro executável.';
       } else {
         setBlackStatus('Runtime integrado', 'Importe uma cópia compatível de Pokémon Black para continuar.', false);
