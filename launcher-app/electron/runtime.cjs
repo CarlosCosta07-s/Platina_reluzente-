@@ -490,4 +490,14 @@ function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.pl
   };
 }
 
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec };
+function createPreparedPlatinumLaunchSpec(launchSpec) {
+  if (!launchSpec || typeof launchSpec !== 'object' || !Array.isArray(launchSpec.args)) {
+    throw new TypeError('A chamada preparada de Platinum exige uma especificação com argumentos.');
+  }
+  const args = launchSpec.args.includes('--platina-prepared')
+    ? [...launchSpec.args]
+    : [...launchSpec.args, '--platina-prepared'];
+  return { ...launchSpec, args };
+}
+
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec, createPreparedPlatinumLaunchSpec };
