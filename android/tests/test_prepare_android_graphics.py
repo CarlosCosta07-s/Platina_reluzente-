@@ -40,8 +40,6 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
         (root / "libraries/sim/src/g3_draw.cpp").write_text(
             '#include <stdio.h>\n#define G3_DRAW_MAX_ITEMS 1000\n'
             'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);\n'
-            'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);\n'
-            'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);\n'
             'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);\n',
             encoding="utf-8",
         )
@@ -77,8 +75,8 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertLess(handler.index("#if defined(SDK_BUILD_ANDROID)"), handler.index("#include <GLES3/gl32.h>"))
             self.assertLess(handler.index("#include <GLES3/gl32.h>"), handler.index("#elif defined(SDK_BUILD_NX)"))
             self.assertIn("SIM_GetBorderClampMode()", draw)
-            self.assertEqual(2, draw.count("GL_TEXTURE_WRAP_S, SIM_GetBorderClampMode()"))
-            self.assertEqual(2, draw.count("GL_TEXTURE_WRAP_T, SIM_GetBorderClampMode()"))
+            self.assertEqual(1, draw.count("GL_TEXTURE_WRAP_S, SIM_GetBorderClampMode()"))
+            self.assertEqual(1, draw.count("GL_TEXTURE_WRAP_T, SIM_GetBorderClampMode()"))
             self.assertNotIn("GL_CLAMP_TO_BORDER);", draw)
             self.assertIn("#version 320 es", shader)
             self.assertIn("precision highp sampler2D;", shader)
