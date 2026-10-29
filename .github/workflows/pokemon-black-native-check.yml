@@ -7,6 +7,8 @@ on:
       - ".github/workflows/pokemon-black-native-check.yml"
       - "docs/POKEMON_BLACK_PORT.md"
       - "docs/ROADMAP.md"
+      - "scripts/stage_black_runtime.py"
+      - "tools/tests/test_stage_black_runtime.py"
   workflow_dispatch:
 
 permissions:
@@ -99,6 +101,31 @@ jobs:
             --relay "$EIDOS_DEFAULT_RELAY"
           test -x build64/host/eidos
           file build64/host/eidos
+
+      - name: Validate staged Linux runtime dependencies without game data
+        working-directory: .black-ci/eidos
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sdl_prefix="$(python3 tools/fetch_sdl.py --locate source --tag linux-x64)"
+          stage_dir="$RUNNER_TEMP/black-runtime-validation"
+          rm -rf -- "$stage_dir" "$stage_dir.previous"
+          python3 "$GITHUB_WORKSPACE/scripts/stage_black_runtime.py" \
+            --platform linux \
+            --source-dir "$PWD/build64/host" \
+            --dependency-dir "$sdl_prefix/lib" \
+            --destination "$stage_dir"
+          test -x "$stage_dir/eidos"
+          loader_output="$(LD_LIBRARY_PATH="$stage_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$stage_dir/eidos")"
+          printf '%s\\n' "$loader_output"
+          if grep -Fq "not found" <<< "$loader_output"; then
+            echo "The staged Black runtime has unresolved shared libraries." >&2
+            exit 1
+          fi
+          if find "$stage_dir" -type f \\( -iname '*.nds' -o -iname '*.narc' -o -name 'save.bin' -o -name 'firmware.bin' \\) -print -quit | grep -q .; then
+            echo "Game data was unexpectedly copied into the staged runtime." >&2
+            exit 1
+          fi
 
   windows-x64:
     name: Windows x64 native compile and tests
@@ -202,6 +229,28 @@ jobs:
             --relay "$EIDOS_DEFAULT_RELAY"
           test -f build64/host/eidos.exe
           file build64/host/eidos.exe
+
+      - name: Validate staged Windows runtime dependencies without game data
+        working-directory: .black-ci/eidos
+        shell: msys2 {0}
+        run: |
+          set -Eeuo pipefail
+          gcc_bin="$PWD/.cache/gcc/xpack-mingw-w64-gcc-14.2.0-1/bin"
+          stage_dir="$(cygpath -u "$RUNNER_TEMP")/black-runtime-validation"
+          rm -rf -- "$stage_dir" "$stage_dir.previous"
+          python "$GITHUB_WORKSPACE/scripts/stage_black_runtime.py" \
+            --platform windows \
+            --source-dir "$PWD/build64/host" \
+            --dependency-dir "$gcc_bin" \
+            --objdump "$gcc_bin/x86_64-w64-mingw32-objdump.exe" \
+            --destination "$stage_dir"
+          test -f "$stage_dir/eidos.exe"
+          test -s "$stage_dir/SDL3.dll"
+          file "$stage_dir/eidos.exe" "$stage_dir/SDL3.dll"
+          if find "$stage_dir" -type f \\( -iname '*.nds' -o -iname '*.narc' -o -name 'save.bin' -o -name 'firmware.bin' \\) -print -quit | grep -q .; then
+            echo "Game data was unexpectedly copied into the staged runtime." >&2
+            exit 1
+          fi
 
 # This workflow validates source compatibility and compilation only. It does not
 # upload a Black executable, ROM, firmware, save, or extracted game data.
