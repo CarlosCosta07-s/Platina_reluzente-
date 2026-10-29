@@ -2,7 +2,7 @@ name: Package Linux launcher from verified native engine
 
 concurrency:
   group: linux-launcher-package-v3-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 on:
   push:
