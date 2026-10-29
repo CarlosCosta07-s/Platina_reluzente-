@@ -422,6 +422,7 @@ BACKUP_WRITE_VERIFY_BODY_PATCHED = r'''    FILE * backupFilePtr;
     if (bytesWritten != (size_t)len || flushStatus != 0 || closeStatus != 0) {
       return FALSE;
     }
+    if (!CARDi_VerifyBackupFileRange(dst, src, len)) return FALSE;
     if (callback != NULL)
     {
       callback(arg);
@@ -476,6 +477,36 @@ static inline FILE *CARDi_OpenBackupFileForRange(u32 offset, u32 length)
         return NULL;
     }
     return backupFilePtr;
+}
+
+static inline BOOL CARDi_VerifyBackupFileRange(u32 offset, const void *expectedBytes, u32 length)
+{
+    FILE *backupFilePtr;
+    const u8 *expected = (const u8 *)expectedBytes;
+    u8 verifyBuffer[4096];
+    u32 remaining = length;
+
+    if (length == 0) return TRUE;
+    if (expectedBytes == NULL) return FALSE;
+    backupFilePtr = fopen(CARDI_BACKUP_SAVE_FILE, "rb");
+    if (backupFilePtr == NULL) return FALSE;
+    if (fseek(backupFilePtr, (long)offset, SEEK_SET) != 0) {
+        fclose(backupFilePtr);
+        return FALSE;
+    }
+
+    while (remaining > 0) {
+        size_t chunkSize = remaining < sizeof(verifyBuffer)
+            ? (size_t)remaining : sizeof(verifyBuffer);
+        size_t bytesRead = fread(verifyBuffer, 1, chunkSize, backupFilePtr);
+        if (bytesRead != chunkSize || memcmp(verifyBuffer, expected, chunkSize) != 0) {
+            fclose(backupFilePtr);
+            return FALSE;
+        }
+        expected += chunkSize;
+        remaining -= (u32)chunkSize;
+    }
+    return fclose(backupFilePtr) == 0;
 }
 #endif /* SDK_PORT */
 
