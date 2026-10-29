@@ -30,7 +30,7 @@ test('native process startup writes stdout and stderr to a persistent local log'
 
   const result = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "process.stdout.write('" + message + "-stdout\\n'); process.stderr.write('" + message + "-stderr\\n'); setTimeout(() => process.exit(0), 1200);"],
+    args: ['-e', "process.stdout.write('" + message + "-stdout\\n'); process.stderr.write('" + message + "-stderr\\n'); setTimeout(() => process.exit(0), 3500);"],
     cwd: root,
     env: process.env,
     logPath,
@@ -44,6 +44,27 @@ test('native process startup writes stdout and stderr to a persistent local log'
   const log = await waitForLog(logPath, [message + '-stdout', message + '-stderr', 'spawn succeeded', 'process exit: code=0']);
   assert.match(log, /platform=/);
   assert.match(log, /rom_sha256=test-hash/);
+});
+
+test('native process that exits during the initial startup window is reported as a failure', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-early-exit-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const logPath = path.join(root, 'logs', 'native-startup.log');
+
+  const result = await launchNativeProcess({
+    executable: process.execPath,
+    args: ['-e', "setTimeout(() => process.exit(7), 1200);"],
+    cwd: root,
+    env: process.env,
+    logPath,
+    platform: process.platform
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.logPath, logPath);
+  assert.match(result.message, /encerrou durante a verificação inicial/);
+  const log = await fs.readFile(logPath, 'utf8');
+  assert.match(log, /process exit: code=7/);
 });
 
 test('native process startup failure is returned and recorded in the log', async (t) => {
