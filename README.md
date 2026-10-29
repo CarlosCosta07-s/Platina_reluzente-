@@ -24,7 +24,7 @@ Os pacotes são publicados como artefatos temporários do GitHub Actions, sem RO
 - [Launcher multiplataforma: Windows .exe, Linux AppImage e Android APK](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/launcher-packages.yml)
 - [Porte nativo: runtime Windows x64 e runtime Linux x86-64](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/native-desktop.yml)
 
-Abra uma execução com conclusão **success** e baixe a seção **Artifacts**. O launcher desktop pode iniciar o executável nativo selecionado na pasta dele. O APK Android só deve ser considerado pronto para teste do jogo quando a compilação ARM64, a integração dos recursos e a verificação do pacote passarem no mesmo commit. Mesmo isso não comprova jogabilidade: ainda é necessário testar em aparelho real a inicialização, os controles, o áudio, os gráficos e os salvamentos. Selecionar uma ROM também não significa, por si só, que todos os recursos foram carregados pelo motor.
+Abra uma execução com conclusão **success** e baixe a seção **Artifacts**. O launcher desktop já inclui o executável nativo correspondente à plataforma e o inicia automaticamente; o usuário só precisa importar sua própria ROM `.nds`. Não é necessário localizar nem selecionar um executável separado. O APK Android só deve ser considerado pronto para teste do jogo quando a compilação ARM64, a integração dos recursos e a verificação do pacote passarem no mesmo commit. Mesmo isso não comprova jogabilidade: ainda é necessário testar em aparelho real a inicialização, os controles, o áudio, os gráficos e os salvamentos. Selecionar uma ROM também não significa, por si só, que todos os recursos foram carregados pelo motor.
 
 ## Decisão técnica
 
