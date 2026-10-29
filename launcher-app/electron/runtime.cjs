@@ -466,7 +466,7 @@ function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.pl
 
     // Preserve custom/system loader hooks, but never reuse a hook loaded from
     // the launcher's temporary AppImage mount inside the game runtime.
-    for (const [name, separator] of [['LD_PRELOAD', /[:\\s]+/], ['LD_AUDIT', /[:]+/]]) {
+    for (const [name, separator] of [['LD_PRELOAD', /[:\s]+/], ['LD_AUDIT', /[:]+/]]) {
       if (typeof env[name] !== 'string') continue;
       const entries = env[name].split(separator).filter((entry) =>
         entry.length > 0 && !isInsideHostAppDir(entry)
