@@ -38,6 +38,87 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header selected by the de
     }
   }'''
 
+ROM_PREFLIGHT_INCLUDE_ORIGINAL = "#include <SDL2/SDL.h>"
+ROM_PREFLIGHT_INCLUDE_PATCHED = """#include <SDL2/SDL.h>
+#include <filesystem>
+#include <fstream>
+#include <exception>
+#include <system_error>
+#include "nds-extract.hpp\""""
+ROM_PREFLIGHT_ENTRY_ORIGINAL = "int main(int argc, char *argv[]) {\n#ifdef SDK_BUILD_NX"
+ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
+  // Extract imported game data before creating the SDL window. The renderer
+  // must not block inside its event loop while a potentially large ROM is read.
+  const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
+  const char *managedRomSha256 = getenv("PLATINA_IMPORTED_ROM_SHA256");
+  if (managedRomPath != NULL && managedRomPath[0] != '\\0') {
+    std::error_code romError;
+    if (!std::filesystem::is_regular_file(std::filesystem::path(managedRomPath), romError)
+        || romError) {
+      fprintf(stderr, "[Platina] Imported ROM is not a readable regular file: %s\\n",
+              managedRomPath);
+      return 2;
+    }
+
+    bool extractionCacheValid = false;
+    if (managedRomSha256 != NULL && managedRomSha256[0] != '\\0') {
+      std::ifstream cacheFile("platina-rom-extraction.sha256");
+      std::string cachedSha256;
+      if (std::getline(cacheFile, cachedSha256) && cachedSha256 == managedRomSha256) {
+        std::error_code assetError;
+        extractionCacheValid = std::filesystem::is_regular_file(
+            std::filesystem::path("msgdata/msg.narc"), assetError) && !assetError;
+      }
+    }
+
+    if (!extractionCacheValid) {
+      fprintf(stdout, "[Platina] Extracting local game data before renderer startup.\\n");
+      fflush(stdout);
+      int extractionStatus = -1;
+      try {
+        extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
+      } catch (const std::exception &exception) {
+        fprintf(stderr, "[Platina] ROM extraction threw an exception: %s\\n",
+                exception.what());
+        return 3;
+      }
+      if (extractionStatus != 0) {
+        fprintf(stderr, "[Platina] ROM extraction failed with status %d.\\n",
+                extractionStatus);
+        return 3;
+      }
+
+      if (managedRomSha256 != NULL && managedRomSha256[0] != '\\0') {
+        const char *cacheTempPath = "platina-rom-extraction.sha256.tmp";
+        std::ofstream cacheTemp(cacheTempPath, std::ios::trunc);
+        if (cacheTemp.is_open()) {
+          cacheTemp << managedRomSha256 << '\\n';
+          cacheTemp.close();
+          if (cacheTemp.good()) {
+            std::error_code cacheError;
+            std::filesystem::remove("platina-rom-extraction.sha256", cacheError);
+            cacheError.clear();
+            std::filesystem::rename(cacheTempPath, "platina-rom-extraction.sha256", cacheError);
+            if (cacheError) {
+              std::filesystem::remove(cacheTempPath, cacheError);
+              fprintf(stderr, "[Platina] Warning: unable to persist extraction cache marker.\\n");
+            }
+          } else {
+            fprintf(stderr, "[Platina] Warning: unable to write extraction cache marker.\\n");
+          }
+        } else {
+          fprintf(stderr, "[Platina] Warning: unable to create extraction cache marker.\\n");
+        }
+      }
+      fprintf(stdout, "[Platina] ROM extraction completed.\\n");
+      fflush(stdout);
+    } else {
+      fprintf(stdout, "[Platina] Reusing verified local game data.\\n");
+      fflush(stdout);
+    }
+  }
+#ifdef SDK_BUILD_NX''
+
 CONFIG_ALARM_SECOND_ORIGINAL = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
         config->osNvramConfig.ncd.alarm.minute = atoi(value);
     }'''
@@ -661,6 +742,35 @@ def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
     return current, current != original
 
 
+def _prepare_rom_preflight(source: str) -> tuple[str, bool]:
+    """Move first-launch ROM extraction before SDL/window startup; fail closed on upstream drift."""
+    current = source
+    if ROM_PREFLIGHT_ENTRY_PATCHED in current:
+        if current.count(ROM_PREFLIGHT_ENTRY_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate managed-ROM preflight patch detected.")
+        if ROM_PREFLIGHT_ENTRY_ORIGINAL in current:
+            raise RuntimePreparationError("Original and patched managed-ROM entry blocks both exist.")
+    else:
+        if current.count(ROM_PREFLIGHT_ENTRY_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected one recognized main() entry point for managed-ROM preflight."
+            )
+        current = current.replace(ROM_PREFLIGHT_ENTRY_ORIGINAL, ROM_PREFLIGHT_ENTRY_PATCHED, 1)
+
+    if ROM_PREFLIGHT_INCLUDE_PATCHED in current:
+        if current.count(ROM_PREFLIGHT_INCLUDE_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate managed-ROM preflight includes detected.")
+    else:
+        if current.count(ROM_PREFLIGHT_INCLUDE_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected one SDL include marker for managed-ROM preflight; refusing uncertain patch."
+            )
+        current = current.replace(
+            ROM_PREFLIGHT_INCLUDE_ORIGINAL, ROM_PREFLIGHT_INCLUDE_PATCHED, 1
+        )
+    return current, current != source
+
+
 def prepare_native_runtime(source_root: str | Path) -> bool:
     """Prepare the desktop ROM handoff, renderer startup, config, filesystem and saves."""
     path = (Path(source_root).expanduser().resolve() / "subprojects" / "libntr"
@@ -683,6 +793,7 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         )
 
     current, _ = _prepare_renderer_startup(current)
+    current, _ = _prepare_rom_preflight(current)
 
     # Validate every source file before writing any of them.
     config_path = path.parent / "config" / "sim_config.c"
