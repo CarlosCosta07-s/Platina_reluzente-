@@ -24,6 +24,17 @@ import java.util.concurrent.Executors;
 @CapacitorPlugin(name = "PlatinaGame")
 public class PlatinaGamePlugin extends Plugin {
     private static final long MAX_ROM_BYTES = 512L * 1024L * 1024L;
+    private static final String[] REQUIRED_RUNTIME_FILES = {
+            "header.bin",
+            "firmware.bin",
+            "build-version.txt",
+            "arm9.bin",
+            "arm7.bin",
+            "arm9ovt.bin",
+            "arm7ovt.bin",
+            "wazaeffect/we.arc",
+            "battle/skill/waza_seq.narc"
+    };
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
     @PluginMethod
@@ -32,9 +43,13 @@ public class PlatinaGamePlugin extends Plugin {
         boolean nativeLibraries = new File(libs, "libmain.so").isFile()
                 && new File(libs, "libSDL2.so").isFile()
                 && new File(libs, "libc++_shared.so").isFile();
-        boolean runtimeAssets = assetExists("pokeplatinum/header.bin")
-                && assetExists("pokeplatinum/firmware.bin")
-                && assetExists("pokeplatinum/build-version.txt");
+        boolean runtimeAssets = true;
+        for (String relativePath : REQUIRED_RUNTIME_FILES) {
+            if (!assetExists("pokeplatinum/" + relativePath)) {
+                runtimeAssets = false;
+                break;
+            }
+        }
         JSObject result = new JSObject();
         result.put("available", nativeLibraries && runtimeAssets);
         result.put("abi", "arm64-v8a");
@@ -177,13 +192,11 @@ public class PlatinaGamePlugin extends Plugin {
     }
 
     private boolean isCompleteRuntime(File directory, String expectedVersion) {
-        if (!directory.isDirectory()
-                || !new File(directory, "header.bin").isFile()
-                || !new File(directory, "firmware.bin").isFile()) {
-            return false;
+        if (!directory.isDirectory()) return false;
+        for (String relativePath : REQUIRED_RUNTIME_FILES) {
+            if (!new File(directory, relativePath).isFile()) return false;
         }
         File stamp = new File(directory, "build-version.txt");
-        if (!stamp.isFile()) return false;
         try {
             return expectedVersion.equals(readFileText(stamp).trim());
         } catch (IOException ignored) {
