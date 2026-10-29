@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, prepareWritableRuntime, validateNdsHeader } = require('./runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, validateNdsHeader } = require('./runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
 
@@ -52,8 +52,9 @@ ipcMain.handle('platina:runtime-status', async () => {
   const root = runtimeRoot();
   const exe = findBundledExecutable(root, process.platform);
   const runtimeDataAvailable = hasRequiredRuntimeData(root);
+  const runtimeAvailable = isRuntimeUsable(root, process.platform);
   return {
-    available: Boolean(exe && runtimeDataAvailable),
+    available: runtimeAvailable,
     executableName: exe ? path.basename(exe) : '',
     runtimeDataAvailable,
     platform: process.platform

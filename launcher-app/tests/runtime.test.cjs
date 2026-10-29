@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, prepareWritableRuntime, validateNdsHeader } = require('../electron/runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, validateNdsHeader } = require('../electron/runtime.cjs');
 
 test('runtime resolves under Electron resources when packaged', () => {
   assert.equal(resolveRuntimeDirectory(true, '/app/resources', '/app'), path.join('/app/resources', 'runtime'));
@@ -171,6 +171,43 @@ test('writable runtime preparation rejects a linked bundled runtime tree', (t) =
     assert.equal(fs.existsSync(destination), false);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('runtime status rejects an unsafe extra file before enabling launch', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-extra-link-'));
+  const outside = path.join(directory, 'outside.txt');
+  const runtime = path.join(directory, 'runtime');
+  fs.mkdirSync(runtime);
+  try {
+    fs.writeFileSync(path.join(runtime, 'main'), 'native executable');
+    fs.chmodSync(path.join(runtime, 'main'), 0o755);
+    for (const relative of [
+      'header.bin',
+      'firmware.bin',
+      'wazaeffect/we.arc',
+      'battle/skill/waza_seq.narc'
+    ]) {
+      const target = path.join(runtime, relative);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, 'fixture');
+    }
+    fs.writeFileSync(outside, 'outside');
+    try {
+      fs.symlinkSync(outside, path.join(runtime, 'unexpected-link'), 'file');
+    } catch (error) {
+      if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+        t.skip('This platform does not permit creating symlinks for tests.');
+        return;
+      }
+      throw error;
+    }
+
+    assert.equal(hasRequiredRuntimeData(runtime), true);
+    assert.equal(findBundledExecutable(runtime, 'linux'), path.join(runtime, 'main'));
+    assert.equal(isRuntimeUsable(runtime, 'linux'), false);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 

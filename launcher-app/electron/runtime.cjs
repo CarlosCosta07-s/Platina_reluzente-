@@ -250,4 +250,4 @@ function validateNdsHeader(header, fileSize) {
   // header's ROM-version byte as well.
   return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, prepareWritableRuntime, validateNdsHeader };
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable: runtimeIsUsable, prepareWritableRuntime, validateNdsHeader };
