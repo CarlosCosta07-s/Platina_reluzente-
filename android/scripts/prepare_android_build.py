@@ -1464,6 +1464,7 @@ def prepare(root_path: str | Path, sdl_path: str | Path, enet_path: str | Path) 
         changes.extend(patch_ppwlobby_pic(staged))
         changes.extend(patch_android_ppwlobby_c_args(staged))
         changes.extend(patch_android_ppwlobby_map_allocators(staged))
+        changes.extend(patch_android_ppwlobby_map_subscript(staged))
         changes.extend(patch_android_ppwlobby_stdlib_compat(staged))
         changes.extend(patch_libntr(staged / "subprojects/libntr"))
         changes.extend(patch_android_sim_config_path(staged / "subprojects/libntr"))
@@ -1522,6 +1523,7 @@ def android_patch_copy_paths(staged: Path, sdk_projects: dict[str, tuple[str, bo
         "lib/ppwlobby/include/ilobby/dwci_lobbydata.h",
         "lib/ppwlobby/include/ilobby/dwci_lobbybase.h",
         "lib/ppwlobby/libraries/ilobby/src/dwci_lobby.cpp",
+        "lib/ppwlobby/libraries/ilobby/src/dwci_lobbydata.cpp",
         "lib/ppwlobby/libraries/ppwlobby/src/ppw_lobby.cpp",
     ]
     # patch_libntr rewrites PIC predicates across nested library Meson files.
