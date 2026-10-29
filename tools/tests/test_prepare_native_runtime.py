@@ -14,6 +14,10 @@ from scripts.prepare_native_runtime import (
     GL_LOADER_PATCHED,
     SDL_INIT_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
+    SDL_VIEWPORT_PATCHED,
+    INPUT_RELEASE_HELPER_PATCHED,
+    WINDOW_EVENT_PATCHED,
+    KEYDOWN_PATCHED,
     MAIN_RENDER_HANDOFF_PATCHED,
     ORIGINAL_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
@@ -166,6 +170,8 @@ BOOL FS_OpenFile (FSFile *p_file, const char *path)
 UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 
+static bool sFastForward = false;
+
 void *SIM_RenderInit(void *arg) {
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
            SDL_INIT_JOYSTICK);
@@ -177,7 +183,25 @@ void *SIM_RenderInit(void *arg) {
       SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
   context = SDL_GL_CreateContext(window);
   gladLoadGLLoader(SDL_GL_GetProcAddress);
+  glViewport(0, 0, windowWidth, windowHeight);
   return NULL;
+}
+
+void SIM_Render(void) {
+  SDL_Event Event;
+  while (SDL_PollEvent(&Event)) {
+    if (Event.type == SDL_WINDOWEVENT) {
+      switch (Event.window.event) {
+      case SDL_WINDOWEVENT_CLOSE:
+        exit(0);
+        break;
+      }
+    }
+    if (Event.type == SDL_KEYDOWN) {
+      int keyRead = Event.key.keysym.sym;
+      (void)keyRead;
+    }
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -197,7 +221,6 @@ int main(int argc, char *argv[]) {
   G3SIM_DrawInit();
   return 0;
 }'''
-
 
 UPSTREAM_SIM_ROM_EXTRACTOR = r'''#include "simulator/sim.h"
 #include "simulator/imgui/imgui.hpp"
@@ -311,6 +334,13 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0)', content)
             self.assertIn(GL_LOADER_PATCHED, content)
             self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
+            self.assertIn(SDL_VIEWPORT_PATCHED, content)
+            self.assertIn(INPUT_RELEASE_HELPER_PATCHED, content)
+            self.assertIn(WINDOW_EVENT_PATCHED, content)
+            self.assertIn(KEYDOWN_PATCHED, content)
+            self.assertIn("SDL_WINDOW_ALLOW_HIGHDPI", content)
+            self.assertIn("SDL_JOYDEVICEREMOVED", content)
+            self.assertIn("SDL_WINDOWEVENT_FOCUS_LOST", content)
             self.assertFalse(prepare_native_runtime(root))
 
     def test_extraction_cache_requires_the_complete_path_manifest_and_per_file_integrity(self):
