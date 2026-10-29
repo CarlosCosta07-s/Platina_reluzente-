@@ -17,9 +17,17 @@ function createWindow() {
     width: 1240, height: 860, minWidth: 760, minHeight: 620,
     title: 'Platina Reluzente — Biblioteca de Ports Nativos', backgroundColor: '#0c1019',
     autoHideMenuBar: true,
+    // Console-style launcher: always starts in full screen (F11 toggles it).
+    fullscreen: true, backgroundColor: '#070b14',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') {
+      window.setFullScreen(!window.isFullScreen());
+      event.preventDefault();
+    }
+  });
   window.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
 }
 function sendLaunchProgress(message) {
@@ -386,7 +394,20 @@ ipcMain.handle('platina:launch-game', async () => {
     });
     if (!prepared.ok) return { ok: false, message: prepared.message, logPath };
     // Phase 2: only now start the real game process and its window.
-    return launchNativeProcess(launchSpec);
+    const launched = await launchNativeProcess(launchSpec);
+    if (launched.ok) {
+      const windows = BrowserWindow.getAllWindows();
+      for (const window of windows) { if (!window.isDestroyed()) window.minimize(); }
+      onNativeProcessIdle(() => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          if (window.isDestroyed()) continue;
+          window.restore();
+          window.setFullScreen(true);
+          window.focus();
+        }
+      });
+    }
+    return launched;
   } catch (error) {
     return {
       ok: false,

@@ -320,6 +320,25 @@
   if (window.platina && typeof window.platina.onLaunchProgress === 'function') {
     window.platina.onLaunchProgress((message) => setStatus(message));
   }
+
+  // Console-style dashboard: live clock and keyboard / gamepad-like navigation.
+  const clockElement = document.getElementById('clock');
+  function tickClock() {
+    if (!clockElement) return;
+    clockElement.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  tickClock();
+  setInterval(tickClock, 15000);
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const target = event.target;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    const next = event.key === 'ArrowRight' ? 'black' : 'platinum';
+    selectGame(next);
+    const card = next === 'black' ? blackCard : platinumCard;
+    if (card && typeof card.focus === 'function') card.focus();
+    event.preventDefault();
+  });
   launchButton.addEventListener('click', launchGame);
   romButton.addEventListener('click', chooseRom);
   startupLogButton.addEventListener('click', openStartupLog);

@@ -3,40 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10141d">
+  <meta name="theme-color" content="#070b14">
   <meta name="description" content="Biblioteca unificada de portes nativos: Pokémon Platinum e Pokémon Black.">
   <title>Platina Reluzente — Biblioteca</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./app.js" defer></script>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Navegação principal">
-      <a class="brand" href="#library" aria-label="Platina Reluzente — início">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="brand-copy"><strong>PLATINA</strong><span>REL<span class="brand-accent">U</span>ZENTE</span></span>
-      </a>
-
-      <div class="sidebar-label">JOGOS</div>
-      <a class="nav-item active" href="#library" aria-current="page">
-        <span class="nav-symbol" aria-hidden="true">▦</span><span>Biblioteca</span><span class="nav-count">02</span>
-      </a>
-      <a class="nav-item" href="#project-status">
-        <span class="nav-symbol" aria-hidden="true">◷</span><span>Estado do projeto</span>
-      </a>
-
-      <div class="sidebar-bottom">
-        <div class="sidebar-separator"></div>
-        <div class="sidebar-label">SOBRE</div>
-        <p>Um launcher único para acompanhar os portes nativos de Platinum e Black.</p>
-        <a href="https://github.com/CarlosCosta07-s/Platina_reluzente-" target="_blank" rel="noreferrer">Abrir repositório <span aria-hidden="true">↗</span></a>
-      </div>
-    </aside>
+  <div class="app-shell" id="app-shell">
 
     <main class="main-content">
       <header class="topbar">
-        <div class="breadcrumb">PLATINA RELUZENTE <span>/</span> BIBLIOTECA</div>
-        <div class="platform-chip"><span class="status-dot"></span><span id="platform-label">Detectando plataforma…</span></div>
+        <a class="brand" href="#library" aria-label="Platina Reluzente — início">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-copy"><strong>PLATINA</strong><span>REL<span class="brand-accent">U</span>ZENTE</span></span>
+        </a>
+        <nav class="top-nav" aria-label="Navegação principal">
+          <a class="nav-item active" href="#library" aria-current="page">Biblioteca</a>
+          <a class="nav-item" href="#project-status">Estado do projeto</a>
+          <a class="nav-item" href="https://github.com/CarlosCosta07-s/Platina_reluzente-" target="_blank" rel="noreferrer">Repositório ↗</a>
+        </nav>
+        <div class="top-right">
+          <div class="platform-chip"><span class="status-dot"></span><span id="platform-label">Detectando plataforma…</span></div>
+          <time id="clock" class="clock" aria-label="Hora atual">--:--</time>
+        </div>
       </header>
 
       <section class="library-section" id="library" aria-labelledby="library-title">
@@ -133,6 +123,11 @@
         <p class="legal-note">Projeto comunitário não oficial. Nenhum pacote deve incluir ROMs, firmware ou dados protegidos dos jogos. Use apenas uma cópia que você tenha direito de utilizar.</p>
       </section>
 
+      <div class="hint-bar" aria-hidden="true">
+        <span><kbd>←</kbd><kbd>→</kbd> Navegar</span>
+        <span><kbd>Enter</kbd> Selecionar</span>
+        <span><kbd>F11</kbd> Tela cheia</span>
+      </div>
       <footer class="footer"><span>PLATINA RELUZENTE <span>•</span> LAUNCHER 0.2.0</span><span>UMA BIBLIOTECA · DOIS PROJETOS</span></footer>
     </main>
   </div>
