@@ -120,6 +120,35 @@ class RuntimeDataCheckTests(unittest.TestCase):
             self.assertFalse(report["ready_for_launch_attempt"])
             self.assertTrue(any(item["path"] == TARGET_FILES[0].as_posix() for item in report["invalid"]))
 
+
+    def test_rejects_runtime_root_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            real_runtime = _runtime(root / "real-runtime")
+            linked_runtime = root / "linked-runtime"
+            try:
+                linked_runtime.symlink_to(real_runtime, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+            with self.assertRaisesRegex(checker.RuntimeDataError, "não pode ser link simbólico"):
+                checker.inspect_runtime_directory(linked_runtime)
+
+    def test_rejects_required_archive_reached_through_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = _runtime(root / "runtime")
+            outside = root / "outside.arc"
+            outside.write_bytes(_narc())
+            target = runtime / "wazaeffect" / "we.arc"
+            target.unlink()
+            try:
+                target.symlink_to(outside)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+            report = checker.inspect_runtime_directory(runtime)
+            self.assertFalse(report["ready_for_launch_attempt"])
+            self.assertIn("wazaeffect/we.arc", report["missing"])
+
     def test_missing_runtime_directory_fails_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(checker.RuntimeDataError):

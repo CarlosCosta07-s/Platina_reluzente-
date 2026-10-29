@@ -91,6 +91,45 @@ class VerifyNativePackageTests(unittest.TestCase):
             self.assertFalse(report["ready"])
             self.assertEqual(len(report["invalid_animation_archives"]), 1)
 
+
+    def test_backslash_path_in_manifest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            build, package, manifest = _tree(Path(tmp))
+            with manifest.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.writer(stream)
+                writer.writerow(["Source File", "Target File"])
+                writer.writerow([r"res\\..\\outside.bin", "/icons/test.dat"])
+            with self.assertRaises(PackageVerificationError):
+                verify_native_package(build, package, manifest)
+
+    def test_mapped_package_file_symlink_is_not_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build, package, manifest = _tree(root)
+            outside = root / "outside.bin"
+            outside.write_bytes(b"icon")
+            target = package / "icons" / "test.dat"
+            target.unlink()
+            try:
+                target.symlink_to(outside)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+            report = verify_native_package(build, package, manifest)
+            self.assertFalse(report["ready"])
+            self.assertTrue(report["missing_package_files"])
+
+    def test_package_root_symlink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build, package, manifest = _tree(root)
+            linked_package = root / "linked-package"
+            try:
+                linked_package.symlink_to(package, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+            with self.assertRaisesRegex(PackageVerificationError, "não pode ser link simbólico"):
+                verify_native_package(build, linked_package, manifest)
+
     def test_unsafe_path_in_manifest_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             build, package, manifest = _tree(Path(tmp))

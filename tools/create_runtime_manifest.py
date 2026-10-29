@@ -15,7 +15,9 @@ class RuntimeManifestError(RuntimeError):
 
 
 def create_runtime_manifest(runtime_dir: str | Path) -> Path:
-    root = Path(runtime_dir).expanduser().resolve()
+    root = Path(runtime_dir).expanduser().absolute()
+    if root.is_symlink():
+        raise RuntimeManifestError(f"Runtime directory must not be a symlink: {root}")
     if not root.is_dir():
         raise RuntimeManifestError(f"Runtime directory does not exist: {root}")
 

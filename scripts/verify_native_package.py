@@ -30,19 +30,33 @@ class PackageVerificationError(ValueError):
 
 def _safe_relative(value: str, *, target: bool = False) -> PurePosixPath:
     value = value.strip()
+    if target and value.startswith("/") and not value.startswith("//"):
+        value = value[1:]
     if not value:
         raise PackageVerificationError("filesys.csv contém caminho vazio.")
+    if "\\" in value or "\x00" in value or ":" in value:
+        raise PackageVerificationError(f"Caminho inseguro no filesys.csv: {value!r}")
+    parts = value.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise PackageVerificationError(f"Caminho inseguro no filesys.csv: {value!r}")
     path = PurePosixPath(value)
     if path.is_absolute():
-        if target:
-            path = PurePosixPath(*path.parts[1:])
-        else:
-            raise PackageVerificationError(f"Caminho de origem absoluto não permitido: {value!r}")
-    if not path.parts or any(part in ("", ".", "..") for part in path.parts):
-        raise PackageVerificationError(f"Caminho inseguro no filesys.csv: {value!r}")
-    if any("\x00" in part for part in path.parts):
-        raise PackageVerificationError(f"Caractere NUL em caminho do filesys.csv: {value!r}")
+        raise PackageVerificationError(f"Caminho absoluto não permitido: {value!r}")
     return path
+
+
+def _regular_file_without_symlinks(root: Path, relative: PurePosixPath) -> Path | None:
+    current = root
+    for index, component in enumerate(relative.parts):
+        current = current / component
+        if current.is_symlink():
+            return None
+        if index < len(relative.parts) - 1:
+            if not current.is_dir():
+                return None
+        elif not current.is_file():
+            return None
+    return current
 
 
 def _sha256(path: Path) -> str:
@@ -91,14 +105,16 @@ def verify_native_package(
     package_dir: str | Path,
     filesys_csv: str | Path,
 ) -> dict[str, Any]:
-    build_root = Path(build_dir).expanduser().resolve()
-    package_root = Path(package_dir).expanduser().resolve()
-    manifest = Path(filesys_csv).expanduser().resolve()
+    build_root = Path(build_dir).expanduser().absolute()
+    package_root = Path(package_dir).expanduser().absolute()
+    manifest = Path(filesys_csv).expanduser().absolute()
     for label, path in (("build", build_root), ("package", package_root)):
+        if path.is_symlink():
+            raise PackageVerificationError(f"Diretório {label} não pode ser link simbólico: {path}")
         if not path.is_dir():
             raise PackageVerificationError(f"Diretório {label} não encontrado: {path}")
-    if not manifest.is_file():
-        raise PackageVerificationError(f"Manifesto filesys.csv não encontrado: {manifest}")
+    if manifest.is_symlink() or not manifest.is_file():
+        raise PackageVerificationError(f"Manifesto filesys.csv não encontrado ou não regular: {manifest}")
 
     missing_sources: list[str] = []
     missing_package_files: list[str] = []
@@ -131,13 +147,13 @@ def verify_native_package(
                 )
             seen_targets.add(target_key)
             manifest_entries += 1
-            source_path = build_root.joinpath(*source_rel.parts)
-            target_path = package_root.joinpath(*target_rel.parts)
+            source_path = _regular_file_without_symlinks(build_root, source_rel)
+            target_path = _regular_file_without_symlinks(package_root, target_rel)
 
-            if not source_path.is_file():
+            if source_path is None:
                 missing_sources.append(f"linha {line_number}: {source_rel.as_posix()}")
                 continue
-            if not target_path.is_file():
+            if target_path is None:
                 missing_package_files.append(f"linha {line_number}: {target_rel.as_posix()}")
                 continue
             source_size = source_path.stat().st_size
@@ -161,16 +177,19 @@ def verify_native_package(
                 })
 
     missing_root_files: list[str] = []
-    if not any((package_root / name).is_file() for name in EXECUTABLE_CANDIDATES):
+    if not any(
+        _regular_file_without_symlinks(package_root, PurePosixPath(name)) is not None
+        for name in EXECUTABLE_CANDIDATES
+    ):
         missing_root_files.append("main ou main.exe")
     for relative in REQUIRED_PACKAGE_FILES:
-        if not (package_root / relative).is_file():
+        if _regular_file_without_symlinks(package_root, PurePosixPath(relative)) is None:
             missing_root_files.append(relative)
 
     invalid_animation_archives: list[dict[str, str]] = []
     for relative in REQUIRED_ANIMATION_ARCHIVES:
-        path = package_root / relative
-        if not path.is_file():
+        path = _regular_file_without_symlinks(package_root, PurePosixPath(relative))
+        if path is None:
             missing_root_files.append(relative)
             continue
         problem = _narc_error(path)

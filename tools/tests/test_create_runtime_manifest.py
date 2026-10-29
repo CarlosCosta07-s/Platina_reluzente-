@@ -48,6 +48,21 @@ class RuntimeManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeManifestError, "Symlinks are not allowed"):
                 create_runtime_manifest(runtime)
 
+
+    def test_manifest_rejects_symlink_runtime_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            actual = root / "actual-runtime"
+            actual.mkdir()
+            (actual / "header.bin").write_bytes(b"header")
+            linked = root / "linked-runtime"
+            try:
+                linked.symlink_to(actual, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+            with self.assertRaisesRegex(RuntimeManifestError, "must not be a symlink"):
+                create_runtime_manifest(linked)
+
     def test_manifest_rejects_missing_runtime_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(RuntimeManifestError, "Runtime directory does not exist"):

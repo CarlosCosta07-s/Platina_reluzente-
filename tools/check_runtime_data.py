@@ -85,12 +85,30 @@ def _validate_narc(path: Path) -> tuple[bool, str]:
     return True, "NARC válido"
 
 
+def _regular_file_without_symlinks(root: Path, relative: str) -> Path | None:
+    """Return a regular file only when none of its runtime path components is a symlink."""
+    current = root
+    parts = Path(relative).parts
+    for index, component in enumerate(parts):
+        current = current / component
+        if current.is_symlink():
+            return None
+        if index < len(parts) - 1:
+            if not current.is_dir():
+                return None
+        elif not current.is_file():
+            return None
+    return current
+
+
 def inspect_runtime_directory(
     runtime_dir: str | Path,
     *,
     require_localized_resources: bool = False,
 ) -> dict[str, object]:
-    root = Path(runtime_dir).expanduser().resolve()
+    root = Path(runtime_dir).expanduser().absolute()
+    if root.is_symlink():
+        raise RuntimeDataError(f"diretório de runtime não pode ser link simbólico: {root}")
     if not root.exists() or not root.is_dir():
         raise RuntimeDataError(f"diretório de runtime não encontrado: {root}")
 
@@ -99,7 +117,10 @@ def inspect_runtime_directory(
     checked: list[dict[str, object]] = []
 
     executable = next(
-        (name for name in EXECUTABLE_CANDIDATES if (root / name).is_file()),
+        (
+            name for name in EXECUTABLE_CANDIDATES
+            if _regular_file_without_symlinks(root, name) is not None
+        ),
         None,
     )
     if executable is None:
@@ -108,8 +129,8 @@ def inspect_runtime_directory(
         checked.append({"path": executable, "status": "present"})
 
     for name, minimum_size in CORE_FILES.items():
-        path = root / name
-        if not path.is_file():
+        path = _regular_file_without_symlinks(root, name)
+        if path is None:
             missing.append(name)
             continue
         size = path.stat().st_size
@@ -123,13 +144,23 @@ def inspect_runtime_directory(
 
     for directory, pattern in OVERLAY_PATTERNS.items():
         overlay_dir = root / directory
-        if not overlay_dir.is_dir():
+        if overlay_dir.is_symlink() or not overlay_dir.is_dir():
             missing.append(f"{directory}/")
             continue
-        overlays = sorted(
-            path for path in overlay_dir.iterdir()
-            if path.is_file() and pattern.fullmatch(path.name)
-        )
+        overlays = []
+        for candidate in sorted(overlay_dir.iterdir()):
+            if not pattern.fullmatch(candidate.name):
+                continue
+            safe_candidate = _regular_file_without_symlinks(
+                root, f"{directory}/{candidate.name}"
+            )
+            if safe_candidate is None:
+                invalid.append({
+                    "path": f"{directory}/{candidate.name}",
+                    "problem": "overlay usa um link simbólico ou não é arquivo regular",
+                })
+                continue
+            overlays.append(safe_candidate)
         if not overlays:
             missing.append(f"{directory}/overlay*_*.bin")
             continue
@@ -145,8 +176,8 @@ def inspect_runtime_directory(
     # These archives are essential to battle/move-animation behavior. The upstream
     # Windows CI once skipped their generation, which let a broken package pass.
     for relative_name in REQUIRED_RUNTIME_ARCHIVES:
-        path = root / relative_name
-        if not path.is_file():
+        path = _regular_file_without_symlinks(root, relative_name)
+        if path is None:
             missing.append(relative_name)
             continue
         valid, message = _validate_narc(path)
@@ -163,9 +194,9 @@ def inspect_runtime_directory(
     if require_localized_resources:
         for relative in TARGET_FILES:
             relative_name = relative.as_posix()
-            path = root.joinpath(*relative.parts)
+            path = _regular_file_without_symlinks(root, relative_name)
             expected_hash = PTBR_RESOURCE_SHA256.get(relative_name)
-            if not path.is_file():
+            if path is None:
                 missing.append(relative_name)
                 continue
 
