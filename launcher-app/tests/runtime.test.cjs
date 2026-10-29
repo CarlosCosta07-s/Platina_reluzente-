@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, validateNdsHeader } = require('../electron/runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('../electron/runtime.cjs');
 
 test('runtime resolves under Electron resources when packaged', () => {
   assert.equal(resolveRuntimeDirectory(true, '/app/resources', '/app'), path.join('/app/resources', 'runtime'));
@@ -268,4 +268,68 @@ test('ROM header validation checks a plausible Nintendo DS title, code and size'
   assert.equal(validateNdsHeader(header, 1024), false);
   header.write('@@!!', 0x0c, 'ascii');
   assert.equal(validateNdsHeader(header, 1024), false);
+});
+
+
+test('horizontal screen layout is created on a fresh writable runtime', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-screen-layout-'));
+  try {
+    const configPath = ensureHorizontalScreenLayout(directory);
+    assert.equal(configPath, path.join(directory, 'sim_config.ini'));
+    assert.equal(fs.readFileSync(configPath, 'utf8'), '[General]\nScreenLayout=horizontal\n');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('horizontal layout preserves user settings and other config sections', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-screen-layout-preserve-'));
+  const configPath = path.join(directory, 'sim_config.ini');
+  try {
+    fs.writeFileSync(configPath, [
+      '[General]',
+      'MasterVolume=100',
+      'ScreenLayout=vertical',
+      'FullScreen=false',
+      '[PAD]',
+      'AKey=122',
+      '',
+    ].join('\r\n'), 'utf8');
+
+    ensureHorizontalScreenLayout(directory);
+    const content = fs.readFileSync(configPath, 'utf8');
+    assert.match(content, /MasterVolume=100/);
+    assert.match(content, /ScreenLayout=horizontal/);
+    assert.match(content, /FullScreen=false/);
+    assert.match(content, /\[PAD\]\r\nAKey=122/);
+    assert.equal((content.match(/ScreenLayout=/g) || []).length, 1);
+    assert.equal(content.includes('ScreenLayout=vertical'), false);
+    assert.equal((content.match(/\[General\]/g) || []).length, 1);
+    assert.equal(ensureHorizontalScreenLayout(directory), configPath);
+    assert.equal(fs.readFileSync(configPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('horizontal layout refuses a symlinked config file', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-screen-layout-link-'));
+  const target = path.join(directory, 'outside.ini');
+  const configPath = path.join(directory, 'sim_config.ini');
+  try {
+    fs.writeFileSync(target, '[General]\\nScreenLayout=vertical\\n');
+    try {
+      fs.symlinkSync(target, configPath, 'file');
+    } catch (error) {
+      if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+        t.skip('This platform does not permit creating symlinks for tests.');
+        return;
+      }
+      throw error;
+    }
+    assert.throws(() => ensureHorizontalScreenLayout(directory), /regular file/);
+    assert.equal(fs.readFileSync(target, 'utf8'), '[General]\\nScreenLayout=vertical\\n');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
