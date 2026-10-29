@@ -35,7 +35,7 @@ A documentação upstream exige Python 3.11+, CMake 3.16+, Ninja e um compilador
 4. Em ambiente local, usar uma cópia legal da ROM para validar a extração, a tela de título, o início de uma nova partida, controles, áudio, salvamento e retomada.
 5. Conectar Black à mesma biblioteca, validar o importador por SHA-1 integral e separar diretórios — etapa de interface e importação já concluída. O próximo bloqueio é integrar um runtime interno legalmente distribuível; o usuário não deve selecionar um executável local separado.
 
-O novo workflow `[Pokémon Black native source validation (no game data)](../.github/workflows/pokemon-black-native-check.yml)` está configurado para Linux x86-64 e Windows x64. Ele fixa os dois commits upstream, executa testes e tenta compilar o porte sem dados do jogo. Ele **não** publica executáveis, ROMs, firmware, saves ou arquivos extraídos. O primeiro resultado da CI será usado para corrigir as instruções, não tratado como prova de que a tela de título funciona.
+O workflow `[Pokémon Black native source validation (no game data)](../.github/workflows/pokemon-black-native-check.yml)` está configurado para Linux x86-64 e Windows x64. Ele fixa os dois commits upstream, executa os testes do motor, compila o porte e tenta montar temporariamente um runtime com o fechamento de dependências nativas resolvido em cada plataforma. Essa verificação usa dados de placeholders e **não** publica executáveis, ROMs, firmware, saves ou arquivos extraídos. O staging aprovado em CI prova somente que o executável e suas bibliotecas foram resolvidos; não prova que a tela de título funciona.
 
 ## Limite jurídico que afeta distribuição
 
