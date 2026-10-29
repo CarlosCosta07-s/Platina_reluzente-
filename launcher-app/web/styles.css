@@ -82,6 +82,7 @@ a { color: inherit; }
 .library-tab.active { color: #f0f5fc; }
 .library-tab.active::after { content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--accent); }
 .library-tab b { color: #c3d9f5; font-size: 9px; }
+.filter-note { padding-bottom: 12px; color: #7f8ea3; font-size: 8px; font-weight: 850; letter-spacing: 1px; }
 .toolbar-note { display: inline-flex; align-items: center; gap: 7px; padding-bottom: 11px; color: #7e8ca0; font-size: 9px; white-space: nowrap; }
 .tiny-dot { width: 5px; height: 5px; }
 .game-library-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
