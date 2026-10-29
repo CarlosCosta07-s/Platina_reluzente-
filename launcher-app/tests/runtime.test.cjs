@@ -34,6 +34,36 @@ test('Platinum launch contract passes the verified ROM and Linux AppImage extrac
   assert.equal(spec.platform, 'linux');
 });
 
+test('Platinum nested AppImage launch removes parent mount paths and forces extract-and-run', () => {
+  const spec = createPlatinumLaunchSpec({
+    runtime: { root: '/tmp/game-runtime', executable: '/tmp/game-runtime/main' },
+    rom: { filePath: '/tmp/private-rom/current.nds', sha256: 'c'.repeat(64) },
+    logPath: '/tmp/platinum-logs/native-startup.log',
+    platform: 'linux',
+    env: {
+      PATH: '/usr/bin',
+      DISPLAY: ':7',
+      APPIMAGE: '/home/tester/Platina-Launcher.AppImage',
+      APPDIR: '/tmp/.mount_launcher',
+      OWD: '/home/tester',
+      ARGV0: './Platina-Launcher.AppImage',
+      LD_LIBRARY_PATH: '/tmp/.mount_launcher/usr/lib:/opt/custom/lib::/usr/lib',
+      LD_PRELOAD: '/tmp/.mount_launcher/usr/lib/liblauncher-hook.so /usr/lib/libsafe-hook.so',
+      LD_AUDIT: '/tmp/.mount_launcher/usr/lib/liblauncher-audit.so:/usr/lib/libsafe-audit.so'
+    }
+  });
+
+  assert.equal(spec.env.APPIMAGE, undefined);
+  assert.equal(spec.env.APPDIR, undefined);
+  assert.equal(spec.env.OWD, undefined);
+  assert.equal(spec.env.ARGV0, undefined);
+  assert.equal(spec.env.APPIMAGE_EXTRACT_AND_RUN, '1');
+  assert.equal(spec.env.LD_LIBRARY_PATH, '/opt/custom/lib:/usr/lib');
+  assert.equal(spec.env.LD_PRELOAD, '/usr/lib/libsafe-hook.so');
+  assert.equal(spec.env.LD_AUDIT, '/usr/lib/libsafe-audit.so');
+  assert.equal(spec.env.DISPLAY, ':7');
+});
+
 test('Platinum launch contract omits Linux-only arguments on Windows', () => {
   const spec = createPlatinumLaunchSpec({
     runtime: { root: 'C:\\Platina\\runtime', executable: 'C:\\Platina\\runtime\\main.exe' },
