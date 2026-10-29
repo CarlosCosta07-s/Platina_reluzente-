@@ -8,7 +8,8 @@ const PERSONAL_FILES = new Set([
   'save.bin',
   'sim_config.ini',
   'launcher-runtime-version.txt',
-  'launcher-runtime-manifest.json'
+  'launcher-runtime-manifest.json',
+  'platinum-data-paths.txt'
 ]);
 
 // Never package a local ROM, save dump, or patch by accident.
@@ -112,6 +113,102 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
   return files;
 }
 
+const GAME_DATA_PATHS_FILE = 'platinum-data-paths.txt';
+const REQUIRED_EXTRACTED_PATHS = [
+  'header.bin',
+  'firmware.bin',
+  'wazaeffect/we.arc',
+  'battle/skill/waza_seq.narc'
+];
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (inQuotes && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (character === ',' && !inQuotes) {
+      row.push(field);
+      field = '';
+    } else if ((character === '\n' || character === '\r') && !inQuotes) {
+      if (character === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(field);
+      field = '';
+      if (row.some((value) => value.trim() !== '')) rows.push(row);
+      row = [];
+    } else {
+      field += character;
+    }
+  }
+  if (inQuotes) throw new Error('O filesys.csv contém aspas CSV sem fechamento.');
+  if (field.length || row.length) {
+    row.push(field);
+    if (row.some((value) => value.trim() !== '')) rows.push(row);
+  }
+  return rows;
+}
+
+function normalizeManifestPath(value, label) {
+  let normalized = String(value || '').trim();
+  if (label === 'target' && normalized.startsWith('/') && !normalized.startsWith('//')) {
+    normalized = normalized.slice(1);
+  }
+  if (!normalized || normalized.includes('\\') || normalized.includes('\0')
+      || normalized.includes(':') || path.posix.isAbsolute(normalized)
+      || normalized.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Caminho inseguro no filesys.csv (' + label + '): ' + JSON.stringify(value));
+  }
+  return normalized;
+}
+
+function createExtractedPathManifest(filesysCsvPath) {
+  if (typeof filesysCsvPath !== 'string' || !path.isAbsolute(filesysCsvPath)) {
+    throw new TypeError('O caminho absoluto de platinum.us/filesys.csv é obrigatório para o pacote de produção.');
+  }
+  const stat = fs.lstatSync(filesysCsvPath);
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error('platinum.us/filesys.csv precisa ser um arquivo regular, não um link simbólico.');
+  }
+  const rows = parseCsv(fs.readFileSync(filesysCsvPath, 'utf8').replace(/^\uFEFF/, ''));
+  const header = rows.shift();
+  if (!header || header.length !== 2
+      || header[0].trim() !== 'Source File' || header[1].trim() !== 'Target File') {
+    throw new Error('Cabeçalho de platinum.us/filesys.csv inesperado.');
+  }
+
+  const targets = new Set(REQUIRED_EXTRACTED_PATHS);
+  const seen = new Set();
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (row.length !== 2) {
+      throw new Error('Linha ' + (index + 2) + ' de filesys.csv deveria conter duas colunas.');
+    }
+    normalizeManifestPath(row[0], 'source');
+    const target = normalizeManifestPath(row[1], 'target');
+    const key = target.toLowerCase();
+    if (seen.has(key)) throw new Error('Destino duplicado em filesys.csv: ' + target);
+    seen.add(key);
+    targets.add(target);
+  }
+
+  // The pinned upstream revision currently maps 340 extracted assets. A much
+  // smaller input usually means the manifest was truncated or the wrong file
+  // was staged; fail the packaging step rather than ship a partial cache contract.
+  if (seen.size < 300) {
+    throw new Error('Manifesto de dados do jogo incompleto: ' + seen.size + ' destinos encontrados; esperado pelo menos 300.');
+  }
+  const paths = Array.from(targets).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+  return 'PLATINA_DATA_PATHS_V1\n' + paths.length + '\n' + paths.join('\n') + '\n';
+}
+
 function hashFile(filePath) {
   const hash = crypto.createHash('sha256');
   const descriptor = fs.openSync(filePath, 'r');
@@ -136,7 +233,7 @@ function lstatIfPresent(filePath) {
   }
 }
 
-function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
+function stageNativeRuntime({ sourceRoot, destinationRoot, platform, dataManifestPath }) {
   if (!Object.hasOwn(TARGETS, platform)) {
     throw new TypeError('Plataforma inválida. Use "linux" ou "windows".');
   }
@@ -160,6 +257,19 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
 
   const target = TARGETS[platform];
   const files = inspectRuntimeTree(source, target.executable, platform);
+  if (dataManifestPath !== undefined) {
+    const normalizedManifestPath = path.resolve(dataManifestPath);
+    if (files.some((file) => file.relativePath === GAME_DATA_PATHS_FILE)) {
+      throw new Error('O pacote de origem contém um nome reservado: ' + GAME_DATA_PATHS_FILE);
+    }
+    files.push({
+      sourcePath: null,
+      relativePath: GAME_DATA_PATHS_FILE,
+      mode: 0o644,
+      generatedContents: createExtractedPathManifest(normalizedManifestPath)
+    });
+    files.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
+  }
   const parentDirectory = path.dirname(destination);
   fs.mkdirSync(parentDirectory, { recursive: true });
   const staging = path.join(parentDirectory, '.runtime-staging-' + process.pid + '-' + Date.now());
@@ -170,8 +280,12 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
     for (const file of files) {
       const destinationPath = path.join(staging, ...file.relativePath.split('/'));
       fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-      fs.copyFileSync(file.sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
-      fs.chmodSync(destinationPath, file.mode);
+      if (typeof file.generatedContents === 'string') {
+        fs.writeFileSync(destinationPath, file.generatedContents, { encoding: 'utf8', flag: 'wx', mode: file.mode });
+      } else {
+        fs.copyFileSync(file.sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
+        fs.chmodSync(destinationPath, file.mode);
+      }
     }
 
     // Record a content hash for every packaged binary and library. The
@@ -264,8 +378,9 @@ if (require.main === module) {
       'pokeplatinum'
     );
     const destinationRoot = path.join(repositoryRoot, 'launcher-app', 'runtime');
+    const dataManifestPath = path.resolve(sourceRoot, '..', '..', 'platinum.us', 'filesys.csv');
     try {
-      const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform });
+      const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform, dataManifestPath });
       process.stdout.write(
         'Runtime ' + result.platform + ' preparado com ' + result.files
         + ' arquivos; fingerprint=' + result.buildId + '\n'
@@ -278,4 +393,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { stageNativeRuntime, inspectRuntimeTree, TARGETS };
+module.exports = { stageNativeRuntime, inspectRuntimeTree, createExtractedPathManifest, parseCsv, TARGETS };
