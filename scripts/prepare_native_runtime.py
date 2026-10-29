@@ -116,8 +116,14 @@ FS_OPEN_FALLBACK_ORIGINAL = r'''        #if FS_FILE_OPEN_DEBUG
         return FS_OpenFile(p_file, path);'''
 FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
         if (managedRomPath != NULL && managedRomPath[0] != '\0') {
-            OS_Warning("[file-system] Required runtime resource is missing: %s.\n", path);
-            return FALSE;
+            if (sLauncherManagedRomExtractionAttempted) {
+                fprintf(stderr, "[file-system] Resource still missing after one extraction attempt: %s\n", path);
+                return FALSE;
+            }
+            sLauncherManagedRomExtractionAttempted = TRUE;
+            fprintf(stderr, "[file-system] Missing resource %s; extracting data from the imported ROM once.\n", path);
+            SIM_ShowRomExtractionDialog();
+            return FS_OpenFile(p_file, path);
         }
         #if FS_FILE_OPEN_DEBUG
         char messageBuf[200] = {0};
@@ -131,6 +137,49 @@ FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLAT
 
         // Manual desktop launches may still use the legacy extraction flow.
         return FS_OpenFile(p_file, path);'''
+SIM_ROM_EXTRACTOR_ORIGINAL = r'''void SIM_ShowRomExtractionDialog() {
+    bool fileSelected = false;
+    SIM::GUI::Enable();
+    SIM::GUI::OpenFileDialog([&fileSelected](std::string fileName) {
+        SIM_NDSExtract(fileName);
+        fileSelected = true;
+    });
+    while(!fileSelected) {
+        SIM_Render(nullptr);
+    }
+
+
+    int foo = 1;
+    foo++;
+    printf("%d", foo);
+}'''
+
+SIM_ROM_EXTRACTOR_PATCHED = r'''void SIM_ShowRomExtractionDialog() {
+    const char *managedRomPath = std::getenv("PLATINA_IMPORTED_ROM");
+    if (managedRomPath != nullptr && managedRomPath[0] != '\0') {
+        const int extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
+        if (extractionStatus != 0) {
+            std::fprintf(stderr, "[rom-extract] Automatic extraction failed with status %d.\\n", extractionStatus);
+        } else {
+            std::fprintf(stderr, "[rom-extract] Missing runtime data extracted from the imported ROM.\\n");
+        }
+        return;
+    }
+
+    bool fileSelected = false;
+    SIM::GUI::Enable();
+    SIM::GUI::OpenFileDialog([&fileSelected](std::string fileName) {
+        SIM_NDSExtract(fileName);
+        fileSelected = true;
+    });
+    while(!fileSelected) {
+        SIM_Render(nullptr);
+    }
+}'''
+
+SIM_ROM_EXTRACTOR_INCLUDE_ORIGINAL = "#include <SDL2/SDL.h>\\n#include <string>"
+SIM_ROM_EXTRACTOR_INCLUDE_PATCHED = "#include <SDL2/SDL.h>\\n#include <cstdio>\\n#include <cstdlib>\\n#include <string>"
+
 BACKUP_SAVE_PATH_INCLUDE_ORIGINAL = '''#ifdef SDK_PORT
 #include <stdio.h>
 #include <stdlib.h>
@@ -525,7 +574,10 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
         patched = True
 
     original_include = "#include <string.h>\n#include <SDL2/SDL.h>"
-    patched_include = "#include <string.h>\n#include <stdlib.h>\n#include <SDL2/SDL.h>"
+    patched_include = (
+        "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>\n"
+        "static BOOL sLauncherManagedRomExtractionAttempted = FALSE;"
+    )
     if patched_include in current:
         if current.count(patched_include) != 1:
             raise RuntimePreparationError("Duplicate stdlib include in fs_file.c.")
@@ -536,6 +588,44 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
         patched = True
 
     return fs_path, current, current != original
+
+
+def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Use the launcher-imported ROM automatically when runtime data is missing."""
+    extractor_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "libraries" / "sim" / "src" / "sim_RomExtractor.cpp"
+    )
+    if not extractor_path.is_file():
+        raise RuntimePreparationError(f"Simulator ROM extractor source missing: {extractor_path}")
+
+    original = extractor_path.read_text(encoding="utf-8")
+    current = original
+    if SIM_ROM_EXTRACTOR_PATCHED in current:
+        if current.count(SIM_ROM_EXTRACTOR_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate automatic ROM extractor patch detected.")
+        if SIM_ROM_EXTRACTOR_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and patched ROM extractor functions exist.")
+    else:
+        if current.count(SIM_ROM_EXTRACTOR_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one known SIM_ShowRomExtractionDialog implementation; refusing uncertain patch."
+            )
+        current = current.replace(SIM_ROM_EXTRACTOR_ORIGINAL, SIM_ROM_EXTRACTOR_PATCHED, 1)
+
+    if SIM_ROM_EXTRACTOR_INCLUDE_PATCHED in current:
+        if current.count(SIM_ROM_EXTRACTOR_INCLUDE_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate include block in sim_RomExtractor.cpp.")
+    else:
+        if current.count(SIM_ROM_EXTRACTOR_INCLUDE_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one known include block in sim_RomExtractor.cpp."
+            )
+        current = current.replace(
+            SIM_ROM_EXTRACTOR_INCLUDE_ORIGINAL, SIM_ROM_EXTRACTOR_INCLUDE_PATCHED, 1
+        )
+
+    return extractor_path, current, current != original
 
 
 def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
@@ -594,14 +684,15 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
 
     current, _ = _prepare_renderer_startup(current)
 
-    # Validate all three source files before writing any of them.
+    # Validate every source file before writing any of them.
     config_path = path.parent / "config" / "sim_config.c"
     config_updated, config_changed = _prepare_sim_config(config_path)
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
+    extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
     backup_path, backup_updated, backup_changed = _prepare_backup_save_path(source_root)
 
     changed = (
-        current != original or config_changed or fs_changed or backup_changed
+        current != original or config_changed or fs_changed or extractor_changed or backup_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
@@ -609,6 +700,8 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         config_path.write_text(config_updated, encoding="utf-8")
     if fs_changed:
         fs_path.write_text(fs_updated, encoding="utf-8")
+    if extractor_changed:
+        extractor_path.write_text(extractor_updated, encoding="utf-8")
     if backup_changed:
         backup_path.write_text(backup_updated, encoding="utf-8")
     return changed
