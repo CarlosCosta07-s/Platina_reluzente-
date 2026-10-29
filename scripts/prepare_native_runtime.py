@@ -719,14 +719,18 @@ NVRAM_FILE_READ_PATCHED = r'''#else
         for (i = 0; i < (s32)size; i++) {
             buf[i] = 0xFF;
         }
-        fprintf(stderr, "[Platina] NVRAM backing file is unavailable; using erased flash bytes for this read.\\\\n");
+        static int nvramFallbackWarned = 0;
+        if (!nvramFallbackWarned) {
+            fprintf(stderr, "[Platina] NVRAM backing file is unavailable; using erased flash bytes for this read.\n");
+            nvramFallbackWarned = 1;
+        }
         return;
     }
     if (fseek(s_nvramFilePtr, (long)address, SEEK_SET) != 0) {
         for (i = 0; i < (s32)size; i++) {
             buf[i] = 0xFF;
         }
-        fprintf(stderr, "[Platina] NVRAM backing read seek failed; using erased flash bytes.\\\\n");
+        fprintf(stderr, "[Platina] NVRAM backing read seek failed; using erased flash bytes.\n");
         fclose(s_nvramFilePtr);
         s_nvramFilePtr = NULL;
         return;
@@ -738,7 +742,7 @@ NVRAM_FILE_READ_PATCHED = r'''#else
                 buf[i] = 0xFF;
             }
             if (ferror(s_nvramFilePtr)) {
-                fprintf(stderr, "[Platina] NVRAM backing read was incomplete; the missing bytes were treated as erased flash.\\\\n");
+                fprintf(stderr, "[Platina] NVRAM backing read was incomplete; the missing bytes were treated as erased flash.\n");
             }
         }
     }
