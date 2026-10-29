@@ -117,7 +117,7 @@ $eidosArgs = @(
 & ".\build64\host\eidos.exe" @eidosArgs
 ```
 
-Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Esses comandos são para teste local com um runtime que você compilou; o launcher ainda não expõe essa ação e não há pacote Black redistribuível aprovado.
+Execute a partir do diretório do build. Mantenha a ROM importada, os dados extraídos, a configuração, os saves e os logs separados de Platinum. Esses comandos são para teste local com um runtime que você compilou. O launcher agora permite selecionar esse build local, importar a ROM e solicitar a inicialização, mas o runtime continua fora do pacote público. O início do processo não comprova que a tela de título apareceu; isso ainda precisa de teste manual. Não há pacote Black redistribuível aprovado.
 ## 6. Validação mínima antes de pensar na integração
 
 1. Execute os testes `ctest --test-dir build --output-on-failure` para a configuração de testes que você construiu, quando aplicável.
