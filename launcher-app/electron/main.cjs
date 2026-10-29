@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('./runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
@@ -322,19 +322,22 @@ ipcMain.handle('platina:launch-game', async () => {
     };
   }
   const logPath = path.join(app.getPath('userData'), 'logs', 'native-startup.log');
-  return launchNativeProcess({
-    executable: writableRuntime.executable,
-    args: process.platform === 'linux' ? ['--appimage-extract-and-run'] : [],
-    cwd: writableRuntime.root,
-    env: {
-      ...process.env,
-      PLATINA_IMPORTED_ROM: rom.filePath,
-      PLATINA_IMPORTED_ROM_SHA256: rom.sha256
-    },
-    logPath,
-    platform: process.platform,
-    romSha256: rom.sha256
-  });
+  try {
+    const launchSpec = createPlatinumLaunchSpec({
+      runtime: writableRuntime,
+      rom,
+      logPath,
+      platform: process.platform,
+      env: process.env
+    });
+    return launchNativeProcess(launchSpec);
+  } catch (error) {
+    return {
+      ok: false,
+      message: 'Não foi possível preparar a chamada de inicialização de Pokémon Platinum: ' + error.message,
+      logPath
+    };
+  }
 });
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
