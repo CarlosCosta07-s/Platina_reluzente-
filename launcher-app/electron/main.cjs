@@ -67,7 +67,7 @@ ipcMain.handle('platina:import-rom', async () => {
   try { await sourceFile.read(header, 0, header.length, 0); }
   finally { await sourceFile.close(); }
   if (!validateNdsHeader(header, stat.size)) {
-    return { canceled: false, ok: false, message: 'O cabeçalho não parece ser de uma ROM Nintendo DS válida.' };
+    return { canceled: false, ok: false, message: 'Esta compilação espera Pokémon Platinum USA Rev. 1 (código CPUE). A ROM selecionada não corresponde à versão configurada.' };
   }
 
   const romDir = path.join(app.getPath('userData'), 'roms');
