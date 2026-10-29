@@ -116,7 +116,7 @@ python scripts/stage_black_runtime.py \
   --objdump "$gcc_bin/x86_64-w64-mingw32-objdump.exe"
 ```
 
-O script recusa dependências não resolvidas e preserva o runtime anterior quando a nova preparação falha. Para abrir a biblioteca em modo de desenvolvimento, compile a interface web com `npm run build:web` dentro de `launcher-app` e execute Electron a partir dessa pasta. Com o runtime local validado presente, o launcher resolve-o internamente — não há seletor de executável externo. Essa cópia local serve para testes de desenvolvimento; ela é ignorada pelo Git e **não** autoriza a publicação de um pacote ou binário derivado.
+O script recusa dependências não resolvidas e preserva o runtime anterior quando a nova preparação falha. Para abrir a biblioteca em modo de desenvolvimento, entre em `launcher-app` e execute `npm install --no-audit --no-fund`, `npm run build:web` e `npm start`. O comando `npm start` inicia o Electron usando o launcher integrado; com o runtime local validado presente em `launcher-app/black-runtime`, o launcher resolve-o internamente — não há seletor de executável externo. Essa cópia local serve para testes de desenvolvimento; ela é ignorada pelo Git e **não** autoriza a publicação de um pacote ou binário derivado.
 
 ## 6. Testar o contrato de inicialização sem um segundo seletor de ROM
 
