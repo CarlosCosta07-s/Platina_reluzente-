@@ -2,7 +2,7 @@
 
 > **Projeto comunitário de preservação e estudo, sem fins comerciais.** Não é um produto oficial nem possui vínculo com Nintendo, Game Freak ou The Pokémon Company.
 
-O projeto reúne uma biblioteca experimental de portes nativos comunitários para **Windows e Linux**. O desenvolvimento principal continua sendo o porte de **Pokémon Platinum**, que já possui runtimes desktop e um launcher integrado em fase de testes. Em paralelo, iniciamos a pesquisa técnica e o planejamento do porte nativo de **Pokémon Black Version**, usando código reconstruído e compilado para o host — sem emulador de Nintendo DS ou interpretador de instruções ARM. O runtime Black ainda não foi integrado: por enquanto, ele aparece no launcher como projeto em desenvolvimento. Nenhuma ROM, firmware ou recurso protegido do jogo será incluído nos releases.
+O projeto reúne uma biblioteca experimental de portes nativos comunitários para **Windows e Linux**. O desenvolvimento principal continua sendo o porte de **Pokémon Platinum**, que já possui runtimes desktop e um launcher integrado em fase de testes. Em paralelo, o porte nativo de **Pokémon Black Version** avançou da auditoria para uma etapa de validação de código e compilação: o workflow [Pokémon Black native source validation (no game data)](.github/workflows/pokemon-black-native-check.yml) verifica revisões fixadas de [Aletheia](https://github.com/Project-Holon/aletheia) e [Eidos](https://github.com/Project-Holon/eidos) em Windows x64 e Linux x86-64 sem ROM ou recursos do jogo. Esta etapa ainda não confirma a tela de título nem integra o runtime Black ao launcher; também não publica binários, porque a licença do código reconstruído precisa de análise antes de qualquer distribuição. Nenhuma ROM, firmware ou recurso protegido do jogo será incluído nos releases.
 
 ## Pokémon Black — etapa técnica
 
@@ -11,7 +11,7 @@ O porte paralelo está agora fixado nas revisões compatíveis do [aletheia](htt
 ## Projetos da biblioteca
 
 - **Pokémon Platinum** — porte nativo principal em Windows/Linux. O launcher integrado já pode ser compilado, mas tela de título e jogabilidade ainda precisam ser confirmadas com uma cópia local compatível.
-- **Pokémon Black Version** — porte nativo paralelo em fase inicial de auditoria técnica. A entrada informativa já foi adicionada ao launcher; importação, execução e builds Black ainda não estão disponíveis. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md).
+- **Pokémon Black Version** — porte nativo paralelo com pipeline de validação e compilação em andamento, baseado em revisões fixadas de Aletheia/Eidos. A entrada informativa já está no launcher; importação e inicialização continuam desativadas e ainda não há build Black validado. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md) e acompanhe o [workflow sem dados do jogo](.github/workflows/pokemon-black-native-check.yml).
 
 ## Estado real do projeto
 
