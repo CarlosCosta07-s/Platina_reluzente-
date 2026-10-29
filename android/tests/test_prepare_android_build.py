@@ -343,6 +343,49 @@ endif
             self.assertEqual([], patch_android_ppwlobby_stdlib_compat(root))
 
 
+    def test_android_ppwlobby_flags_reject_partial_cpp_argument_replacements(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            meson = root / "lib" / "ppwlobby" / "meson.build"
+            ilobby = root / "lib" / "ppwlobby" / "libraries" / "ilobby" / "meson.build"
+            lobby = root / "lib" / "ppwlobby" / "libraries" / "ppwlobby" / "meson.build"
+            for path in (meson, ilobby, lobby):
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+            meson.write_text(
+                "if(build_target == 'arm')\n"
+                "    ppwlobby_c_args = ['-wrap:sdk', '2.0/sp2p3', '-nothumb']\n"
+                "    ppwlobby_cpp_args = ppwlobby_c_args\n"
+                "elif(build_target == 'android')\n"
+                "    ppwlobby_c_args = ['-std=c99']\n"
+                "    ppwlobby_cpp_args = ['-fpermissive', '-std=c++03']\n"
+                "else\n"
+                "    ppwlobby_c_args = ['-fpermissive', '-std=c++03']\n"
+                "    ppwlobby_cpp_args = ppwlobby_c_args\n"
+                "endif\n",
+                encoding="utf-8",
+            )
+            partial_ilobby = (
+                "lib = static_library('ilobby',\n"
+                "    cpp_args: cpp_args + ppwlobby_cpp_args,\n"
+                "    cpp_args: cpp_args + ppwlobby_c_args,\n"
+                ")\n"
+            )
+            ilobby.write_text(partial_ilobby, encoding="utf-8")
+            lobby.write_text(
+                "lib = static_library('lobby',\n"
+                "    cpp_args: [cpp_args, ppwlobby_c_args],\n"
+                ")\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(PatchError, "partial or duplicated patch markers"):
+                patch_android_ppwlobby_c_args(root)
+
+            self.assertEqual(partial_ilobby, ilobby.read_text(encoding="utf-8"))
+            self.assertIn("ppwlobby_c_args = ['-std=c99']", meson.read_text(encoding="utf-8"))
+            self.assertIn("cpp_args: [cpp_args, ppwlobby_c_args]", lobby.read_text(encoding="utf-8"))
+
     def test_ppwlobby_static_libraries_enable_android_pic_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
