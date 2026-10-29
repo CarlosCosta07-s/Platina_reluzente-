@@ -36,10 +36,11 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
   requireRealDirectory(sourceRoot, 'Runtime de origem');
   const discoveredFiles = [];
 
-  // Scan the full build tree for unsafe entries, but only stage native code
-  // and shared libraries. Game data is extracted to a per-user writable
-  // directory from the ROM the user imports on first launch.
-  function visit(directory) {
+  // Only inspect files that can enter the package. The upstream Linux build
+  // also creates an AppDir containing intentional symlinks; we never package
+  // that directory, only its self-contained AppImage file. On Windows, only
+  // native executables and DLL dependencies are copied, never extracted data.
+  function visitWindows(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const sourcePath = path.join(directory, entry.name);
       const stat = fs.lstatSync(sourcePath);
@@ -48,46 +49,54 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
         throw new Error('Runtime contém link simbólico; não será empacotado: ' + relativePath);
       }
       if (stat.isDirectory()) {
-        visit(sourcePath);
+        visitWindows(sourcePath);
         continue;
       }
       if (!stat.isFile()) {
         throw new Error('Runtime contém uma entrada especial não suportada: ' + relativePath);
       }
-
       const extension = path.extname(entry.name).toLowerCase();
       if (FORBIDDEN_EXTENSIONS.has(extension)) {
         throw new Error('Arquivo ROM/save/patch proibido na pasta de runtime: ' + relativePath);
       }
-      if (PERSONAL_FILES.has(entry.name.toLowerCase())) {
-        continue;
+      if (PERSONAL_FILES.has(entry.name.toLowerCase())) continue;
+      if (extension === '.exe' || extension === '.dll') {
+        discoveredFiles.push({ sourcePath, relativePath, mode: stat.mode & 0o777 });
       }
-      discoveredFiles.push({ sourcePath, relativePath, mode: stat.mode & 0o777 });
     }
   }
 
-  visit(sourceRoot);
-  discoveredFiles.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
-
   let files;
   if (platform === 'linux') {
-    const appImage = discoveredFiles.find((file) => file.relativePath === 'pokeplatinum.AppImage');
-    if (!appImage) {
-      throw new Error('Executável nativo portátil Linux ausente: pokeplatinum.AppImage');
+    const appImagePath = path.join(sourceRoot, 'pokeplatinum.AppImage');
+    let stat;
+    try {
+      stat = fs.lstatSync(appImagePath);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        throw new Error('Executável nativo portátil Linux ausente: pokeplatinum.AppImage');
+      }
+      throw error;
     }
-    if ((appImage.mode & 0o111) === 0) {
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error('O AppImage Linux precisa ser um arquivo regular, não um link simbólico.');
+    }
+    if ((stat.mode & 0o111) === 0) {
       throw new Error('O AppImage Linux não possui permissão de execução.');
     }
-    files = [{ ...appImage, relativePath: expectedExecutable }];
+    files = [{
+      sourcePath: appImagePath,
+      relativePath: expectedExecutable,
+      mode: stat.mode & 0o777
+    }];
   } else {
+    visitWindows(sourceRoot);
+    discoveredFiles.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
     const executable = discoveredFiles.find((file) => file.relativePath === expectedExecutable);
     if (!executable) {
       throw new Error('Executável nativo obrigatório ausente: ' + expectedExecutable);
     }
-    files = discoveredFiles.filter((file) =>
-      file.relativePath === expectedExecutable
-      || path.extname(file.relativePath).toLowerCase() === '.dll'
-    );
+    files = discoveredFiles;
   }
 
   files.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
