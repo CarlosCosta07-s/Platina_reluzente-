@@ -3,3 +3,4 @@ dist/
 android/
 *.log
 .DS_Store
+runtime/
