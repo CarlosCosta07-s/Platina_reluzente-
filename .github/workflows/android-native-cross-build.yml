@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Test Android Meson source preparation
-        run: python -m unittest android.tests.test_prepare_android_build -v
+        run: python -m unittest android.tests.test_prepare_android_build android.tests.test_summarize_build_log -v
       - name: Test native SDL entrypoint and ROM handoff
         run: python -m unittest tools.tests.test_prepare_native_runtime -v
       - name: Test Android runtime manifest creation
@@ -194,7 +194,8 @@ jobs:
           # The copy script can be reached by dependency targets during either
           # compile invocation, so select Android mode before the first one.
           touch "$RUNNER_TEMP/build_android/.android-target"
-          meson compile -C "$RUNNER_TEMP/build_android" main --verbose
+          # Keep the verbose log: on failure it is scanned for the first real errors.
+          meson compile -C "$RUNNER_TEMP/build_android" main --verbose 2>&1 | tee "$RUNNER_TEMP/native-build.log"
           lib="$RUNNER_TEMP/build_android/libmain.so"
           test -s "$lib"
           file "$lib"
@@ -256,7 +257,7 @@ jobs:
           cp "$build/libmain.so" "$build/main"
           # This target builds the same resource tree used by desktop, then
           # the Android guard prevents host AppImage/linuxdeploy packaging.
-          meson compile -C "$build" --verbose
+          meson compile -C "$build" --verbose 2>&1 | tee -a "$RUNNER_TEMP/native-build.log"
           runtime="$build/pokeplatinum"
           test -d "$runtime"
           test -s "$runtime/header.bin"
@@ -306,6 +307,9 @@ jobs:
           unzip -l "$apk" | grep -F 'lib/arm64-v8a/libmain.so'
           unzip -l "$apk" | grep -F 'assets/pokeplatinum/runtime-manifest.txt'
           echo "Integrated APK built and inspected at $apk. It remains in this disposable CI job and is not uploaded."
+      - name: Report first native build errors
+        if: failure()
+        run: python android/scripts/summarize_build_log.py "$RUNNER_TEMP/native-build.log"
       - name: Write summary
         if: always()
         env:
