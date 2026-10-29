@@ -54,6 +54,7 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /abrir a atividade ainda não confirma que o jogo carregou/);
     assert.match(plugin, /roms\/current\.nds/);
     assert.match(plugin, /!\"CPUE\"\.equals\(code\)/);
+    assert.equal((plugin.match(/!\"CPUE\"\.equals\(code\)/g) || []).length, 1, 'CPUE revision guard appears exactly once');
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /"CPUE"/);
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
