@@ -225,12 +225,12 @@ FS_OPEN_FALLBACK_ORIGINAL = r'''        #if FS_FILE_OPEN_DEBUG
         // yes, this is recursive, so if the user is dumb enough to keep extracting the wrong ROM and does this enough times, it will crash
         return FS_OpenFile(p_file, path);'''
 FS_OPEN_FALLBACK_PATCHED = r'''        #ifdef SDK_BUILD_ANDROID
-        OS_Warning("[file-system] Required runtime resource is missing: %s.\\n", path);
+        OS_Warning("[file-system] Required runtime resource is missing: %s.\n", path);
         return FALSE;
         #else
         const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
-        if (managedRomPath != NULL && managedRomPath[0] != '\\0') {
-            OS_Warning("[file-system] Required runtime resource is missing: %s.\\n", path);
+        if (managedRomPath != NULL && managedRomPath[0] != '\0') {
+            OS_Warning("[file-system] Required runtime resource is missing: %s.\n", path);
             return FALSE;
         }
         #if FS_FILE_OPEN_DEBUG
@@ -351,8 +351,8 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
         current = current.replace(FS_OPEN_FALLBACK_ORIGINAL, FS_OPEN_FALLBACK_PATCHED, 1)
         patched = True
 
-    original_include = "#include <string.h>\\n#include <SDL2/SDL.h>"
-    patched_include = "#include <string.h>\\n#include <stdlib.h>\\n#include <SDL2/SDL.h>"
+    original_include = "#include <string.h>\n#include <SDL2/SDL.h>"
+    patched_include = "#include <string.h>\n#include <stdlib.h>\n#include <SDL2/SDL.h>"
     if patched_include in current:
         if current.count(patched_include) != 1:
             raise RuntimePreparationError("Duplicate stdlib include in fs_file.c.")
