@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Caminho explícito para objdump; útil quando o toolchain MinGW fornece um binário específico.",
     )
     parser.add_argument(
-        "--destination", default=str(repo_root / "launcher-app" / "black-runtime"),
+        "--destination", default=str(repo_root / "launcher-app" / "black-runtime" / "runtime"),
         help="Pasta local de runtime (por padrão, launcher-app/black-runtime, ignorada pelo Git).",
     )
     args = parser.parse_args(argv)
