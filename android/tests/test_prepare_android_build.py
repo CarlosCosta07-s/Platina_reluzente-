@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from android.scripts.prepare_android_build import check_pin, PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_android_trainer_ai_asm_macro_case, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
+from android.scripts.prepare_android_build import check_pin, PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_map_subscript, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_android_trainer_ai_asm_macro_case, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -398,6 +398,33 @@ endif
                 second_text,
             )
             self.assertEqual([], patch_android_ppwlobby_map_allocators(root))
+
+
+    def test_android_ppwlobby_map_subscript_avoids_libcpp_const_key_allocator_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = (
+                root / "lib" / "ppwlobby" / "libraries" / "ilobby"
+                / "src" / "dwci_lobbydata.cpp"
+            )
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "    unk_70[v0] = param0;\n",
+                encoding="utf-8",
+            )
+
+            changes = patch_android_ppwlobby_map_subscript(root)
+
+            updated = source.read_text(encoding="utf-8")
+            self.assertEqual(
+                ["PPW lobby: avoid libc++ const-key construction through map::operator[]"],
+                changes,
+            )
+            self.assertNotIn("unk_70[v0] = param0;", updated)
+            self.assertIn("UnkClass_ov66_02243B64_UnkMap0::iterator v2 = unk_70.find(v0);", updated)
+            self.assertIn("unk_70.insert(std::make_pair(v0, param0));", updated)
+            self.assertIn("v2->second = param0;", updated)
+            self.assertEqual([], patch_android_ppwlobby_map_subscript(root))
 
 
     def test_android_ppwlobby_allocator_and_callback_handles_support_arm64(self):
