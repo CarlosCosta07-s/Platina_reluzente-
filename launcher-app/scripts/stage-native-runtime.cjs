@@ -7,7 +7,8 @@ const crypto = require('node:crypto');
 const PERSONAL_FILES = new Set([
   'save.bin',
   'sim_config.ini',
-  'launcher-runtime-version.txt'
+  'launcher-runtime-version.txt',
+  'launcher-runtime-manifest.json'
 ]);
 
 // Never package a local ROM, save dump, or patch by accident.
@@ -173,13 +174,31 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
       fs.chmodSync(destinationPath, file.mode);
     }
 
-    // Fingerprint every staged file, not just the executable, so a data-only
-    // runtime update also refreshes the launcher's writable copy.
+    // Record a content hash for every packaged binary and library. The
+    // writable copy verifies these entries again before any game is launched.
+    const manifestFiles = files.map((file) => {
+      const stagedPath = path.join(staging, ...file.relativePath.split('/'));
+      const stat = fs.lstatSync(stagedPath);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw new Error('Arquivo nativo staged não é um arquivo regular: ' + file.relativePath);
+      }
+      return {
+        path: file.relativePath,
+        size: stat.size,
+        sha256: hashFile(stagedPath)
+      };
+    });
     const manifestHash = crypto.createHash('sha256');
-    for (const file of files) {
-      manifestHash.update(file.relativePath + '\0' + hashFile(path.join(staging, ...file.relativePath.split('/'))) + '\n');
+    for (const entry of manifestFiles) {
+      manifestHash.update(entry.path + '\0' + entry.sha256 + '\n');
     }
     const buildId = manifestHash.digest('hex');
+    fs.writeFileSync(path.join(staging, 'launcher-runtime-manifest.json'), JSON.stringify({
+      schemaVersion: 1,
+      platform,
+      buildId,
+      files: manifestFiles
+    }, null, 2) + '\n', { encoding: 'utf8', flag: 'wx' });
     fs.writeFileSync(path.join(staging, 'launcher-runtime-version.txt'), buildId + '\n', {
       encoding: 'utf8',
       flag: 'wx'
