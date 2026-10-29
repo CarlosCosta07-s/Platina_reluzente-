@@ -18,6 +18,8 @@ from scripts.prepare_native_runtime import (
     ORIGINAL_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
     RuntimePreparationError,
+    SIM_ROM_EXTRACTOR_ORIGINAL,
+    SIM_ROM_EXTRACTOR_PATCHED,
     prepare_native_runtime,
 )
 
@@ -195,6 +197,34 @@ int main(int argc, char *argv[]) {
 }'''
 
 
+UPSTREAM_SIM_ROM_EXTRACTOR = r'''#include "simulator/sim.h"
+#include "simulator/imgui/imgui.hpp"
+#include "simulator/sim_RomExtractor.h"
+#include "simulator/sim_gui.hpp"
+#include "nds-extract.hpp"
+
+#include <SDL2/SDL.h>
+#include <string>
+
+
+void SIM_ShowRomExtractionDialog() {
+    bool fileSelected = false;
+    SIM::GUI::Enable();
+    SIM::GUI::OpenFileDialog([&fileSelected](std::string fileName) {
+        SIM_NDSExtract(fileName);
+        fileSelected = true;
+    });
+    while(!fileSelected) {
+        SIM_Render(nullptr);
+    }
+
+
+    int foo = 1;
+    foo++;
+    printf("%d", foo);
+}'''
+
+
 class NativeRuntimePreparationTests(unittest.TestCase):
     def make_source(self, root: Path, content: str = UPSTREAM_HEADER) -> Path:
         source_dir = root / "subprojects/libntr/libraries/sim/src"
@@ -207,6 +237,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
         fs_source.parent.mkdir(parents=True, exist_ok=True)
         fs_source.write_text(UPSTREAM_FS_FILE, encoding="utf-8")
+        extractor_source = root / "subprojects/libntr/libraries/sim/src/sim_RomExtractor.cpp"
+        extractor_source.write_text(UPSTREAM_SIM_ROM_EXTRACTOR, encoding="utf-8")
         backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
         backup_header.parent.mkdir(parents=True, exist_ok=True)
         backup_header.write_text(UPSTREAM_BACKUP_HEADER, encoding="utf-8")
@@ -235,7 +267,15 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             fs_content = (root / "subprojects/libntr/libraries/fs/src/fs_file.c").read_text(encoding="utf-8")
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
+            self.assertIn("sLauncherManagedRomExtractionAttempted", fs_content)
+            self.assertIn("return FS_OpenFile(p_file, path);", FS_OPEN_FALLBACK_PATCHED)
+            self.assertNotIn("return FALSE;", FS_OPEN_FALLBACK_PATCHED.split("Manual desktop launches")[0])
             self.assertNotIn("SDK_BUILD_ANDROID", fs_content)
+            extractor_content = (root / "subprojects/libntr/libraries/sim/src/sim_RomExtractor.cpp").read_text(encoding="utf-8")
+            self.assertIn(SIM_ROM_EXTRACTOR_PATCHED, extractor_content)
+            self.assertIn('std::getenv("PLATINA_IMPORTED_ROM")', extractor_content)
+            self.assertIn("SIM_NDSExtract(std::string(managedRomPath))", extractor_content)
+            self.assertNotIn(SIM_ROM_EXTRACTOR_ORIGINAL, extractor_content)
             backup_content = (root / "subprojects/libntr/include/nitro/card/backup.h").read_text(encoding="utf-8")
             self.assertIn(BACKUP_SAVE_PATH_INCLUDE_PATCHED, backup_content)
             self.assertIn(BACKUP_FILE_IO_HELPERS_PATCHED, backup_content)
@@ -288,6 +328,29 @@ class NativeRuntimePreparationTests(unittest.TestCase):
 
             self.assertFalse(prepare_native_runtime(root))
             self.assertEqual(config.read_text(encoding="utf-8"), once)
+
+    def test_unknown_sim_rom_extractor_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            original_fs = fs_source.read_text(encoding="utf-8")
+            extractor_source = root / "subprojects/libntr/libraries/sim/src/sim_RomExtractor.cpp"
+            extractor_source.write_text("unknown ROM extractor implementation\\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), original_fs)
+            self.assertEqual(
+                extractor_source.read_text(encoding="utf-8"),
+                "unknown ROM extractor implementation\\n",
+            )
 
     def test_unknown_fs_fallback_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:
