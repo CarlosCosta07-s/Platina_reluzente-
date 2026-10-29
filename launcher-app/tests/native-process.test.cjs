@@ -40,7 +40,7 @@ test('native process startup writes stdout and stderr to a persistent local log'
 
   assert.equal(result.ok, true);
   assert.equal(result.logPath, logPath);
-  assert.match(result.message, /não comprova que a tela de título apareceu/);
+  assert.match(result.message, /janela do jogo não foi confirmada/);
   const log = await waitForLog(logPath, [message + '-stdout', message + '-stderr', 'spawn succeeded', 'process exit: code=0']);
   assert.match(log, /platform=/);
   assert.match(log, /rom_sha256=test-hash/);
