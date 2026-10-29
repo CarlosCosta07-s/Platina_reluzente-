@@ -1,7 +1,7 @@
 name: Package Windows launcher from verified native engine
 
 concurrency:
-  group: windows-launcher-package-v1-${{ github.ref }}
+  group: windows-launcher-package-v2-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -77,7 +77,7 @@ jobs:
           $nativeFiles = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -File |
             Where-Object { $_.Extension -in @(".exe", ".dll") })
           foreach ($file in $nativeFiles) {
-            $relativePath = $file.FullName.Substring($sourceDir.TrimEnd('\','/').Length).TrimStart('\','/')
+            $relativePath = [System.IO.Path]::GetRelativePath($sourceDir, $file.FullName)
             $destination = Join-Path $targetDir $relativePath
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath $file.FullName -Destination $destination
