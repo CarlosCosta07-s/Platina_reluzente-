@@ -59,6 +59,17 @@ test('launcher reserves the internal Black resource path without bundling an unl
   assert.match(electronMain, /readBundledBlackRuntime\(\)/);
 });
 
+
+test('Platinum importer gives a specific error for USA Rev. 0 instead of treating it as Rev. 1', () => {
+  assert.ok(electronMain.includes(
+    "header.subarray(0x0c, 0x10).toString('ascii') === 'CPUE' && header[0x1e] === 0"
+  ));
+  assert.ok(electronMain.includes(
+    'A ROM selecionada é Pokémon Platinum USA Rev. 0.'
+  ));
+  assert.match(electronMain, /expectedSha1: ORIGINAL_ROM_SHA1/);
+});
+
 test('Platinum ROM validation and launch IPC remain part of the same app', () => {
   assert.match(electronMain, /const ORIGINAL_ROM_SHA1 = '0862ec35b24de5c7e2dcb88c9eea0873110d755c'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:import-rom'/);
