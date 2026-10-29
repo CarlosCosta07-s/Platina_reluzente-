@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
@@ -295,6 +295,41 @@ ipcMain.handle('platina:launch-black-game', async () => {
     return result;
   } catch (error) {
     return { ok: false, message: 'Falha ao preparar a inicialização de Pokémon Black: ' + error.message, logPath: paths.logPath };
+  }
+});
+
+ipcMain.handle('platina:open-startup-log', async () => {
+  const logPath = path.join(app.getPath('userData'), 'logs', 'native-startup.log');
+  try {
+    await fs.promises.mkdir(path.dirname(logPath), { recursive: true });
+    let stat;
+    try {
+      stat = await fs.promises.lstat(logPath);
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') throw error;
+      // Make the action useful even before the first launch attempt. Use
+      // exclusive creation so an unexpected file or symlink is never followed.
+      try {
+        await fs.promises.writeFile(
+          logPath,
+          'Nenhuma tentativa de inicialização nativa foi registrada ainda.\n',
+          { encoding: 'utf8', flag: 'wx', mode: 0o600 }
+        );
+      } catch (createError) {
+        if (!createError || createError.code !== 'EEXIST') throw createError;
+      }
+      stat = await fs.promises.lstat(logPath);
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      return { ok: false, message: 'O caminho do log não é um arquivo regular seguro.', logPath };
+    }
+    const openError = await shell.openPath(logPath);
+    if (openError) {
+      return { ok: false, message: 'Não foi possível abrir o log automaticamente: ' + openError, logPath };
+    }
+    return { ok: true, logPath, message: 'Log de inicialização aberto: ' + logPath };
+  } catch (error) {
+    return { ok: false, message: 'Não foi possível abrir o log de inicialização: ' + error.message, logPath };
   }
 });
 
