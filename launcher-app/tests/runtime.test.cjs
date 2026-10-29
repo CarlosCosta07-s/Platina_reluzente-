@@ -317,7 +317,7 @@ test('horizontal layout refuses a symlinked config file', (t) => {
   const target = path.join(directory, 'outside.ini');
   const configPath = path.join(directory, 'sim_config.ini');
   try {
-    fs.writeFileSync(target, '[General]\\nScreenLayout=vertical\\n');
+    fs.writeFileSync(target, '[General]\nScreenLayout=vertical\n');
     try {
       fs.symlinkSync(target, configPath, 'file');
     } catch (error) {
@@ -327,8 +327,8 @@ test('horizontal layout refuses a symlinked config file', (t) => {
       }
       throw error;
     }
-    assert.throws(() => ensureHorizontalScreenLayout(directory), /regular file/);
-    assert.equal(fs.readFileSync(target, 'utf8'), '[General]\\nScreenLayout=vertical\\n');
+    assert.throws(() => ensureHorizontalScreenLayout(directory), /arquivo regular/);
+    assert.equal(fs.readFileSync(target, 'utf8'), '[General]\nScreenLayout=vertical\n');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
