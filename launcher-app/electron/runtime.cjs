@@ -7,10 +7,20 @@ function resolveRuntimeDirectory(isPackaged, resourcesPath, appDirectory) {
 }
 function findBundledExecutable(runtimeRoot, platform = process.platform) {
   const names = platform === 'win32' ? ['main.exe'] : ['main'];
+  try {
+    const rootStat = fs.lstatSync(runtimeRoot);
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return null;
+  } catch {
+    return null;
+  }
+
   for (const name of names) {
     const candidate = path.join(runtimeRoot, name);
     try {
-      if (!fs.statSync(candidate).isFile()) continue;
+      // The executable is bundled by the build workflow. Do not follow a
+      // symbolic link that could point outside the application runtime.
+      const stat = fs.lstatSync(candidate);
+      if (stat.isSymbolicLink() || !stat.isFile()) continue;
       if (platform !== 'win32') fs.accessSync(candidate, fs.constants.X_OK);
       return candidate;
     } catch {}
@@ -25,13 +35,35 @@ const REQUIRED_RUNTIME_FILES = [
 ];
 
 function hasRequiredRuntimeData(runtimeRoot) {
+  let rootStat;
+  try {
+    rootStat = fs.lstatSync(runtimeRoot);
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+    throw error;
+  }
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return false;
+
   for (const relativePath of REQUIRED_RUNTIME_FILES) {
-    try {
-      const stat = fs.statSync(path.join(runtimeRoot, relativePath));
-      if (!stat.isFile() || stat.size === 0) return false;
-    } catch (error) {
-      if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
-      throw error;
+    const components = relativePath.split('/');
+    let currentPath = path.resolve(runtimeRoot);
+    for (let index = 0; index < components.length; index += 1) {
+      currentPath = path.join(currentPath, components[index]);
+      let stat;
+      try {
+        // lstat each component so a linked parent directory cannot redirect
+        // validation to a file outside the packaged runtime.
+        stat = fs.lstatSync(currentPath);
+      } catch (error) {
+        if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+        throw error;
+      }
+      if (stat.isSymbolicLink()) return false;
+      if (index < components.length - 1) {
+        if (!stat.isDirectory()) return false;
+      } else if (!stat.isFile() || stat.size === 0) {
+        return false;
+      }
     }
   }
   return true;
