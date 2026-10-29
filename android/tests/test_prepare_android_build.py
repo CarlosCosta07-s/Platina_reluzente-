@@ -372,6 +372,7 @@ endif
                 "endif\n",
                 encoding="utf-8",
             )
+            original_meson = meson.read_text(encoding="utf-8")
             partial_ilobby = (
                 "lib = static_library('ilobby',\n"
                 "    cpp_args: cpp_args + ppwlobby_cpp_args,\n"
@@ -390,7 +391,7 @@ endif
                 patch_android_ppwlobby_c_args(root)
 
             self.assertEqual(partial_ilobby, ilobby.read_text(encoding="utf-8"))
-            self.assertIn("ppwlobby_c_args = ['-std=c99']", meson.read_text(encoding="utf-8"))
+            self.assertEqual(original_meson, meson.read_text(encoding="utf-8"))
             self.assertIn("cpp_args: [cpp_args, ppwlobby_c_args]", lobby.read_text(encoding="utf-8"))
 
     def test_ppwlobby_static_libraries_enable_android_pic_idempotently(self):
