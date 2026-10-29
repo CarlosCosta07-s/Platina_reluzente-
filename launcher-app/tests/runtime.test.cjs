@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec } = require('../electron/runtime.cjs');
+const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, verifyRuntimeManifest, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec, createPreparedPlatinumLaunchSpec } = require('../electron/runtime.cjs');
 
 test('runtime resolves under Electron resources when packaged', () => {
   assert.equal(resolveRuntimeDirectory(true, '/app/resources', '/app'), path.join('/app/resources', 'runtime'));
@@ -32,6 +32,22 @@ test('Platinum launch contract passes the verified ROM and Linux AppImage extrac
   assert.equal(spec.logPath, '/tmp/platinum-logs/native-startup.log');
   assert.equal(spec.romSha256, rom.sha256);
   assert.equal(spec.platform, 'linux');
+});
+
+test('prepared Platinum launch carries the verified-cache handoff without mutating the base spec', () => {
+  const base = {
+    executable: '/tmp/platinum-runtime/main',
+    args: ['--appimage-extract-and-run'],
+    cwd: '/tmp/platinum-runtime'
+  };
+  const prepared = createPreparedPlatinumLaunchSpec(base);
+  assert.deepEqual(prepared.args, ['--appimage-extract-and-run', '--platina-prepared']);
+  assert.deepEqual(base.args, ['--appimage-extract-and-run']);
+
+  const preparedAgain = createPreparedPlatinumLaunchSpec(prepared);
+  assert.deepEqual(preparedAgain.args, prepared.args);
+  assert.notEqual(preparedAgain.args, prepared.args);
+  assert.throws(() => createPreparedPlatinumLaunchSpec({ args: 'invalid' }), /especificação com argumentos/);
 });
 
 test('Platinum nested AppImage launch removes parent mount paths and forces extract-and-run', () => {
