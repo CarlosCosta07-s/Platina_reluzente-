@@ -116,13 +116,13 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
 
   if (!hasRom && hasRomBackup && hasMetadata && await matchesMetadata(romBackup, metadataPath)) {
     await fs.rename(romBackup, destinationPath);
-    await Promise.all([removeIfPresent(metadataBackup), removeIfPresent(romStaging), removeIfPresent(metadataStaging)]);
+    await cleanupBestEffort([metadataBackup, romStaging, metadataStaging]);
     return;
   }
 
   if (hasRom && !hasMetadata && hasMetadataBackup && await matchesMetadata(destinationPath, metadataBackup)) {
     await fs.rename(metadataBackup, metadataPath);
-    await Promise.all([removeIfPresent(romBackup), removeIfPresent(romStaging), removeIfPresent(metadataStaging)]);
+    await cleanupBestEffort([romBackup, romStaging, metadataStaging]);
     return;
   }
 
