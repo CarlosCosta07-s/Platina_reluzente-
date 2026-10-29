@@ -837,7 +837,7 @@ FS_OPEN_FALLBACK_ORIGINAL = r'''        #if FS_FILE_OPEN_DEBUG
         // try again, because the ROM should be extracted at this point
         // yes, this is recursive, so if the user is dumb enough to keep extracting the wrong ROM and does this enough times, it will crash
         return FS_OpenFile(p_file, path);'''
-FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
+FS_OPEN_FALLBACK_PATCHED_LEGACY = r'''        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
         if (managedRomPath != NULL && managedRomPath[0] != '\0') {
             if (sLauncherManagedRomExtractionAttempted) {
                 fprintf(stderr, "[file-system] Resource still missing after one extraction attempt: %s\n", path);
@@ -860,6 +860,24 @@ FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLAT
 
         // Manual desktop launches may still use the legacy extraction flow.
         return FS_OpenFile(p_file, path);'''
+FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
+        if (managedRomPath != NULL && managedRomPath[0] != '\0') {
+            fprintf(stderr, "[Platina] Required runtime resource is missing after launcher preparation: %s. Close the game and run data preparation again from the launcher. No extraction will be attempted while the game window is open.\n", path);
+            return FALSE;
+        }
+        #if FS_FILE_OPEN_DEBUG
+        char messageBuf[200] = {0};
+        snprintf(messageBuf, 199, "Failed to open file '%s'.", path);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", messageBuf, NULL);
+        #else
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
+        #endif
+
+        SIM_ShowRomExtractionDialog();
+
+        // Manual desktop launches may still use the legacy extraction flow.
+        return FS_OpenFile(p_file, path);'''
+
 SIM_ROM_EXTRACTOR_ORIGINAL = r'''void SIM_ShowRomExtractionDialog() {
     bool fileSelected = false;
     SIM::GUI::Enable();
