@@ -122,6 +122,83 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             self.assertEqual(marker.read_text(encoding="utf-8"), "existing runtime")
             self.assertEqual(sorted(item.name for item in destination.iterdir()), ["preserve.txt"])
 
+    def test_interrupted_staging_restores_previous_runtime_before_new_build_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "incomplete-build"
+            source.mkdir()
+            destination = root / "black-runtime"
+            backup = root / "black-runtime.previous"
+            backup.mkdir()
+            marker = backup / "preserve.txt"
+            marker.write_text("last known runtime", encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeStageError, "Executável nativo Eidos"):
+                stage_black_runtime(source, destination, "linux")
+
+            self.assertEqual(
+                (destination / "preserve.txt").read_text(encoding="utf-8"),
+                "last known runtime",
+            )
+            self.assertFalse(backup.exists())
+
+    def test_failed_atomic_promotion_restores_previous_runtime(self):
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "eidos-build"
+            source.mkdir()
+            executable = source / "eidos"
+            executable.write_bytes(b"new executable")
+            executable.chmod(0o755)
+
+            dependency = root / "libs" / "libSDL3.so.0"
+            dependency.parent.mkdir()
+            dependency.write_bytes(b"SDL library")
+
+            destination = root / "black-runtime"
+            destination.mkdir()
+            previous_marker = destination / "preserve.txt"
+            previous_marker.write_text("last known runtime", encoding="utf-8")
+
+            real_replace = os.replace
+
+            def fail_new_runtime_promotion(src, dst):
+                src_path = Path(src)
+                dst_path = Path(dst)
+                if src_path.name.startswith(destination.name + ".staging-") and dst_path == destination:
+                    raise OSError("simulated atomic promotion failure")
+                return real_replace(src, dst)
+
+            with patch(
+                "scripts.stage_black_runtime._linux_dependencies",
+                return_value={"libSDL3.so.0": dependency},
+            ), patch(
+                "scripts.stage_black_runtime.os.replace",
+                side_effect=fail_new_runtime_promotion,
+            ):
+                with self.assertRaisesRegex(OSError, "simulated atomic promotion failure"):
+                    stage_black_runtime(source, destination, "linux")
+
+            self.assertEqual(
+                (destination / "preserve.txt").read_text(encoding="utf-8"),
+                "last known runtime",
+            )
+            self.assertFalse((destination / "eidos").exists())
+            self.assertFalse(destination.with_name(destination.name + ".previous").exists())
+
+    def test_runtime_destination_cannot_contain_or_be_contained_by_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            destination = root / "launcher-app" / "black-runtime"
+            source = destination / "build64" / "host"
+            source.mkdir(parents=True)
+            (source / "eidos").write_bytes(b"should not be staged")
+
+            with self.assertRaisesRegex(RuntimeStageError, "não podem conter um ao outro"):
+                stage_black_runtime(source, destination, "linux")
+
 
 if __name__ == "__main__":
     unittest.main()
