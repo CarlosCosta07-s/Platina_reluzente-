@@ -16,6 +16,8 @@ from scripts.prepare_native_runtime import (
     SDL_WINDOW_CONTEXT_PATCHED,
     SDL_VIEWPORT_PATCHED,
     INPUT_RELEASE_HELPER_PATCHED,
+    MOUSE_DOWN_DECLARATION_ORIGINAL,
+    MOUSE_DOWN_DECLARATION_PATCHED,
     WINDOW_EVENT_PATCHED,
     KEYDOWN_PATCHED,
     MAIN_RENDER_HANDOFF_PATCHED,
@@ -211,6 +213,7 @@ UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 
 static bool sFastForward = false;
+static u8 isMouseDown = 0;
 
 void *SIM_RenderInit(void *arg) {
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
@@ -390,6 +393,12 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertNotIn('fseek(s_nvramFilePtr, address, SEEK_SET);', nvram_content)
             self.assertFalse(prepare_native_runtime(root))
             self.assertIn(INPUT_RELEASE_HELPER_PATCHED, content)
+            self.assertIn(MOUSE_DOWN_DECLARATION_PATCHED, content)
+            self.assertNotIn(MOUSE_DOWN_DECLARATION_ORIGINAL, content)
+            self.assertLess(
+                content.index("static u8 isMouseDown = 0;"),
+                content.index("static void ReleaseDesktopInputState()"),
+            )
             self.assertIn(WINDOW_EVENT_PATCHED, content)
             self.assertIn(KEYDOWN_PATCHED, content)
             self.assertIn("SDL_WINDOW_ALLOW_HIGHDPI", content)
