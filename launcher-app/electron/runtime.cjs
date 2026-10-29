@@ -17,6 +17,26 @@ function findBundledExecutable(runtimeRoot, platform = process.platform) {
   }
   return null;
 }
+const REQUIRED_RUNTIME_FILES = [
+  'header.bin',
+  'firmware.bin',
+  'wazaeffect/we.arc',
+  'battle/skill/waza_seq.narc'
+];
+
+function hasRequiredRuntimeData(runtimeRoot) {
+  for (const relativePath of REQUIRED_RUNTIME_FILES) {
+    try {
+      const stat = fs.statSync(path.join(runtimeRoot, relativePath));
+      if (!stat.isFile() || stat.size === 0) return false;
+    } catch (error) {
+      if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+      throw error;
+    }
+  }
+  return true;
+}
+
 function validateNdsHeader(header, fileSize) {
   if (!Buffer.isBuffer(header) || header.length < 0x160
       || !Number.isSafeInteger(fileSize) || fileSize < 0x200
@@ -27,4 +47,4 @@ function validateNdsHeader(header, fileSize) {
   // Reject other DS games/regions before storing a ROM the runtime cannot use.
   return title.length > 0 && code === 'CPUE';
 }
-module.exports = { resolveRuntimeDirectory, findBundledExecutable, validateNdsHeader };
+module.exports = { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, validateNdsHeader };
