@@ -30,7 +30,6 @@ function blackPaths({ platform = process.platform, env = process.env, home = os.
     romDir,
     romPath: path.join(romDir, 'current.nds'),
     romMetadataPath: path.join(root, 'rom-import.json'),
-    runtimeSelectionPath: path.join(root, 'runtime-selection.json'),
     eidosHome: path.join(root, 'eidos-home'),
     extractDir: path.join(root, 'extract'),
     processAppData: path.join(root, 'process-appdata'),
