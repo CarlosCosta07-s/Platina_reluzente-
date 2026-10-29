@@ -6,6 +6,7 @@ const { spawn } = require('node:child_process');
 
 const STARTUP_CONFIRMATION_MS = 750;
 let activeLaunch = null;
+const idleCallbacks = new Set();
 
 function appendLog(logPath, message) {
   try {
@@ -13,6 +14,49 @@ function appendLog(logPath, message) {
   } catch {
     // A logging error must not mask the primary process-launch result.
   }
+}
+
+function appendSafeDiagnostic(logPath, message) {
+  if (typeof logPath !== 'string' || !path.isAbsolute(logPath)) return;
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    try {
+      const stat = fs.lstatSync(logPath);
+      if (stat.isSymbolicLink() || !stat.isFile()) return;
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') return;
+    }
+    const flags = fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_WRONLY
+      | (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
+    const descriptor = fs.openSync(logPath, flags, 0o600);
+    try {
+      fs.writeSync(descriptor, '\n' + new Date().toISOString() + ' ' + message + '\n');
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch {
+    // Diagnostics are best-effort and must not replace the validation error.
+  }
+}
+
+function notifyIdleCallbacks() {
+  const callbacks = Array.from(idleCallbacks);
+  idleCallbacks.clear();
+  for (const callback of callbacks) {
+    try { callback(); } catch {}
+  }
+}
+
+function onNativeProcessIdle(callback) {
+  if (typeof callback !== 'function') {
+    throw new TypeError('O callback de encerramento deve ser uma função.');
+  }
+  if (!activeLaunch) {
+    callback();
+    return () => {};
+  }
+  idleCallbacks.add(callback);
+  return () => idleCallbacks.delete(callback);
 }
 
 function validateLaunchRequest({ executable, args, cwd, env, logPath, platform }) {
@@ -60,6 +104,7 @@ function launchNativeProcess({
   try {
     validateLaunchRequest({ executable, args, cwd, env, logPath: absoluteLogPath, platform });
   } catch (error) {
+    if (absoluteLogPath) appendSafeDiagnostic(absoluteLogPath, 'pre-launch validation failed: ' + error.message);
     return Promise.resolve({
       ok: false,
       message: 'A preparação segura do processo falhou: ' + error.message,
@@ -127,7 +172,10 @@ function launchNativeProcess({
     };
 
     const releaseLaunch = () => {
-      if (activeLaunch === token) activeLaunch = null;
+      if (activeLaunch === token) {
+        activeLaunch = null;
+        notifyIdleCallbacks();
+      }
     };
 
     const clearStartupTimer = () => {
@@ -217,4 +265,4 @@ function hasActiveNativeProcess() {
   return Boolean(activeLaunch);
 }
 
-module.exports = { launchNativeProcess, hasActiveNativeProcess };
+module.exports = { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle };
