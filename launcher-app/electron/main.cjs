@@ -61,12 +61,17 @@ ipcMain.handle('platina:platform', () => process.platform);
 ipcMain.handle('platina:runtime-status', async () => {
   const root = runtimeRoot();
   const exe = findBundledExecutable(root, process.platform);
-  const runtimeDataAvailable = hasRequiredRuntimeData(root);
+  const packagedDataAvailable = hasRequiredRuntimeData(root);
+  const writableDataAvailable = hasRequiredRuntimeData(
+    path.join(app.getPath('userData'), 'runtime')
+  );
+  const runtimeDataAvailable = packagedDataAvailable || writableDataAvailable;
   const runtimeAvailable = isRuntimeUsable(root, process.platform);
   return {
     available: runtimeAvailable,
     executableName: exe ? path.basename(exe) : '',
     runtimeDataAvailable,
+    extractOnFirstLaunch: !runtimeDataAvailable,
     platform: process.platform
   };
 });
@@ -147,11 +152,10 @@ ipcMain.handle('platina:launch-game', async () => {
   if (!rom) return { ok: false, message: 'Importe primeiro a ROM .nds.' };
   const root = runtimeRoot();
   const exe = findBundledExecutable(root, process.platform);
-  const runtimeDataAvailable = hasRequiredRuntimeData(root);
-  if (!exe || !runtimeDataAvailable) {
+  if (!exe) {
     return {
       ok: false,
-      message: 'Este pacote desktop está incompleto: o executável nativo ou os recursos obrigatórios do jogo estão ausentes. Baixe o pacote completo mais recente.'
+      message: 'Este pacote desktop está incompleto: o executável nativo está ausente. Baixe o pacote mais recente.'
     };
   }
   let writableRuntime;
@@ -170,6 +174,7 @@ ipcMain.handle('platina:launch-game', async () => {
   const logPath = path.join(app.getPath('userData'), 'logs', 'native-startup.log');
   return launchNativeProcess({
     executable: writableRuntime.executable,
+    args: process.platform === 'linux' ? ['--appimage-extract-and-run'] : [],
     cwd: writableRuntime.root,
     env: { ...process.env, PLATINA_IMPORTED_ROM: rom.filePath },
     logPath,
