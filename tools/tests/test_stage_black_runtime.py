@@ -90,6 +90,43 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             self.assertEqual(dependencies["libSDL3.so.0"], sdl.resolve())
             self.assertEqual(dependencies["libcodec-helper.so.1"], helper.resolve())
 
+
+    def test_linux_dependency_scan_drops_empty_loader_path_components(self):
+        import os
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "eidos"
+            executable.write_bytes(b"fake executable")
+            executable.chmod(0o755)
+            dependency_dir = root / "deps"
+            dependency_dir.mkdir()
+            observed_envs = []
+
+            def fake_ldd(args, **kwargs):
+                observed_envs.append(kwargs["env"])
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="/lib64/ld-linux-x86-64.so.2 (0x00007f0000000000)\\n",
+                    stderr="",
+                )
+
+            with patch("scripts.stage_black_runtime.shutil.which", return_value="/usr/bin/ldd"), patch(
+                "scripts.stage_black_runtime.subprocess.run", side_effect=fake_ldd
+            ), patch.dict(os.environ, {"LD_LIBRARY_PATH": ":/custom/lib::"}):
+                dependencies = _linux_dependencies(executable, [dependency_dir])
+
+            self.assertEqual(dependencies, {})
+            self.assertEqual(len(observed_envs), 1)
+            self.assertEqual(
+                observed_envs[0]["LD_LIBRARY_PATH"],
+                os.pathsep.join([str(dependency_dir), "/custom/lib"]),
+            )
+            self.assertNotIn("::", observed_envs[0]["LD_LIBRARY_PATH"])
+            self.assertFalse(observed_envs[0]["LD_LIBRARY_PATH"].startswith(os.pathsep))
+            self.assertFalse(observed_envs[0]["LD_LIBRARY_PATH"].endswith(os.pathsep))
+
     def test_linux_dependency_scan_fails_when_a_transitive_library_is_missing(self):
         from types import SimpleNamespace
 
