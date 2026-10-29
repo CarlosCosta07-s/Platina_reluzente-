@@ -188,11 +188,11 @@ test('extracted path manifest rejects truncated, duplicated and traversing paths
   assert.ok(content.includes('battle/skill/waza_seq.narc'));
 
   const truncated = path.join(root, 'truncated.csv');
-  fs.writeFileSync(truncated, 'Source File,Target File\\nres/a.bin,/data/a.bin\\n');
+  fs.writeFileSync(truncated, 'Source File,Target File\nres/a.bin,/data/a.bin\n');
   assert.throws(() => createExtractedPathManifest(truncated), /incompleto/);
 
   const duplicate = path.join(root, 'duplicate.csv');
-  fs.writeFileSync(duplicate, 'Source File,Target File\\nres/a.bin,/data/a.bin\\nres/b.bin,/data/a.bin\\n');
+  fs.writeFileSync(duplicate, 'Source File,Target File\nres/a.bin,/data/a.bin\nres/b.bin,/data/a.bin\n');
   assert.throws(() => createExtractedPathManifest(duplicate), /Destino duplicado/);
 
   const unsafe = path.join(root, 'unsafe.csv');
