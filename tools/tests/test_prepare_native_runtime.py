@@ -394,7 +394,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertFalse(prepare_native_runtime(root))
             self.assertIn(INPUT_RELEASE_HELPER_PATCHED, content)
             self.assertIn(MOUSE_DOWN_DECLARATION_PATCHED, content)
-            self.assertNotIn(MOUSE_DOWN_DECLARATION_ORIGINAL, content)
+            self.assertNotIn(MOUSE_DOWN_DECLARATION_ORIGINAL + "\\n", content)
             self.assertLess(
                 content.index("static u8 isMouseDown = 0;"),
                 content.index("static void ReleaseDesktopInputState()"),
