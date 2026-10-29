@@ -14,16 +14,19 @@ class RuntimeManifestTests(unittest.TestCase):
             nested = runtime / "battle" / "skill"
             nested.mkdir(parents=True)
             runtime.mkdir(exist_ok=True)
-            (runtime / "header.bin").write_bytes(b"header")
-            (runtime / "build-version.txt").write_bytes(b"abc123\n")
-            (nested / "waza_seq.narc").write_bytes(b"archive data")
+            header_data = b"header"
+            version_data = b"abc123\n"
+            archive_data = b"archive data"
+            (runtime / "header.bin").write_bytes(header_data)
+            (runtime / "build-version.txt").write_bytes(version_data)
+            (nested / "waza_seq.narc").write_bytes(archive_data)
 
             manifest = create_runtime_manifest(runtime)
             first = manifest.read_text(encoding="utf-8")
             expected = [
-                f"battle/skill/waza_seq.narc\t{len(b'archive data')}",
-                f"build-version.txt\t{len(b'abc123\n')}",
-                f"header.bin\t{len(b'header')}",
+                f"battle/skill/waza_seq.narc\t{len(archive_data)}",
+                f"build-version.txt\t{len(version_data)}",
+                f"header.bin\t{len(header_data)}",
             ]
             self.assertEqual(expected, first.splitlines())
             self.assertNotIn("runtime-manifest.txt", first)
