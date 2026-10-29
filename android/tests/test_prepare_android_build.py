@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from android.scripts.prepare_android_build import check_pin, PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
+from android.scripts.prepare_android_build import check_pin, PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_android_trainer_ai_asm_macro_case, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -240,6 +240,43 @@ class AndroidMesonPatchTests(unittest.TestCase):
             self.assertIn("subprojects/libntrsystem/libraries/fnd/meson.build", paths)
             self.assertEqual(len(paths), len(set(paths)))
 
+    def test_android_trainer_ai_macro_case_is_compatible_with_clang_assembler(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            macro_file = root / "asm" / "macros" / "aicmd.inc"
+            macro_file.parent.mkdir(parents=True)
+            original = (
+                ".macro IfLoadedinTable table:req, jump:req\\n"
+                ".endm\\n"
+                ".macro IfLoadedNotinTable table:req, jump:req\\n"
+                ".endm\\n"
+            )
+            macro_file.write_text(original, encoding="utf-8")
+
+            changes = patch_android_trainer_ai_asm_macro_case(root)
+            patched = macro_file.read_text(encoding="utf-8")
+            self.assertEqual(
+                ["Android assembler: match trainer AI macro names to case-sensitive Clang"],
+                changes,
+            )
+            self.assertIn(".macro IfLoadedInTable table:req, jump:req", patched)
+            self.assertIn(".macro IfLoadedNotInTable table:req, jump:req", patched)
+            self.assertNotIn(".macro IfLoadedinTable table:req, jump:req", patched)
+            self.assertNotIn(".macro IfLoadedNotinTable table:req, jump:req", patched)
+            self.assertEqual([], patch_android_trainer_ai_asm_macro_case(root))
+
+    def test_android_trainer_ai_macro_patch_rejects_partial_source_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            macro_file = root / "asm" / "macros" / "aicmd.inc"
+            macro_file.parent.mkdir(parents=True)
+            original = ".macro IfLoadedinTable table:req, jump:req\\n.endm\\n"
+            macro_file.write_text(original, encoding="utf-8")
+
+            with self.assertRaisesRegex(PatchError, "expected exactly one declaration"):
+                patch_android_trainer_ai_asm_macro_case(root)
+            self.assertEqual(original, macro_file.read_text(encoding="utf-8"))
+
     def test_root_adds_android_shared_target_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -247,6 +284,13 @@ class AndroidMesonPatchTests(unittest.TestCase):
                 "option('build_target', type: 'combo', choices: ['arm', 'win64', 'linux', 'nx'], value: 'arm')\n",
                 encoding="utf-8")
             (root / "meson.build").write_text(ROOT, encoding="utf-8")
+            macro_include = root / "asm" / "macros" / "aicmd.inc"
+            macro_include.parent.mkdir(parents=True)
+            macro_include.write_text(
+                ".macro IfLoadedinTable table:req, jump:req\\n.endm\\n"
+                ".macro IfLoadedNotinTable table:req, jump:req\\n.endm\\n",
+                encoding="utf-8",
+            )
             changes = patch_root(root)
             second = patch_root(root)
             result = (root / "meson.build").read_text(encoding="utf-8")
