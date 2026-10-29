@@ -123,7 +123,15 @@ const NativeGame = registerPlugin('PlatinaGame');
         const saved = JSON.parse(localStorage.getItem('platinaRom') || 'null');
         if (saved) {
           const file = await Filesystem.stat({ path: saved.storedPath || 'roms/current.nds', directory: Directory.Data });
-          if (file) { state.romName = saved.name; state.romSize = saved.size || file.size || 0; state.romImported = true; }
+          const savedSize = Number(saved.size);
+          const actualSize = Number(file && file.size);
+          if (file && Number.isSafeInteger(savedSize) && savedSize > 0 && actualSize === savedSize) {
+            state.romName = saved.name;
+            state.romSize = savedSize;
+            state.romImported = true;
+          } else {
+            localStorage.removeItem('platinaRom');
+          }
         }
       } catch { localStorage.removeItem('platinaRom'); }
       renderRom(); renderPrimaryAction();
