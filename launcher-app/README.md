@@ -1,15 +1,19 @@
 # Platina Reluzente Launcher
 
-Launcher multiplataforma para o porte nativo comunitário de Pokémon Platinum.
+Launcher experimental para o porte nativo comunitário de Pokémon Platinum.
 
 ## Windows e Linux
 
-O pacote desktop completo inclui o executável nativo e os recursos do jogo. Abra o launcher, importe sua ROM \`.nds\` e use **Iniciar jogo**. Não é necessário localizar ou selecionar um executável separado. A ROM é validada e guardada no armazenamento privado; o motor nativo usa o caminho importado para ler o cabeçalho.
+Os scripts de empacotamento desktop podem ser usados localmente quando você tiver compilado o runtime nativo. Coloque os arquivos do runtime da sua compilação em `launcher-app/runtime`, incluindo o executável `main` (Linux) ou `main.exe` (Windows) e os recursos exigidos pelo launcher. Em seguida, dentro de `launcher-app`, execute `npm install` e use `npm run build:linux` ou `npm run build:windows`.
+
+O launcher não pede para selecionar um executável separado: ele procura o binário incluído no pacote. A ROM é validada e armazenada no diretório privado do aplicativo. Esta versão do importador desktop aceita Pokémon Platinum USA Rev. 1 (código `CPUE`, byte de versão `1`); a localização PT-BR é uma etapa independente.
 
 ## Android
 
-O APK integrado reúne a interface, o importador de ROM, o runtime nativo ARM64, SDL2 e os recursos do jogo. Importe sua ROM \`.nds\`; ao tocar em **Iniciar jogo**, o aplicativo valida a ROM, prepara os recursos no armazenamento privado e abre a atividade SDL incluída no mesmo APK. Não é necessário instalar um segundo APK nem selecionar um executável.
+A integração Android NDK/SDL2 é experimental. O APK local exige a biblioteca nativa ARM64, o código Java do SDL e o conjunto completo de recursos do runtime, preparados de acordo com os passos em `android/scripts` e `.github/workflows/android-native-cross-build.yml`. A simples compilação da biblioteca `libmain.so` não equivale a um APK integrado nem prova que o jogo inicializa num telefone.
 
-O empacotamento combinado só é liberado quando Windows, Linux e Android passam no mesmo commit. O runtime Android exige ARM64 e Android API 24 ou superior. A compilação do APK não substitui o teste em dispositivo real: execução gráfica, toque, áudio e salvamentos ainda precisam de validação em aparelho.
+## Dados e distribuição
 
-A ROM permanece local e não é incluída nos artefatos. Use apenas arquivos que você tenha direito de utilizar. Os artefatos de CI expiram após 14 dias.
+A CI compila e valida código, mas não publica pacotes completos ou runtime de jogo para download. Não faça commit de ROMs, recursos NARC, firmware, saves, runtimes compilados ou pacotes que contenham dados derivados do jogo. Mantenha esses arquivos no ambiente local e consulte `docs/LEGAL.md` antes de distribuir qualquer compilação.
+
+O launcher permanece experimental até que inicialização, controles, áudio, gráficos, salvamentos e retomada tenham sido validados em dispositivos reais.

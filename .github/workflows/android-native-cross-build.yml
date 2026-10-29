@@ -17,7 +17,6 @@ on:
       - "launcher-app/**"
       - ".github/workflows/native-desktop.yml"
       - ".github/workflows/android-graphics-compat.yml"
-      - ".github/workflows/launcher-packages.yml"
   workflow_dispatch:
 
 permissions:
@@ -281,15 +280,7 @@ jobs:
             echo "## Android native ARM64 cross-build"
             echo
             echo "Expected ABI: arm64-v8a; minimum Android API: 24."
-            echo "This job publishes the native libraries, SDLActivity Java sources and runtime-data bundle used to build the single integrated Android APK."
-            echo "The launcher packaging workflow combines these assets after Windows, Linux and Android builds pass on the same commit."
+            echo "This job compiles and validates the native ARM64 target and its temporary runtime-data tree."
+            echo "Runtime binaries and game-derived assets stay in disposable CI storage and are not uploaded."
             echo "Gameplay, touch, audio and saves still require real-device testing."
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload ARM64 native cross-build artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: platina-reluzente-android-arm64-native-libs
-          path: android-native-artifact/
-          if-no-files-found: error
-          retention-days: 14

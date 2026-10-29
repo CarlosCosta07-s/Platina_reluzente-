@@ -17,7 +17,6 @@ on:
       - "launcher-app/**"
       - ".github/workflows/android-native-cross-build.yml"
       - ".github/workflows/android-graphics-compat.yml"
-      - ".github/workflows/launcher-packages.yml"
   workflow_dispatch:
 
 permissions:
@@ -129,24 +128,6 @@ jobs:
         env:
           APPIMAGE_PATH: ${{ steps.linux_appimage.outputs.path }}
         run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$APPIMAGE_PATH" 15
-      - name: Package Linux runtime archive (preserve executable permissions)
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          build_root="$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux"
-          package_dir="$build_root/pokeplatinum"
-          archive="$build_root/Platina-Reluzente-Linux-x86_64.tar.gz"
-          test -d "$package_dir"
-          tar -C "$package_dir" -czf "$archive" .
-          test -s "$archive"
-          echo "Linux runtime archive created: $archive"
-      - name: Upload Linux native runtime for manual testing
-        uses: actions/upload-artifact@v4
-        with:
-          name: platina-reluzente-linux-x86_64
-          path: vendor/pokeplatinum-native/build_linux/Platina-Reluzente-Linux-x86_64.tar.gz
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Audit Android graphics compatibility requirements
         run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
@@ -220,19 +201,11 @@ jobs:
             throw "No .exe was found in the verified Windows runtime package."
           }
           $executables | ForEach-Object { Write-Host ("Windows executable: " + $_.FullName) }
-      - name: Upload Windows native runtime for manual testing
-        uses: actions/upload-artifact@v4
-        with:
-          name: platina-reluzente-windows-x64
-          path: vendor/pokeplatinum-native/build_win64/pokeplatinum/
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Restore Meson dependency references
         if: always()
         shell: pwsh
         run: python (Join-Path $env:GITHUB_WORKSPACE "scripts/pin_native_dependencies.py") --restore (Join-Path $env:GITHUB_WORKSPACE "vendor/pokeplatinum-native")
 
 
-# CI uploads short-lived native runtime artifacts for manual testing. It never uploads ROMs
-# or extracted user-owned ROM images; the Android package is built separately as a launcher.
+# CI compiles and validates native builds but does not upload executables or game-derived runtime data.
+# ROMs and extracted resources remain local to the developer.

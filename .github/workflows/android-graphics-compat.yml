@@ -12,7 +12,6 @@ on:
       - "launcher-app/**"
       - ".github/workflows/native-desktop.yml"
       - ".github/workflows/android-native-cross-build.yml"
-      - ".github/workflows/launcher-packages.yml"
   workflow_dispatch:
 
 permissions:

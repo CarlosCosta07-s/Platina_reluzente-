@@ -17,14 +17,13 @@ O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em 
 
 Não anunciamos o porte como concluído, jogável do início ao fim ou compatível com Android antes de termos compilação e testes reproduzíveis.
 
-## Builds para teste manual
+## Compilação e validação
 
-Os pacotes são publicados como artefatos temporários do GitHub Actions, sem ROMs ou arquivos de jogo fornecidos pelo usuário:
+A CI verifica testes de manutenção, compilação nativa e a inicialização pré-ROM da interface Linux. Ela não publica executáveis, AppImages, APKs ou arquivos runtime que possam conter recursos derivados do jogo. Esses dados permanecem na área temporária do job e não são disponibilizados como artefatos para download.
 
-- [Launcher multiplataforma: Windows .exe, Linux AppImage e Android APK](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/launcher-packages.yml)
-- [Porte nativo: runtime Windows x64 e runtime Linux x86-64](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/native-desktop.yml)
+Para teste manual, compile o porte localmente seguindo o [guia de compilação](docs/BUILDING.md), use uma cópia de ROM que você tenha direito de utilizar e mantenha os dados extraídos fora do Git. O smoke test automático confirma apenas a criação da janela sem ROM; não comprova que o jogo chega à tela inicial ou que seja jogável. A importação PT-BR é um passo local separado e ainda exige validação dentro do jogo.
 
-Abra uma execução com conclusão **success** e baixe a seção **Artifacts**. O launcher desktop já inclui o executável nativo correspondente à plataforma e o inicia automaticamente; o usuário só precisa importar sua própria ROM `.nds`. Não é necessário localizar nem selecionar um executável separado. O APK Android só deve ser considerado pronto para teste do jogo quando a compilação ARM64, a integração dos recursos e a verificação do pacote passarem no mesmo commit. Mesmo isso não comprova jogabilidade: ainda é necessário testar em aparelho real a inicialização, os controles, o áudio, os gráficos e os salvamentos. Selecionar uma ROM também não significa, por si só, que todos os recursos foram carregados pelo motor.
+A CI também mantém testes para a integração Android ARM64 e para a adaptação inicial de OpenGL ES. Esses testes não comprovam compatibilidade completa com dispositivos reais, e não há APK pronto para download publicado por este repositório.
 
 ## Decisão técnica
 
