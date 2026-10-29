@@ -4,13 +4,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const REQUIRED_RUNTIME_FILES = [
-  'header.bin',
-  'firmware.bin',
-  'wazaeffect/we.arc',
-  'battle/skill/waza_seq.narc'
-];
-
 const PERSONAL_FILES = new Set([
   'save.bin',
   'sim_config.ini',
@@ -25,8 +18,11 @@ const FORBIDDEN_EXTENSIONS = new Set([
 ]);
 
 const TARGETS = Object.freeze({
-  linux: Object.freeze({ buildDirectory: 'build_linux', executable: 'main' }),
-  windows: Object.freeze({ buildDirectory: 'build_win64', executable: 'main.exe' })
+  // The AppImage bundles the Linux executable and its shared libraries. It is
+  // renamed to "main" in the launcher's writable runtime so assets can be
+  // extracted from the imported ROM into the current working directory.
+  linux: Object.freeze({ buildDirectory: 'build_linux', executable: 'main', sourceExecutable: 'pokeplatinum.AppImage' }),
+  windows: Object.freeze({ buildDirectory: 'build_win64', executable: 'main.exe', sourceExecutable: 'main.exe' })
 });
 
 function requireRealDirectory(directory, label) {
@@ -38,8 +34,11 @@ function requireRealDirectory(directory, label) {
 
 function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
   requireRealDirectory(sourceRoot, 'Runtime de origem');
-  const files = [];
+  const discoveredFiles = [];
 
+  // Scan the full build tree for unsafe entries, but only stage native code
+  // and shared libraries. Game data is extracted to a per-user writable
+  // directory from the ROM the user imports on first launch.
   function visit(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const sourcePath = path.join(directory, entry.name);
@@ -63,27 +62,39 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
       if (PERSONAL_FILES.has(entry.name.toLowerCase())) {
         continue;
       }
-      files.push({ sourcePath, relativePath, mode: stat.mode & 0o777 });
+      discoveredFiles.push({ sourcePath, relativePath, mode: stat.mode & 0o777 });
     }
   }
 
   visit(sourceRoot);
-  files.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
+  discoveredFiles.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
 
+  let files;
+  if (platform === 'linux') {
+    const appImage = discoveredFiles.find((file) => file.relativePath === 'pokeplatinum.AppImage');
+    if (!appImage) {
+      throw new Error('Executável nativo portátil Linux ausente: pokeplatinum.AppImage');
+    }
+    if ((appImage.mode & 0o111) === 0) {
+      throw new Error('O AppImage Linux não possui permissão de execução.');
+    }
+    files = [{ ...appImage, relativePath: expectedExecutable }];
+  } else {
+    const executable = discoveredFiles.find((file) => file.relativePath === expectedExecutable);
+    if (!executable) {
+      throw new Error('Executável nativo obrigatório ausente: ' + expectedExecutable);
+    }
+    files = discoveredFiles.filter((file) =>
+      file.relativePath === expectedExecutable
+      || path.extname(file.relativePath).toLowerCase() === '.dll'
+    );
+  }
+
+  files.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
   const names = new Set(files.map((file) => file.relativePath));
   if (!names.has(expectedExecutable)) {
     throw new Error('Executável nativo obrigatório ausente: ' + expectedExecutable);
   }
-  for (const relativePath of REQUIRED_RUNTIME_FILES) {
-    if (!names.has(relativePath)) {
-      throw new Error('Recurso obrigatório ausente no runtime: ' + relativePath);
-    }
-    const required = files.find((file) => file.relativePath === relativePath);
-    if (fs.statSync(required.sourcePath).size === 0) {
-      throw new Error('Recurso obrigatório está vazio: ' + relativePath);
-    }
-  }
-
   const executable = files.find((file) => file.relativePath === expectedExecutable);
   if (platform === 'linux' && (executable.mode & 0o111) === 0) {
     throw new Error('O executável Linux não possui permissão de execução: ' + expectedExecutable);
@@ -166,13 +177,6 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
     });
 
     requireRealDirectory(staging, 'Runtime preparado');
-    for (const relativePath of REQUIRED_RUNTIME_FILES) {
-      const stagedPath = path.join(staging, ...relativePath.split('/'));
-      const stat = fs.lstatSync(stagedPath);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0) {
-        throw new Error('Validação pós-cópia falhou para: ' + relativePath);
-      }
-    }
     const executablePath = path.join(staging, target.executable);
     const executableStat = fs.lstatSync(executablePath);
     if (!executableStat.isFile() || executableStat.isSymbolicLink()) {
@@ -246,4 +250,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { stageNativeRuntime, inspectRuntimeTree, TARGETS, REQUIRED_RUNTIME_FILES };
+module.exports = { stageNativeRuntime, inspectRuntimeTree, TARGETS };
