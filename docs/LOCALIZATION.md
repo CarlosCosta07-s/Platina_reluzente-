@@ -33,6 +33,24 @@ Essa imagem **não é compatível com a configuração atual do runtime**, que f
 
 O patch PT-BR E4T v1.2.0 publicado documenta como base `3541 – Pokémon Platinum Version (US)(XenoPhobia).nds`, CRC-32 `1D8A5220` (fonte: [E4T — informações de Pokémon Platina](https://e4t.com.br/downloads/pokemon-platina/informacoes-pokemon-platina/)). Esse CRC não corresponde nem à ROM Rev. 0 enviada agora (`9253921D`) nem à ROM Rev. 1 suportada (`69D628E8`). Portanto, **o arquivo de patch não deve ser aplicado diretamente à ROM enviada nem à Rev. 1 presumindo compatibilidade**. A fonte PT-BR já examinada continua sendo apenas uma referência local para os sete recursos NARC aprovados; a compatibilidade visual e de jogo desses recursos em execução nativa ainda não foi demonstrada.
 
+## Comparação local dos recursos na ROM Rev. 0 enviada
+
+A inspeção local comparou os sete caminhos permitidos entre a ROM USA Rev. 0 recém-enviada e a ROM PT-BR de referência. Os sete caminhos existem nas duas imagens com os mesmos IDs FAT e cabeçalhos NARC válidos; os hashes de conteúdo são diferentes na versão inglesa e a versão PT-BR corresponde ao manifesto de hashes aprovado:
+
+| Caminho do recurso | ID FAT | Resultado de conteúdo PT-BR |
+|---|---:|---|
+| `battle/graphic/pl_b_plist_gra.narc` | 157 | Hash PT-BR aprovado; distinto do inglês |
+| `data/slot.narc` | 245 | Hash PT-BR aprovado; distinto do inglês |
+| `demo/title/op_demo.narc` | 318 | Hash PT-BR aprovado; distinto do inglês |
+| `graphic/pl_bag_gra.narc` | 370 | Hash PT-BR aprovado; distinto do inglês |
+| `graphic/pl_plist_gra.narc` | 372 | Hash PT-BR aprovado; distinto do inglês |
+| `graphic/pl_pst_gra.narc` | 373 | Hash PT-BR aprovado; distinto do inglês |
+| `msgdata/pl_msg.narc` | 404 | Hash PT-BR aprovado; distinto do inglês |
+
+O `msgdata/pl_msg.narc` da ROM PT-BR tem tamanho declarado de 4.185.274 bytes no cabeçalho NARC, mas a entrada FAT declara apenas 4.184.402 bytes. O importador já recupera os 872 bytes adicionais somente após validar o cabeçalho e provar que o intervalo não se sobrepõe a outro arquivo FAT. Esse caso precisa continuar coberto pelos testes.
+
+**Conclusão de dados:** existe evidência em nível de arquivo de que os sete recursos traduzidos são identificáveis e compatíveis com a allowlist de importação, inclusive na ROM Rev. 0 recém-enviada. Isso permite preparar uma camada de localização para o runtime Rev. 1 como próximo passo de implementação. Contudo, não prova que o runtime nativo mostre corretamente esses recursos: o teste em jogo permanece pendente, e a ROM Rev. 0 em si continua incompatível com o alvo nativo atual.
+
 ## Verificação do patch PT-BR v1.2.0 (29/10/2026)
 
 O arquivo enviado contém `Pokemon Platinum (BR) v1.2.0.xdelta`. O README incluído no pacote e a página da tradução identificam a ROM-base como `3541 – Pokémon Platinum Version (US)(XenoPhobia).nds`, CRC-32 `1D8A5220` ([informações da tradução E4T](https://e4t.com.br/downloads/pokemon-platina/informacoes-pokemon-platina/)).
