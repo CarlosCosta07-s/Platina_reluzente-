@@ -179,8 +179,8 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
     const manifestFiles = files.map((file) => {
       const stagedPath = path.join(staging, ...file.relativePath.split('/'));
       const stat = fs.lstatSync(stagedPath);
-      if (stat.isSymbolicLink() || !stat.isFile()) {
-        throw new Error('Arquivo nativo staged não é um arquivo regular: ' + file.relativePath);
+      if (stat.isSymbolicLink() || !stat.isFile() || stat.size <= 0) {
+        throw new Error('Arquivo nativo staged não é um arquivo regular não vazio: ' + file.relativePath);
       }
       return {
         path: file.relativePath,
