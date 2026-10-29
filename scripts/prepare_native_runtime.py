@@ -386,7 +386,8 @@ BACKUP_WRITE_VERIFY_BODY_PATCHED = r'''    FILE * backupFilePtr;
     }
     return TRUE;'''
 
-BACKUP_FILE_IO_HELPERS = r'''static inline BOOL CARDi_EnsureBackupFileSize(FILE *backupFilePtr, u32 requiredSize)
+BACKUP_FILE_IO_HELPERS = r'''#ifdef SDK_PORT
+static inline BOOL CARDi_EnsureBackupFileSize(FILE *backupFilePtr, u32 requiredSize)
 {
     static const u8 zeroBuffer[4096] = {0};
     long currentSize;
@@ -434,6 +435,7 @@ static inline FILE *CARDi_OpenBackupFileForRange(u32 offset, u32 length)
     }
     return backupFilePtr;
 }
+#endif /* SDK_PORT */
 
 '''
 
@@ -531,6 +533,10 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
     if BACKUP_FILE_IO_HELPERS_PATCHED in current:
         if current.count(BACKUP_FILE_IO_HELPERS_PATCHED) != 1:
             raise RuntimePreparationError("Duplicate checked card-backup I/O helper block.")
+        if "#ifdef SDK_PORT\nstatic inline BOOL CARDi_EnsureBackupFileSize" not in current:
+            raise RuntimePreparationError("Card-backup I/O helper is not guarded by SDK_PORT.")
+        if "#endif /* SDK_PORT */\n  SDK_INLINE BOOL CARDi_ReadBackup(" not in current:
+            raise RuntimePreparationError("Card-backup I/O helper SDK_PORT guard is incomplete.")
         expected_patched = (
             BACKUP_READ_BODY_PATCHED,
             BACKUP_WRITE_BODY_PATCHED,
