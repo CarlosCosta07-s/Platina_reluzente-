@@ -93,41 +93,102 @@ public class PlatinaGamePlugin extends Plugin {
         File destination = new File(filesDir, "pokeplatinum");
         File staging = new File(filesDir, "pokeplatinum.staging");
         File previous = new File(filesDir, "pokeplatinum.previous");
+        String expectedVersion = readAssetText("pokeplatinum/build-version.txt").trim();
+        if (expectedVersion.isEmpty()) {
+            throw new IOException("A versão dos recursos incluídos no APK está vazia.");
+        }
 
-        // Recover an interrupted replacement before cleaning up stale backups.
-        // If a prior process moved the destination but died before installing
-        // staging, keep the last usable runtime rather than deleting its backup.
+        // Recover an interrupted replacement before touching either the current
+        // runtime or its backup. A present destination is not automatically valid:
+        // the process may have died while an earlier copy was incomplete.
         if (!destination.exists() && previous.exists() && !previous.renameTo(destination)) {
             throw new IOException("Não foi possível recuperar a pasta de recursos anterior.");
         }
-        if (destination.exists() && previous.exists()) deleteRecursively(previous);
+        if (destination.exists() && previous.exists()) {
+            if (isCompleteRuntime(destination, expectedVersion)) {
+                // Destination is already the exact runtime version required by this APK.
+                // A stale backup is expendable only after this check succeeds.
+                deleteRecursively(previous);
+            } else {
+                if (!deleteRecursively(destination)) {
+                    throw new IOException("Não foi possível remover os recursos incompletos para recuperar o backup.");
+                }
+                if (!previous.renameTo(destination)) {
+                    throw new IOException("Não foi possível restaurar o backup dos recursos do jogo.");
+                }
+            }
+        }
 
-        String expectedVersion = readAssetText("pokeplatinum/build-version.txt").trim();
-        File stamp = new File(destination, "build-version.txt");
-        if (destination.isDirectory()
-                && new File(destination, "header.bin").isFile()
-                && new File(destination, "firmware.bin").isFile()
-                && stamp.isFile()
-                && expectedVersion.equals(readFileText(stamp).trim())) return;
+        if (isCompleteRuntime(destination, expectedVersion)) return;
 
-        deleteRecursively(staging);
+        if (staging.exists() && !deleteRecursively(staging)) {
+            throw new IOException("Não foi possível limpar a importação anterior dos recursos locais.");
+        }
         copyAssetTree("pokeplatinum", staging);
-        if (!new File(staging, "header.bin").isFile()
-                || !new File(staging, "firmware.bin").isFile()
-                || !new File(staging, "build-version.txt").isFile()) {
-            deleteRecursively(staging);
-            throw new IOException("O pacote não contém todos os recursos obrigatórios do jogo.");
+        if (!isCompleteRuntime(staging, expectedVersion)) {
+            if (!deleteRecursively(staging)) {
+                throw new IOException("O pacote de recursos está incompleto; a pasta temporária foi mantida em " + staging.getAbsolutePath());
+            }
+            throw new IOException("O pacote não contém uma versão completa dos recursos obrigatórios do jogo.");
         }
-        if (destination.exists() && !destination.renameTo(previous)) {
-            deleteRecursively(staging);
-            throw new IOException("Não foi possível atualizar os recursos locais do jogo.");
+
+        if (destination.exists()) {
+            // The recovery block above should have cleared this path if a backup
+            // existed. Never delete an existing backup to make room for a rename.
+            if (previous.exists()) {
+                if (!deleteRecursively(staging)) {
+                    throw new IOException("Não foi possível limpar os recursos temporários; backup preservado em " + previous.getAbsolutePath());
+                }
+                throw new IOException("Já existe um backup dos recursos; a instalação foi interrompida para preservá-lo.");
+            }
+            if (!destination.renameTo(previous)) {
+                deleteRecursively(staging);
+                throw new IOException("Não foi possível guardar a versão anterior dos recursos.");
+            }
         }
+
         if (!staging.renameTo(destination)) {
-            if (previous.exists()) previous.renameTo(destination);
-            deleteRecursively(staging);
+            if (previous.exists() && !previous.renameTo(destination)) {
+                throw new IOException(
+                        "Não foi possível instalar os recursos novos. O backup anterior foi preservado em "
+                                + previous.getAbsolutePath());
+            }
+            if (!deleteRecursively(staging)) {
+                throw new IOException("A instalação falhou e os recursos temporários permaneceram em " + staging.getAbsolutePath());
+            }
             throw new IOException("Não foi possível preparar a pasta de recursos do jogo.");
         }
+
+        if (!isCompleteRuntime(destination, expectedVersion)) {
+            // This should be impossible after the validated same-volume rename,
+            // but fail safely rather than reporting a corrupt runtime as ready.
+            if (!deleteRecursively(destination)) {
+                throw new IOException("A verificação final falhou e a pasta instalada não pôde ser removida.");
+            }
+            if (previous.exists() && !previous.renameTo(destination)) {
+                throw new IOException("A verificação final falhou; o backup continua em " + previous.getAbsolutePath());
+            }
+            throw new IOException("A pasta de recursos instalada não passou na verificação final.");
+        }
+
+        // The new runtime is complete. Backup cleanup is non-fatal: a stale
+        // backup consumes space but must not turn a successful install into failure.
         deleteRecursively(previous);
+    }
+
+    private boolean isCompleteRuntime(File directory, String expectedVersion) {
+        if (!directory.isDirectory()
+                || !new File(directory, "header.bin").isFile()
+                || !new File(directory, "firmware.bin").isFile()) {
+            return false;
+        }
+        File stamp = new File(directory, "build-version.txt");
+        if (!stamp.isFile()) return false;
+        try {
+            return expectedVersion.equals(readFileText(stamp).trim());
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
     private void copyAssetTree(String assetPath, File destination) throws IOException {
@@ -170,12 +231,16 @@ public class PlatinaGamePlugin extends Plugin {
             return value.toString();
         }
     }
-    private void deleteRecursively(File file) {
+    private boolean deleteRecursively(File file) {
+        if (!file.exists()) return true;
         if (file.isDirectory()) {
             File[] children = file.listFiles();
-            if (children != null) for (File child : children) deleteRecursively(child);
+            if (children == null) return false;
+            for (File child : children) {
+                if (!deleteRecursively(child)) return false;
+            }
         }
-        if (file.exists() && !file.delete()) file.deleteOnExit();
+        return !file.exists() || file.delete();
     }
     @Override
     protected void handleOnDestroy() {
