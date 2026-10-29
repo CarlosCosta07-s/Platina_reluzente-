@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-const STARTUP_CONFIRMATION_MS = 750;
+// A short but meaningful grace period catches native processes that start
+// successfully and then exit before the game has finished early initialization.
+const STARTUP_CONFIRMATION_MS = 3000;
 let activeLaunch = null;
 const idleCallbacks = new Set();
 
@@ -253,7 +255,7 @@ function launchNativeProcess({
         finish({
           ok: true,
           pid: child.pid,
-          message: 'O processo nativo permaneceu ativo durante a verificação inicial. Isso não comprova que a tela de título apareceu. Consulte o log: '
+          message: 'O processo nativo permaneceu ativo por 3 segundos, mas a janela do jogo não foi confirmada. Se nada aparecer, abra o log de inicialização: '
             + absoluteLogPath
         });
       }, STARTUP_CONFIRMATION_MS);
