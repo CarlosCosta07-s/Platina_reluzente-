@@ -65,16 +65,16 @@ class BlackRuntimeStagingTests(unittest.TestCase):
                 image = Path(args[-1]).name
                 outputs = {
                     "eidos": (
-                        f"libSDL3.so.0 => {sdl} (0x00007f0000000000)\\n"
+                        f"libSDL3.so.0 => {sdl} (0x00007f0000000000)\n"
                     ),
                     "libSDL3.so.0": (
-                        f"libcodec-helper.so.1 => {helper} (0x00007f0000000001)\\n"
+                        f"libcodec-helper.so.1 => {helper} (0x00007f0000000001)\n"
                         "/lib/x86_64-linux-gnu/libc.so.6 => "
-                        "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000002)\\n"
+                        "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000002)\n"
                     ),
                     "libcodec-helper.so.1": (
                         "/lib/x86_64-linux-gnu/libc.so.6 => "
-                        "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000003)\\n"
+                        "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000003)\n"
                     ),
                 }
                 if image not in outputs:
@@ -106,9 +106,9 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             def fake_ldd(args, **kwargs):
                 image = Path(args[-1]).name
                 if image == "eidos":
-                    output = f"libSDL3.so.0 => {sdl} (0x00007f0000000000)\\n"
+                    output = f"libSDL3.so.0 => {sdl} (0x00007f0000000000)\n"
                 else:
-                    output = "libcodec-helper.so.1 => not found\\n"
+                    output = "libcodec-helper.so.1 => not found\n"
                 return SimpleNamespace(returncode=0, stdout=output, stderr="")
 
             with patch("scripts.stage_black_runtime.shutil.which", return_value="/usr/bin/ldd"), patch(
