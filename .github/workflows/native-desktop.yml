@@ -13,7 +13,6 @@ on:
       - "scripts/**"
       - "tools/**"
       - "vendor/**"
-      - "android/**"
   workflow_dispatch:
 
 permissions:
@@ -36,13 +35,12 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_audit_android_graphics.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py tools/tests/test_prepare_native_runtime.py android/scripts/prepare_android_build.py android/scripts/prepare_android_graphics.py android/tests/test_prepare_android_build.py
+        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py tools/tests/test_prepare_native_runtime.py
 
       - name: Run unit tests
         run: |
           python -m unittest discover -s tools/tests -v
           python -m unittest tools.tests.test_prepare_native_runtime -v
-          python -m unittest android.tests.test_prepare_android_build -v
 
       - name: Validate native Linux smoke-test shell syntax
         shell: bash
@@ -126,8 +124,6 @@ jobs:
           APPIMAGE_PATH: ${{ steps.linux_appimage.outputs.path }}
         run: bash "$GITHUB_WORKSPACE/scripts/smoke-test-native-startup.sh" "$APPIMAGE_PATH" 15
 
-      - name: Audit Android graphics compatibility requirements
-        run: python "$GITHUB_WORKSPACE/scripts/audit_android_graphics.py" --source-root "$GITHUB_WORKSPACE/vendor/pokeplatinum-native" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Restore Meson dependency references
         if: always()
         run: python "$GITHUB_WORKSPACE/scripts/pin_native_dependencies.py" --restore "$GITHUB_WORKSPACE/vendor/pokeplatinum-native"

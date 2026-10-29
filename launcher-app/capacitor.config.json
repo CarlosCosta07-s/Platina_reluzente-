@@ -1,9 +1,0 @@
-{
-  "appId": "org.carloscostaxavier.platinareluzentelauncher",
-  "appName": "Platina Reluzente",
-  "webDir": "web-dist",
-  "bundledWebRuntime": false,
-  "android": {
-    "backgroundColor": "#0c1019"
-  }
-}

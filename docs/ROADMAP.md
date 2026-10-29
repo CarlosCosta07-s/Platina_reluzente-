@@ -1,6 +1,6 @@
 # Roteiro de desenvolvimento
 
-O foco inicial é compilar e executar a base nativa, sem otimização prematura. Cada marco só muda para concluído com evidência reproduzível.
+O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimização prematura. Cada marco só muda para concluído com evidência reproduzível. O alvo Android foi encerrado em 29/10/2026 após falhas recorrentes na validação do pipeline ARM64.
 
 ## Marco 0 — base real e processo de build
 
@@ -39,24 +39,14 @@ O foco inicial é compilar e executar a base nativa, sem otimização prematura.
 - [ ] Testar acentos, fontes, menus, diálogos, tela de título, batalhas, eventos e save/load.
 - [ ] Investigar separadamente diferenças fora da allowlist sem importar binários desconhecidos.
 
-## Marco 3 — Android nativo
-
-- [x] Fazer auditoria estática inicial do contexto, shaders e APIs OpenGL desktop.
-- [x] Selecionar SDL2 + OpenGL ES 3.2 como primeira hipótese a prototipar, não suporte concluído.
-- [ ] Compilar um protótipo GLES 3.2 e comprovar shaders, FBO e caminhos de textura num dispositivo Android.
-- [ ] Adaptar operações incompatíveis sem stubs que finjam sucesso.
-- [ ] Integrar Android NDK, ciclo de vida, toque, controles, áudio e armazenamento.
-- [ ] Gerar APK arm64-v8a por CI, sem ROMs ou conteúdo do jogo.
-- [ ] Testar inicialização, gameplay, áudio, salvamento, pausa e retomada.
-
-## Marco 4 — fidelidade e estabilidade
+## Marco 3 — fidelidade e estabilidade
 
 - [ ] Comparar telas e comportamento com a versão original.
 - [ ] Corrigir renderização, temporização, áudio, entrada, carregamento e salvamento.
 - [ ] Criar testes de regressão para correções.
 - [ ] Só então avaliar resolução ampliada, escalonamento, melhorias visuais e desempenho.
 
-## Marco 5 — distribuição responsável
+## Marco 4 — distribuição responsável
 
 - [ ] Auditar licenças do código original reconstruído e das dependências.
 - [ ] Garantir que nenhum recurso protegido seja empacotado ou espelhado indevidamente.

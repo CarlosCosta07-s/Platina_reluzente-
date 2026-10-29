@@ -2,28 +2,26 @@
 
 > **Projeto comunitário de preservação e estudo, sem fins comerciais.** Não é um produto oficial nem possui vínculo com Nintendo, Game Freak ou The Pokémon Company.
 
-O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em **Windows, Linux e Android**, reutilizando o código C reconstruído pela comunidade a partir do jogo original. O projeto não pretende incluir ROMs, firmware ou arquivos de jogo nos releases.
+O objetivo é fazer **Pokémon Platinum executar como um aplicativo nativo** em **Windows e Linux**, reutilizando o código C reconstruído pela comunidade a partir do jogo original. O projeto não pretende incluir ROMs, firmware ou arquivos de jogo nos releases.
 
 ## Estado real do projeto
 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
 - **Linux x86-64 e Windows x64:** ambos os alvos passaram na execução [40647214112 do GitHub Actions](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40647214112), em 28 de outubro de 2026. Os testes automatizados também passaram e cada pacote foi validado contra os 340 caminhos do manifesto upstream, incluindo recursos de animação. Isso valida compilação e integridade do pacote, não a inicialização nem a jogabilidade.
-- **Android ARM64:** em desenvolvimento experimental. O repositório já contém preparação de compilação NDK, integração SDL2 e adaptação inicial do renderizador para OpenGL ES 3.2, além de testes para esses preparadores. Isso ainda não comprova que a biblioteca nativa compile, que o APK integrado funcione ou que o jogo seja jogável em aparelho real; esses marcos dependem de build e teste reproduzíveis.
+- **Escopo de plataforma:** o suporte Android foi encerrado após falhas recorrentes na validação final do pipeline ARM64. O projeto e a CI ficam concentrados exclusivamente em Windows x64 e Linux x86-64.
 - **Inicialização da interface Linux:** o AppImage nativo abriu uma janela visível e permaneceu ativo por 15 segundos no teste [40691585390](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40691585390), usando um diretório temporário vazio e sem ROM. Isso confirma somente que a interface inicia; **não** comprova que uma ROM foi extraída, que a tela de título apareceu ou que o jogo está jogável.
 - **ROM aceita pelo launcher:** a implementação nativa atual espera Pokémon Platinum USA Rev. 1: código de jogo `CPUE` e byte `ROM version` do cabeçalho no deslocamento `0x1E` igual a `1`. O SHA-1 de referência para a ROM limpa é `0862ec35b24de5c7e2dcb88c9eea0873110d755c`; o importador valida os campos do cabeçalho, não calcula esse hash integral.
 - **Português brasileiro:** a variante PT-BR fornecida difere em dez entradas FAT em relação à ROM USA. O fluxo de localização permite importar sete recursos NARC aprovados para o runtime; isso é separado da ROM usada para executar o jogo e continua experimental até validar menus, diálogos, batalhas e salvamento.
 
-**Próximo objetivo de execução:** provar que o binário desktop consegue abrir com uma cópia local válida da ROM USA Rev. 1 e chegar à tela inicial; depois validar uma sequência mínima de gameplay e salvamento. A adaptação Android não deve atrasar esse primeiro marco de jogo realmente carregado.
+**Próximo objetivo de execução:** provar que o binário desktop consegue abrir com uma cópia local válida da ROM USA Rev. 1 e chegar à tela inicial; depois validar uma sequência mínima de gameplay e salvamento.
 
-Não anunciamos o porte como concluído, jogável do início ao fim ou compatível com Android antes de termos compilação e testes reproduzíveis.
+Não anunciamos o porte como concluído nem jogável do início ao fim antes de termos compilação e testes reproduzíveis.
 
 ## Compilação e validação
 
 A CI verifica testes de manutenção, compilação nativa e a inicialização pré-ROM da interface Linux. Ela não publica executáveis, AppImages, APKs ou arquivos runtime que possam conter recursos derivados do jogo. Esses dados permanecem na área temporária do job e não são disponibilizados como artefatos para download.
 
 Para teste manual, compile o porte localmente seguindo o [guia de compilação](docs/BUILDING.md), use uma cópia de ROM que você tenha direito de utilizar e mantenha os dados extraídos fora do Git. O smoke test automático confirma apenas a criação da janela sem ROM; não comprova que o jogo chega à tela inicial ou que seja jogável. A importação PT-BR é um passo local separado e ainda exige validação dentro do jogo.
-
-A CI também mantém testes para a integração Android ARM64 e para a adaptação inicial de OpenGL ES. Esses testes não comprovam compatibilidade completa com dispositivos reais, e não há APK pronto para download publicado por este repositório.
 
 ## Decisão técnica
 
@@ -36,7 +34,6 @@ A rota escolhida é:
 - **Meson + Ninja** para a compilação do porte de PC;
 - **libntr** e a camada nativa do projeto de referência para substituir APIs do NitroSDK no host;
 - **OpenGL de desktop** para Windows/Linux na base existente;
-- **Android NDK** para gerar código ARM64 nativo no telefone, com um backend gráfico próprio para Android.
 
 A camada de compatibilidade recria serviços e chamadas gráficas que o jogo espera, mas **não executa uma CPU de DS emulada nem interpreta o código ARM do jogo durante a partida**: o código recompilado é compilado pelo toolchain do sistema-alvo.
 
@@ -108,5 +105,3 @@ O desenvolvimento será feito diretamente na branch main; não serão criadas br
 - [Preservação, direitos e distribuição](docs/LEGAL.md)
 - [Decompilação base (pret)](https://github.com/pret/pokeplatinum)
 - [Porte nativo PC de referência](https://github.com/cybervisi0n/pokeplatinum)
-- [Guia oficial SDL2 para Android](https://wiki.libsdl.org/SDL2/README-android)
-- [OpenGL ES no Android](https://developer.android.com/develop/ui/views/graphics/opengl/about-opengl)

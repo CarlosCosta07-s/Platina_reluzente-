@@ -44,12 +44,8 @@ A primeira instalação baixa ferramentas do MSYS2 e pode levar algum tempo. A c
 
 Os testes do importador e do fixador de dependências não precisam de ROM:
 
-    python3 -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py scripts/audit_android_graphics.py
+    python3 -m py_compile tools/import_localization.py scripts/pin_native_dependencies.py scripts/verify_native_package.py scripts/prepare_native_runtime.py
     python3 -m unittest discover -s tools/tests -v
-
-A auditoria Android depende de a configuração do build já ter baixado o subprojeto libntr:
-
-    python3 scripts/audit_android_graphics.py --source-root vendor/pokeplatinum-native --format markdown
 
 ## Teste com uma cópia local
 

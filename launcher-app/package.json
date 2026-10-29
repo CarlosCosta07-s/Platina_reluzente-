@@ -1,23 +1,19 @@
 {
   "name": "platina-reluzente-launcher",
   "version": "0.1.0",
-  "description": "Launcher multiplataforma com executável desktop embutido e runtime Android integrado",
+  "description": "Launcher desktop para Windows e Linux com executável nativo incluído",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/rom-storage.cjs && node --check scripts/integrate-android-runtime.cjs && node --check web/app.js",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/rom-storage.cjs && node --check web/app.js",
     "test": "npm run check && node --test tests/*.test.cjs && npm run build:web",
     "build:windows": "npm run build:web && electron-builder --win portable --x64",
     "build:linux": "npm run build:web && electron-builder --linux AppImage tar.gz --x64",
     "build:web": "node scripts/build-web.cjs"
   },
   "devDependencies": {
-    "@capacitor/android": "^6.2.1",
-    "@capacitor/cli": "^6.2.1",
-    "@capacitor/core": "^6.2.1",
     "electron": "^32.2.7",
     "electron-builder": "^25.1.8",
-    "@capacitor/filesystem": "^6.0.3",
     "esbuild": "^0.24.2"
   },
   "build": {
@@ -60,11 +56,6 @@
       ],
       "category": "Game",
       "artifactName": "Platina-Reluzente-Launcher-${version}-linux-${arch}.${ext}"
-    },
-    "mac": {
-      "target": [
-        "zip"
-      ]
     },
     "extraResources": [
       {

@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Executar a lógica reconstruída de Pokémon Platinum como código nativo em Windows x64, Linux x86-64 e Android arm64-v8a. O alvo é preservar o jogo original; a aplicação não deve exigir que um emulador de Nintendo DS rode por baixo nem interpretar instruções ARM do DS em tempo de execução.
+Executar a lógica reconstruída de Pokémon Platinum como código nativo em Windows x64 e Linux x86-64. O alvo é preservar o jogo original; a aplicação não deve exigir que um emulador de Nintendo DS rode por baixo nem interpretar instruções ARM do DS em tempo de execução.
 
 ## Base escolhida
 
@@ -19,7 +19,6 @@ Isso é preferível a reconstruir as mecânicas do zero em uma engine genérica.
 | Build desktop | Meson + Ninja, orquestrados por Make | Configuração e compilação reproduzível |
 | Compatibilidade com SDK | libntr / camada do porte | Substituir serviços do NitroSDK usados pelo jogo |
 | Windows/Linux | Binário nativo de host | Execução sem emulação da CPU do DS |
-| Android | Android NDK + backend gráfico compatível | Compilar para ARM64 e integrar ciclo de vida, entrada e armazenamento |
 | Entrada/áudio/ciclo de vida móveis | Avaliar SDL3 onde isso não conflitar com a camada existente | APIs portáveis de plataforma; não será usada como engine substituta |
 
 ## Dependências reproduzíveis
@@ -38,46 +37,9 @@ A compilação no GitHub Actions prepara o código upstream como um checkout Git
 
 A camada de compatibilidade implementa comportamento de APIs do DS; isso não é o mesmo que emular a CPU do DS. O critério do projeto é que a lógica compilada rode como código nativo, sem um interpretador ou máquina virtual de instruções do DS.
 
-## Windows/Linux agora
+## Alvos suportados: Windows e Linux
 
-O upstream já possui alvos `win64` e `linux` em Meson. Este repositório os aciona por scripts e CI. Primeiro validaremos uma compilação limpa de cada alvo; depois será necessário smoke test manual com uma cópia local válida.
-
-## Android — auditoria inicial do renderer
-
-A revisão do código da dependência libntr fixada em `1555d911ac80c0190ac1c321f99f1323de8b3c09` encontrou incompatibilidades concretas no renderer desktop:
-
-- `libraries/sim/src/sim_main.cpp` solicita explicitamente um contexto SDL/OpenGL 4.2 core.
-- Os shaders de G2/G3 usam a diretiva GLSL `#version 420 core`.
-- `libraries/sim/src/g3_draw.cpp` utiliza `GL_CLAMP_TO_BORDER` quando a textura não deve repetir; essa opção precisa de uma estratégia compatível com GLES ou de uma extensão validada.
-- A base utiliza `glProgramUniform*` e `glDebugMessageCallback`; esses recursos exigem revisão da versão/extensões GLES selecionadas e de suas alternativas.
-- O backend OpenGL do Dear ImGui também precisa ser configurado para o contexto GLES correto.
-
-O relatório automatizado é produzido por `scripts/audit_android_graphics.py` após a compilação Linux e aparece no resumo da execução da CI. Ele é uma auditoria de código-fonte, não uma prova de compatibilidade Android.
-
-### Primeira hipótese de implementação
-
-**Começar por SDL2 + OpenGL ES 3.2 é a hipótese de menor distância em relação à base existente**, porque o simulator de libntr já usa SDL2. OpenGL ES 3.2 é disponibilizado pelo Android a partir do API level 24, mas a implementação gráfica continua opcional em dispositivos e precisa ser verificada em runtime. Documentação oficial: [SDL2 para Android](https://wiki.libsdl.org/SDL2/README-android) e [OpenGL ES no Android](https://developer.android.com/develop/ui/views/graphics/opengl/about-opengl).
-
-O protótipo deve:
-1. criar o contexto GLES por SDL2 Android, removendo a solicitação hardcoded de OpenGL 4.2 apenas no alvo Android;
-2. converter e validar os shaders para GLSL ES (incluindo declarações de precisão e outputs);
-3. implementar uma alternativa correta para border clamp, sem depender de extensão opcional sem detecção;
-4. revisar chamadas de estado direto/debug e o renderer do Dear ImGui;
-5. validar texturas, FBOs, blending, depth, renderização dos dois ecrãs e entrada por toque num dispositivo com os recursos mínimos declarados.
-
-Não abrir um alvo Android no build principal até o protótipo compilar e desenhar a cena de teste corretamente. Vulkan continua uma alternativa caso a auditoria de GLES revele que a adaptação será maior do que reimplementar o backend.
-
-## Android — trabalho necessário
-
-O caminho de desktop utiliza OpenGL 4.2; não devemos presumir que essa API esteja disponível em dispositivos Android. Antes de adicionar um alvo Android real, é necessário:
-
-1. mapear todos os usos de APIs OpenGL desktop e identificar requisitos de shaders, buffers, sincronização e framebuffer;
-2. implementar e testar um backend OpenGL ES adequado ou optar por Vulkan caso os requisitos não possam ser atendidos de forma robusta;
-3. integrar eventos de pausa/retomada, toque, controladores, áudio e armazenamento com o Android NDK;
-4. compilar um APK arm64-v8a em CI;
-5. testar inicialização, tela inicial, áudio, salvamento e retomada em dispositivo real e/ou emulador de Android. Um emulador de Android pode ser usado para testar o aplicativo Android; não será usado como emulador de Nintendo DS.
-
-Não declare Android concluído até os critérios acima serem atendidos. Não introduza stubs que simplesmente retornem sucesso para APIs gráficas essenciais.
+O upstream já possui alvos `win64` e `linux` em Meson. Este repositório os aciona por scripts e CI. O desenvolvimento agora se concentra exclusivamente nesses dois alvos. A compilação e o smoke test pré-ROM são etapas necessárias, mas a inicialização do jogo e o gameplay ainda precisam de validação manual com uma cópia local válida.
 
 ## Gestão de dados do jogo
 
