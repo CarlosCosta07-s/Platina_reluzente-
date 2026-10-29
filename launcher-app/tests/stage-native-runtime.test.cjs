@@ -9,9 +9,20 @@ const { stageNativeRuntime } = require('../scripts/stage-native-runtime.cjs');
 
 function createRuntime(sourceRoot, platform = 'linux') {
   fs.mkdirSync(sourceRoot, { recursive: true });
-  const executable = path.join(sourceRoot, platform === 'windows' ? 'main.exe' : 'main');
-  fs.writeFileSync(executable, 'native-runtime-test-binary');
-  if (platform === 'linux') fs.chmodSync(executable, 0o755);
+  const executable = path.join(
+    sourceRoot,
+    platform === 'windows' ? 'main.exe' : 'pokeplatinum.AppImage'
+  );
+  fs.writeFileSync(executable, platform === 'windows' ? 'native-runtime-test-binary' : 'portable-linux-appimage');
+  if (platform === 'linux') {
+    fs.chmodSync(executable, 0o755);
+    // The build tree also contains the raw executable, but the portable
+    // AppImage is what the launcher stages to keep its shared libraries intact.
+    fs.writeFileSync(path.join(sourceRoot, 'main'), 'raw-linux-executable-not-staged');
+    fs.chmodSync(path.join(sourceRoot, 'main'), 0o755);
+  } else {
+    fs.writeFileSync(path.join(sourceRoot, 'SDL2.dll'), 'native-runtime-test-library');
+  }
   for (const relative of [
     'header.bin',
     'firmware.bin',
@@ -37,9 +48,12 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
   const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux' });
   assert.equal(result.platform, 'linux');
   assert.equal(result.destination, destinationRoot);
-  assert.equal(result.files, 6);
+  assert.equal(result.files, 1);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main')), true);
-  assert.equal(fs.existsSync(path.join(destinationRoot, 'msgdata', 'pl_msg.narc')), true);
+  assert.equal(fs.readFileSync(path.join(destinationRoot, 'main'), 'utf8'), 'portable-linux-appimage');
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'msgdata', 'pl_msg.narc')), false);
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'header.bin')), false);
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'firmware.bin')), false);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'save.bin')), false);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'sim_config.ini')), false);
   assert.equal(
@@ -59,7 +73,11 @@ test('stages a Windows runtime with main.exe without requiring Unix executable b
 
   const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'windows' });
   assert.equal(result.executable, path.join(destinationRoot, 'main.exe'));
+  assert.equal(result.files, 2);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main.exe')), true);
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'SDL2.dll')), true);
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'header.bin')), false);
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'wazaeffect', 'we.arc')), false);
 });
 
 test('refuses to stage a runtime that contains a ROM or patch and preserves the previous destination', (t) => {
@@ -105,19 +123,19 @@ test('refuses symbolic links in the native runtime source', (t) => {
   assert.equal(fs.existsSync(destinationRoot), false);
 });
 
-test('does not replace a previous runtime when required game resources are missing', (t) => {
+test('does not replace a previous runtime when the portable executable is missing', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-stage-runtime-incomplete-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.join(root, 'build_linux', 'pokeplatinum');
   const destinationRoot = path.join(root, 'launcher-app', 'runtime');
   createRuntime(sourceRoot, 'linux');
-  fs.unlinkSync(path.join(sourceRoot, 'battle', 'skill', 'waza_seq.narc'));
+  fs.unlinkSync(path.join(sourceRoot, 'pokeplatinum.AppImage'));
   fs.mkdirSync(destinationRoot, { recursive: true });
   fs.writeFileSync(path.join(destinationRoot, 'preserve.txt'), 'previous destination');
 
   assert.throws(
     () => stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux' }),
-    /Recurso obrigatório ausente/
+    /Executável nativo portátil Linux ausente/
   );
   assert.equal(fs.readFileSync(path.join(destinationRoot, 'preserve.txt'), 'utf8'), 'previous destination');
 });
