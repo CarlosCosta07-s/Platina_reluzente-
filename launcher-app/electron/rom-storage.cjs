@@ -5,6 +5,10 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { createReadStream } = require('node:fs');
 
+function isMissingPathError(error) {
+  return Boolean(error && (error.code === 'ENOENT' || error.code === 'ENOTDIR'));
+}
+
 async function exists(filePath) {
   try {
     await fs.access(filePath);
@@ -12,7 +16,7 @@ async function exists(filePath) {
   } catch (error) {
     // Only absence should be treated as false. Permission and storage failures
     // must interrupt recovery instead of making a backup look nonexistent.
-    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+    if (isMissingPathError(error)) return false;
     throw error;
   }
 }
@@ -37,21 +41,35 @@ function sha256File(filePath) {
 }
 
 async function matchesMetadata(romPath, metadataPath) {
+  let metadataText;
+  let stat;
   try {
-    const [metadataText, stat] = await Promise.all([
+    [metadataText, stat] = await Promise.all([
       fs.readFile(metadataPath, 'utf8'),
       fs.stat(romPath)
     ]);
-    const metadata = JSON.parse(metadataText);
-    if (!stat.isFile() || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
-      return false;
-    }
-    if (typeof metadata.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(metadata.sha256)) {
-      return false;
-    }
-    return (await sha256File(romPath)) === metadata.sha256.toLowerCase();
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    throw error;
+  }
+
+  let metadata;
+  try {
+    metadata = JSON.parse(metadataText);
   } catch {
     return false;
+  }
+  if (!stat.isFile() || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
+    return false;
+  }
+  if (typeof metadata.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(metadata.sha256)) {
+    return false;
+  }
+  try {
+    return (await sha256File(romPath)) === metadata.sha256.toLowerCase();
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    throw error;
   }
 }
 
@@ -70,8 +88,6 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
       exists(destinationPath), exists(metadataPath), exists(romBackup), exists(metadataBackup),
       exists(romStaging), exists(metadataStaging)
     ]);
-
-  if (![hasRomBackup, hasMetadataBackup, hasRomStaging, hasMetadataStaging].some(Boolean)) return;
 
   if (hasRom && hasMetadata && await matchesMetadata(destinationPath, metadataPath)) {
     await cleanupBestEffort([
