@@ -77,6 +77,7 @@ class PrepareAndroidGraphicsTests(unittest.TestCase):
             self.assertLess(handler.index("#if defined(SDK_BUILD_ANDROID)"), handler.index("#include <GLES3/gl32.h>"))
             self.assertLess(handler.index("#include <GLES3/gl32.h>"), handler.index("#elif defined(SDK_BUILD_NX)"))
             self.assertIn("SIM_GetBorderClampMode()", draw)
+            self.assertIn(r'fallback.\n");', draw)
             self.assertEqual(1, draw.count("GL_TEXTURE_WRAP_S, SIM_GetBorderClampMode()"))
             self.assertEqual(1, draw.count("GL_TEXTURE_WRAP_T, SIM_GetBorderClampMode()"))
             self.assertNotIn("GL_CLAMP_TO_BORDER);", draw)

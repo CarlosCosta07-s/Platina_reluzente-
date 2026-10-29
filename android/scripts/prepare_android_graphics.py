@@ -98,7 +98,7 @@ static GLenum SIM_GetBorderClampMode() {
     // GLES core lacks border clamp; this fallback may change texture-edge pixels.
     static bool warningPrinted = false;
     if (!warningPrinted) {
-        fprintf(stderr, "Android GLES: border-clamp extension absent; using CLAMP_TO_EDGE fallback.\n");
+        fprintf(stderr, "Android GLES: border-clamp extension absent; using CLAMP_TO_EDGE fallback.\\n");
         warningPrinted = true;
     }
     return GL_CLAMP_TO_EDGE;
