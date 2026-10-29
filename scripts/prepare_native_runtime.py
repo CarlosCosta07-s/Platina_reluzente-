@@ -252,6 +252,7 @@ BACKUP_SAVE_PATH_INCLUDE_ORIGINAL = '''#ifdef SDK_PORT
 #include <string.h>
 #endif'''
 BACKUP_SAVE_PATH_INCLUDE_PATCHED = '''#ifdef SDK_PORT
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -261,6 +262,181 @@ BACKUP_SAVE_PATH_INCLUDE_PATCHED = '''#ifdef SDK_PORT
 #define CARDI_BACKUP_SAVE_FILE "save.bin"
 #endif
 #endif'''
+
+BACKUP_FILE_IO_HELPERS_PATCHED = "static inline FILE *CARDi_OpenBackupFileForRange("
+BACKUP_READ_BODY_ORIGINAL = r'''    FILE * backupFilePtr;
+    backupFilePtr = fopen("save.bin", "rb");
+    if(!backupFilePtr) {
+      // File does not exist. Create the file
+      backupFilePtr = fopen("save.bin", "wb");
+
+      // Zero out the file with the len
+      u8 * buf = (u8*)malloc(len + src);
+      memset(buf, 0, len + src);
+      fwrite(buf, 1, len + src, backupFilePtr);
+      fclose(backupFilePtr);
+      free(buf);
+
+      // Reopen file
+      backupFilePtr = fopen("save.bin", "rb");
+    }
+    fseek(backupFilePtr, src, SEEK_SET);
+    fread(dst, 1, len, backupFilePtr);
+    fclose(backupFilePtr);
+    if( callback != NULL )
+    {
+      callback(arg);
+    }
+
+    return TRUE;'''
+BACKUP_READ_BODY_PATCHED = r'''    FILE * backupFilePtr;
+    size_t bytesRead;
+    int closeStatus;
+    if (len == 0) {
+      if (callback != NULL) callback(arg);
+      return TRUE;
+    }
+    if (dst == NULL) return FALSE;
+    backupFilePtr = CARDi_OpenBackupFileForRange(src, len);
+    if (backupFilePtr == NULL) return FALSE;
+    if (fseek(backupFilePtr, (long)src, SEEK_SET) != 0) {
+      fclose(backupFilePtr);
+      return FALSE;
+    }
+    bytesRead = fread(dst, 1, len, backupFilePtr);
+    closeStatus = fclose(backupFilePtr);
+    if (bytesRead != (size_t)len || closeStatus != 0) return FALSE;
+    if (callback != NULL)
+    {
+      callback(arg);
+    }
+    return TRUE;'''
+
+BACKUP_WRITE_BODY_ORIGINAL = r'''    FILE * backupFilePtr;
+    backupFilePtr = fopen("save.bin", "rb+");
+    fseek(backupFilePtr, dst, SEEK_SET);
+    fwrite(src, 1, len, backupFilePtr);
+    fclose(backupFilePtr);
+    if( callback != NULL )
+    {
+      callback(arg);
+    }
+    return TRUE;'''
+BACKUP_WRITE_BODY_PATCHED = r'''    FILE * backupFilePtr;
+    size_t bytesWritten;
+    int flushStatus;
+    int closeStatus;
+    if (len == 0) {
+      if (callback != NULL) callback(arg);
+      return TRUE;
+    }
+    if (src == NULL) return FALSE;
+    backupFilePtr = CARDi_OpenBackupFileForRange(dst, len);
+    if (backupFilePtr == NULL) return FALSE;
+    if (fseek(backupFilePtr, (long)dst, SEEK_SET) != 0) {
+      fclose(backupFilePtr);
+      return FALSE;
+    }
+    bytesWritten = fwrite(src, 1, len, backupFilePtr);
+    flushStatus = fflush(backupFilePtr);
+    closeStatus = fclose(backupFilePtr);
+    if (bytesWritten != (size_t)len || flushStatus != 0 || closeStatus != 0) {
+      return FALSE;
+    }
+    if (callback != NULL)
+    {
+      callback(arg);
+    }
+    return TRUE;'''
+
+BACKUP_WRITE_VERIFY_BODY_ORIGINAL = r'''    FILE * backupFilePtr;
+    backupFilePtr = fopen("save.bin", "rb+");
+    fseek(backupFilePtr, dst, SEEK_SET);
+    fwrite(src, 1, len, backupFilePtr);
+    fclose(backupFilePtr);
+    if( callback != NULL )
+    {
+      callback(arg);
+    }
+    return CARD_RESULT_SUCCESS;'''
+BACKUP_WRITE_VERIFY_BODY_PATCHED = r'''    FILE * backupFilePtr;
+    size_t bytesWritten;
+    int flushStatus;
+    int closeStatus;
+    if (len == 0) {
+      if (callback != NULL) callback(arg);
+      return TRUE;
+    }
+    if (src == NULL) return FALSE;
+    backupFilePtr = CARDi_OpenBackupFileForRange(dst, len);
+    if (backupFilePtr == NULL) return FALSE;
+    if (fseek(backupFilePtr, (long)dst, SEEK_SET) != 0) {
+      fclose(backupFilePtr);
+      return FALSE;
+    }
+    bytesWritten = fwrite(src, 1, len, backupFilePtr);
+    flushStatus = fflush(backupFilePtr);
+    closeStatus = fclose(backupFilePtr);
+    if (bytesWritten != (size_t)len || flushStatus != 0 || closeStatus != 0) {
+      return FALSE;
+    }
+    if (callback != NULL)
+    {
+      callback(arg);
+    }
+    return TRUE;'''
+
+BACKUP_FILE_IO_HELPERS = r'''static inline BOOL CARDi_EnsureBackupFileSize(FILE *backupFilePtr, u32 requiredSize)
+{
+    static const u8 zeroBuffer[4096] = {0};
+    long currentSize;
+    u32 remaining;
+
+    if (backupFilePtr == NULL || fseek(backupFilePtr, 0, SEEK_END) != 0) {
+        return FALSE;
+    }
+    currentSize = ftell(backupFilePtr);
+    if (currentSize < 0) return FALSE;
+    if ((unsigned long)currentSize >= (unsigned long)requiredSize) return TRUE;
+    if (fseek(backupFilePtr, currentSize, SEEK_SET) != 0) return FALSE;
+
+    remaining = requiredSize - (u32)currentSize;
+    while (remaining > 0) {
+        size_t chunkSize = remaining < sizeof(zeroBuffer)
+            ? (size_t)remaining : sizeof(zeroBuffer);
+        if (fwrite(zeroBuffer, 1, chunkSize, backupFilePtr) != chunkSize) {
+            return FALSE;
+        }
+        remaining -= (u32)chunkSize;
+    }
+    return fflush(backupFilePtr) == 0;
+}
+
+static inline FILE *CARDi_OpenBackupFileForRange(u32 offset, u32 length)
+{
+    FILE *backupFilePtr;
+    int openError;
+
+    if (offset > ((u32)-1) - length) return NULL;
+    backupFilePtr = fopen(CARDI_BACKUP_SAVE_FILE, "rb+");
+    if (backupFilePtr == NULL) {
+        openError = errno;
+        // Never fall back to "wb+" for access or I/O errors: that could
+        // truncate an existing save that simply could not be opened.
+        if (openError != ENOENT) return NULL;
+        backupFilePtr = fopen(CARDI_BACKUP_SAVE_FILE, "wb+");
+        if (backupFilePtr == NULL) return NULL;
+    }
+
+    if (!CARDi_EnsureBackupFileSize(backupFilePtr, offset + length)) {
+        fclose(backupFilePtr);
+        return NULL;
+    }
+    return backupFilePtr;
+}
+
+'''
+
 CONFIG_SAVE_OPEN_PATCHED = (
     CONFIG_SAVE_OPEN_ORIGINAL
     + "\n    if (configFile == NULL) {\n        return;\n    }"
@@ -341,7 +517,7 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
 
 
 def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]:
-    """Keep Android save data beside the replaceable runtime directory."""
+    """Keep Android saves outside runtime updates and fail closed on save I/O errors."""
     header_path = (
         Path(source_root).expanduser().resolve()
         / "subprojects" / "libntr" / "include" / "nitro" / "card" / "backup.h"
@@ -351,9 +527,46 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
 
     original = header_path.read_text(encoding="utf-8")
     current = original
+
+    if BACKUP_FILE_IO_HELPERS_PATCHED in current:
+        if current.count(BACKUP_FILE_IO_HELPERS_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate checked card-backup I/O helper block.")
+        expected_patched = (
+            BACKUP_READ_BODY_PATCHED,
+            BACKUP_WRITE_BODY_PATCHED,
+            BACKUP_WRITE_VERIFY_BODY_PATCHED,
+        )
+        expected_original = (
+            BACKUP_READ_BODY_ORIGINAL,
+            BACKUP_WRITE_BODY_ORIGINAL,
+            BACKUP_WRITE_VERIFY_BODY_ORIGINAL,
+        )
+        if any(current.count(block) != 1 for block in expected_patched):
+            raise RuntimePreparationError("Card-backup I/O patch is incomplete or duplicated.")
+        if any(block in current for block in expected_original):
+            raise RuntimePreparationError("Both original and hardened card-backup bodies exist.")
+        if 'fopen("save.bin",' in current:
+            raise RuntimePreparationError("Legacy save.bin fopen call remains after hardening.")
+        return header_path, current, current != original
+
+    # Upgrade the include block from upstream or from the earlier save-path-only patch.
+    legacy_include = '''#ifdef SDK_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef SDK_BUILD_ANDROID
+#define CARDI_BACKUP_SAVE_FILE "../save.bin"
+#else
+#define CARDI_BACKUP_SAVE_FILE "save.bin"
+#endif
+#endif'''
     if BACKUP_SAVE_PATH_INCLUDE_PATCHED in current:
         if current.count(BACKUP_SAVE_PATH_INCLUDE_PATCHED) != 1:
             raise RuntimePreparationError("Duplicate Android save-path macro in backup.h.")
+    elif legacy_include in current:
+        if current.count(legacy_include) != 1:
+            raise RuntimePreparationError("Duplicate legacy save-path macro in backup.h.")
+        current = current.replace(legacy_include, BACKUP_SAVE_PATH_INCLUDE_PATCHED, 1)
     else:
         if current.count(BACKUP_SAVE_PATH_INCLUDE_ORIGINAL) != 1:
             raise RuntimePreparationError(
@@ -363,19 +576,34 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
             BACKUP_SAVE_PATH_INCLUDE_ORIGINAL, BACKUP_SAVE_PATH_INCLUDE_PATCHED, 1
         )
 
-    open_call = 'fopen("save.bin",'
-    patched_call = "fopen(CARDI_BACKUP_SAVE_FILE,"
-    if patched_call in current:
-        if current.count(patched_call) != 5 or open_call in current:
-            raise RuntimePreparationError("Backup save-path call sites are only partially patched.")
-    else:
-        if current.count(open_call) != 5:
-            raise RuntimePreparationError(
-                f"Expected exactly five save.bin fopen call sites in backup.h; found {current.count(open_call)}."
-            )
-        current = current.replace(open_call, patched_call)
+    if current.count('fopen("save.bin",') != 5:
+        raise RuntimePreparationError(
+            "Expected exactly five original save.bin fopen call sites before backup I/O hardening."
+        )
 
+    replacements = (
+        (BACKUP_READ_BODY_ORIGINAL, BACKUP_READ_BODY_PATCHED, "CARDi_ReadBackup"),
+        (BACKUP_WRITE_BODY_ORIGINAL, BACKUP_WRITE_BODY_PATCHED, "CARDi_WriteBackup"),
+        (BACKUP_WRITE_VERIFY_BODY_ORIGINAL, BACKUP_WRITE_VERIFY_BODY_PATCHED, "CARDi_WriteAndVerifyBackup"),
+    )
+    for expected, hardened, label in replacements:
+        if current.count(expected) != 1:
+            raise RuntimePreparationError(
+                f"Expected exactly one upstream {label} body in backup.h; refusing uncertain I/O patch."
+            )
+        current = current.replace(expected, hardened, 1)
+
+    insertion_marker = "  SDK_INLINE BOOL CARDi_ReadBackup("
+    if current.count(insertion_marker) != 1:
+        raise RuntimePreparationError("Cannot locate the card-backup read function for helper insertion.")
+    current = current.replace(insertion_marker, BACKUP_FILE_IO_HELPERS + insertion_marker, 1)
+
+    if 'fopen("save.bin",' in current:
+        raise RuntimePreparationError("Legacy save.bin fopen call remains after hardening.")
+    if current.count(BACKUP_FILE_IO_HELPERS_PATCHED) != 1:
+        raise RuntimePreparationError("Checked card-backup I/O helper was not installed exactly once.")
     return header_path, current, current != original
+
 
 
 def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path, str, bool]:

@@ -5,7 +5,11 @@ from pathlib import Path
 from scripts.prepare_native_runtime import (
     ANDROID_MAIN_INIT,
     CONFIG_ALARM_SECOND_PATCHED,
+    BACKUP_FILE_IO_HELPERS_PATCHED,
+    BACKUP_READ_BODY_PATCHED,
     BACKUP_SAVE_PATH_INCLUDE_PATCHED,
+    BACKUP_WRITE_BODY_PATCHED,
+    BACKUP_WRITE_VERIFY_BODY_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
     GL_LOADER_PATCHED,
@@ -44,13 +48,92 @@ UPSTREAM_BACKUP_HEADER = r'''#ifndef NITRO_CARD_BACKUP_H_
 #include <stdlib.h>
 #include <string.h>
 #endif
-static void save_fixture(void) {
-    fopen("save.bin", "rb");
-    fopen("save.bin", "wb");
-    fopen("save.bin", "rb");
-    fopen("save.bin", "rb+");
-    fopen("save.bin", "rb+");
+#ifdef __cplusplus
+extern "C" {
+#endif
+void CARDi_RequestWriteSectorCommand(u32 src, u32 dst, u32 len, BOOL verify,
+                                     MIDmaCallback callback, void *arg, BOOL is_async);
+
+SDK_INLINE BOOL CARDi_ReadBackup(u32 src, void *dst, u32 len,
+                                 MIDmaCallback callback, void *arg, BOOL is_async)
+{
+    #ifdef SDK_PORT
+    FILE * backupFilePtr;
+    backupFilePtr = fopen("save.bin", "rb");
+    if(!backupFilePtr) {
+      // File does not exist. Create the file
+      backupFilePtr = fopen("save.bin", "wb");
+
+      // Zero out the file with the len
+      u8 * buf = (u8*)malloc(len + src);
+      memset(buf, 0, len + src);
+      fwrite(buf, 1, len + src, backupFilePtr);
+      fclose(backupFilePtr);
+      free(buf);
+
+      // Reopen file
+      backupFilePtr = fopen("save.bin", "rb");
+    }
+    fseek(backupFilePtr, src, SEEK_SET);
+    fread(dst, 1, len, backupFilePtr);
+    fclose(backupFilePtr);
+    if( callback != NULL )
+    {
+      callback(arg);
+    }
+
+    return TRUE;
+    #else
+    return CARDi_RequestStreamCommand((u32)src, (u32)dst, len,
+                                      callback, arg, is_async,
+                                      CARD_REQ_READ_BACKUP, 1, CARD_REQUEST_MODE_RECV);
+    #endif
 }
+
+SDK_INLINE BOOL CARDi_WriteBackup(u32 dst, const void *src, u32 len,
+                                  MIDmaCallback callback, void *arg, BOOL is_async)
+{
+    #ifdef SDK_PORT
+    FILE * backupFilePtr;
+    backupFilePtr = fopen("save.bin", "rb+");
+    fseek(backupFilePtr, dst, SEEK_SET);
+    fwrite(src, 1, len, backupFilePtr);
+    fclose(backupFilePtr);
+    if( callback != NULL )
+    {
+      callback(arg);
+    }
+    return TRUE;
+    #else
+    return CARDi_RequestStreamCommand((u32)src, (u32)dst, len, callback, arg, is_async,
+                                      CARD_REQ_WRITE_BACKUP, CARD_RETRY_COUNT_MAX,
+                                      CARD_REQUEST_MODE_SEND);
+    #endif
+}
+
+SDK_INLINE BOOL CARDi_WriteAndVerifyBackup(u32 dst, const void *src, u32 len,
+                                           MIDmaCallback callback, void *arg, BOOL is_async)
+{
+    #ifdef SDK_PORT
+    FILE * backupFilePtr;
+    backupFilePtr = fopen("save.bin", "rb+");
+    fseek(backupFilePtr, dst, SEEK_SET);
+    fwrite(src, 1, len, backupFilePtr);
+    fclose(backupFilePtr);
+    if( callback != NULL )
+    {
+      callback(arg);
+    }
+    return CARD_RESULT_SUCCESS;
+    #else
+    return CARDi_RequestStreamCommand((u32)src, (u32)dst, len, callback, arg, is_async,
+                                      CARD_REQ_WRITE_BACKUP, CARD_RETRY_COUNT_MAX,
+                                      CARD_REQUEST_MODE_SEND_VERIFY);
+    #endif
+}
+#ifdef __cplusplus
+}
+#endif
 #endif'''
 
 UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
@@ -174,9 +257,15 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("#ifdef SDK_BUILD_ANDROID", fs_content)
             backup_content = (root / "subprojects/libntr/include/nitro/card/backup.h").read_text(encoding="utf-8")
             self.assertIn(BACKUP_SAVE_PATH_INCLUDE_PATCHED, backup_content)
-            self.assertEqual(5, backup_content.count("fopen(CARDI_BACKUP_SAVE_FILE,"))
+            self.assertIn(BACKUP_FILE_IO_HELPERS_PATCHED, backup_content)
+            self.assertIn(BACKUP_READ_BODY_PATCHED, backup_content)
+            self.assertIn(BACKUP_WRITE_BODY_PATCHED, backup_content)
+            self.assertIn(BACKUP_WRITE_VERIFY_BODY_PATCHED, backup_content)
+            self.assertEqual(1, backup_content.count('fopen(CARDI_BACKUP_SAVE_FILE, "rb+")'))
+            self.assertEqual(1, backup_content.count('fopen(CARDI_BACKUP_SAVE_FILE, "wb+")'))
             self.assertNotIn('fopen("save.bin",', backup_content)
             self.assertIn('CARDI_BACKUP_SAVE_FILE "../save.bin"', backup_content)
+            self.assertNotIn("return CARD_RESULT_SUCCESS;", backup_content)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
