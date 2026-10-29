@@ -46,6 +46,12 @@ A camada de compatibilidade recria serviços e chamadas gráficas que o jogo esp
 
 Veja o [guia de compilação](docs/BUILDING.md), a [arquitetura](docs/PORTING_ARCHITECTURE.md), o [roteiro geral](docs/ROADMAP.md), o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md), a [estratégia PT-BR](docs/LOCALIZATION.md) e o [aviso legal](docs/LEGAL.md).
 
+## Referências técnicas e correções da versão 0.2.0
+
+O Launcher 0.2.0 prepara a extração da ROM antes de inicializar a janela SDL/OpenGL, mantém um marcador local vinculado ao SHA-256 da ROM e configura as duas telas do Nintendo DS horizontalmente, lado a lado. A extração deixa de depender do loop gráfico para começar; ainda é necessário validar manualmente que o runtime chega à tela de título com uma ROM compatível.
+
+As decisões de importação local, cache recuperável e testes sem dados protegidos são informadas pelo [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) e seu [guia de desenvolvimento e testes](https://github.com/bryanthaboi/gen1recomp/wiki/Guide-Developer-Setup). O renderizador e a lógica original de Platinum continuam baseados em C/C++, [pret/pokeplatinum](https://github.com/pret/pokeplatinum) e na camada desktop [libntr](https://github.com/cybervisi0n/libntr); não importamos o motor Lua/LÖVE do Gen1Recomp. Veja a [nota de referências técnicas](docs/GEN1RECOMP_REFERENCE.md).
+
 ## Código de referência e compilação
 
 A base desktop usada como referência está em [cybervisi0n/pokeplatinum](https://github.com/cybervisi0n/pokeplatinum), baseada na [decompilação pret/pokeplatinum](https://github.com/pret/pokeplatinum) e na biblioteca [libntr](https://github.com/cybervisi0n/libntr). Ela é vinculada como dependência externa fixada e não é modificada permanentemente por este projeto sem revisão específica das condições do upstream.
