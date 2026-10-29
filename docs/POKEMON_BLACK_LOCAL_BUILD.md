@@ -93,7 +93,7 @@ O arquivo esperado é `build64/host/eidos.exe`. Os nomes exatos de pacotes e pr�
 
 ## 5. Integrar o build local ao launcher para teste
 
-Depois de compilar Eidos a partir das revisões fixadas, prepare uma cópia **local e ignorada pelo Git** do runtime. O helper copia somente o executável e as bibliotecas nativas resolvidas para `launcher-app/black-runtime`; não copia a ROM, arquivos extraídos, saves ou intermediários de build.
+Depois de compilar Eidos a partir das revisões fixadas, prepare uma cópia **local e ignorada pelo Git** do runtime. O helper copia somente o executável e as bibliotecas nativas resolvidas para `launcher-app/black-runtime/runtime`; não copia a ROM, arquivos extraídos, saves ou intermediários de build.
 
 Linux x86-64 (execute na raiz do repositório Platina Reluzente, com Eidos e Aletheia em pastas irmãs):
 
@@ -116,7 +116,7 @@ python scripts/stage_black_runtime.py \
   --objdump "$gcc_bin/x86_64-w64-mingw32-objdump.exe"
 ```
 
-O script recusa dependências não resolvidas e preserva o runtime anterior quando a nova preparação falha. Para abrir a biblioteca em modo de desenvolvimento, entre em `launcher-app` e execute `npm install --no-audit --no-fund`, `npm run build:web` e `npm start`. O comando `npm start` inicia o Electron usando o launcher integrado; com o runtime local validado presente em `launcher-app/black-runtime`, o launcher resolve-o internamente — não há seletor de executável externo. Essa cópia local serve para testes de desenvolvimento; ela é ignorada pelo Git e **não** autoriza a publicação de um pacote ou binário derivado.
+O script recusa dependências não resolvidas e preserva o runtime anterior quando a nova preparação falha. Para abrir a biblioteca em modo de desenvolvimento, entre em `launcher-app` e execute `npm install --no-audit --no-fund`, `npm run build:web` e `npm start`. O comando `npm start` inicia o Electron usando o launcher integrado; com o runtime local validado presente em `launcher-app/black-runtime/runtime`, o launcher resolve-o internamente — não há seletor de executável externo. Essa cópia local serve para testes de desenvolvimento; ela é ignorada pelo Git e **não** autoriza a publicação de um pacote ou binário derivado.
 
 ## 6. Testar o contrato de inicialização sem um segundo seletor de ROM
 
