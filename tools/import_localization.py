@@ -424,6 +424,7 @@ def extract_localization(
         raise
 
     shutil.rmtree(transaction_root, ignore_errors=True)
+    return written
 
 
 def main(argv: list[str] | None = None) -> int:
