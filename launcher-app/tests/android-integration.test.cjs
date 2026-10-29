@@ -177,7 +177,7 @@ test('Android runtime integration rejects a manifest path through a symlinked di
     const files = {
       'header.bin': 'header',
       'firmware.bin': 'firmware',
-      'build-version.txt': 'test-build\\n',
+      'build-version.txt': 'test-build\n',
       'wazaeffect/we.arc': 'waza-effect archive',
       'battle/skill/waza_seq.narc': 'move-animation archive',
     };
@@ -196,7 +196,7 @@ test('Android runtime integration rejects a manifest path through a symlinked di
     }
 
     const manifestLines = Object.entries(files).map(([relative, value]) => {
-      return relative + '\\t' + Buffer.byteLength(value);
+      return relative + '\t' + Buffer.byteLength(value);
     });
     manifestLines.push('linked/secret.bin\t' + Buffer.byteLength('outside runtime'));
     fs.writeFileSync(path.join(runtimeData, 'runtime-manifest.txt'), manifestLines.join('\n') + '\n');

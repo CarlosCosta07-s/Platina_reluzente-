@@ -21,6 +21,7 @@ from scripts.prepare_native_runtime import (
     ORIGINAL_HEADER_LOAD,
     PREVIOUS_PATCHED_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
+    PRIOR_PATCHED_HEADER_LOAD,
     RuntimePreparationError,
     prepare_native_runtime,
 )
@@ -54,7 +55,7 @@ extern "C" {
 void CARDi_RequestWriteSectorCommand(u32 src, u32 dst, u32 len, BOOL verify,
                                      MIDmaCallback callback, void *arg, BOOL is_async);
 
-SDK_INLINE BOOL CARDi_ReadBackup(u32 src, void *dst, u32 len,
+  SDK_INLINE BOOL CARDi_ReadBackup(u32 src, void *dst, u32 len,
                                  MIDmaCallback callback, void *arg, BOOL is_async)
 {
     #ifdef SDK_PORT
@@ -90,7 +91,7 @@ SDK_INLINE BOOL CARDi_ReadBackup(u32 src, void *dst, u32 len,
     #endif
 }
 
-SDK_INLINE BOOL CARDi_WriteBackup(u32 dst, const void *src, u32 len,
+  SDK_INLINE BOOL CARDi_WriteBackup(u32 dst, const void *src, u32 len,
                                   MIDmaCallback callback, void *arg, BOOL is_async)
 {
     #ifdef SDK_PORT
@@ -111,7 +112,7 @@ SDK_INLINE BOOL CARDi_WriteBackup(u32 dst, const void *src, u32 len,
     #endif
 }
 
-SDK_INLINE BOOL CARDi_WriteAndVerifyBackup(u32 dst, const void *src, u32 len,
+  SDK_INLINE BOOL CARDi_WriteAndVerifyBackup(u32 dst, const void *src, u32 len,
                                            MIDmaCallback callback, void *arg, BOOL is_async)
 {
     #ifdef SDK_PORT
@@ -274,6 +275,27 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0)', content)
             self.assertIn(GL_LOADER_PATCHED, content)
             self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
+            self.assertFalse(prepare_native_runtime(root))
+
+    def test_desktop_first_launch_can_start_without_a_rom_header(self):
+        desktop_branch = PATCHED_HEADER_LOAD.split("#else", 1)[1]
+        self.assertIn('romFile = fopen("header.bin", "rb");', desktop_branch)
+        self.assertIn("Unable to open imported desktop ROM", desktop_branch)
+        self.assertIn("if (romFile != NULL) {", PATCHED_HEADER_LOAD)
+        self.assertNotIn("Unable to open a ROM header source or packaged header.bin", PATCHED_HEADER_LOAD)
+        self.assertIn("return 1;", desktop_branch)
+
+    def test_upgrades_prior_strict_rom_header_patch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prior_source = UPSTREAM_HEADER.replace(
+                ORIGINAL_HEADER_LOAD, PRIOR_PATCHED_HEADER_LOAD, 1
+            )
+            source = self.make_source(root, prior_source)
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertEqual(1, content.count(PATCHED_HEADER_LOAD))
+            self.assertNotIn(PRIOR_PATCHED_HEADER_LOAD, content)
             self.assertFalse(prepare_native_runtime(root))
 
     def test_android_rom_open_failure_does_not_fall_back_to_packaged_header(self):
