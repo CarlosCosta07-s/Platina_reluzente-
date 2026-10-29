@@ -317,6 +317,9 @@
   document.querySelectorAll('[data-game-select]').forEach((card) => {
     card.addEventListener('click', () => selectGame(card.dataset.gameSelect));
   });
+  if (window.platina && typeof window.platina.onLaunchProgress === 'function') {
+    window.platina.onLaunchProgress((message) => setStatus(message));
+  }
   launchButton.addEventListener('click', launchGame);
   romButton.addEventListener('click', chooseRom);
   startupLogButton.addEventListener('click', openStartupLog);

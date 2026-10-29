@@ -263,8 +263,88 @@ function launchNativeProcess({
   });
 }
 
+
+const PREPARE_TIMEOUT_MS = 20 * 60 * 1000;
+let preparing = false;
+
+/**
+ * Run the native executable in its "--platina-prepare" mode: verify/extract the
+ * game data from the imported ROM BEFORE any game window exists (the approach
+ * used by gen1recomp: a separate import/prepare phase with visible progress,
+ * then launch). Output is appended to the same startup log. Resolves with
+ * { ok, code, message }.
+ */
+function runNativePrepare({ executable, args = [], cwd, env = process.env, logPath, platform = process.platform, romSha256 = 'unavailable', onProgress = () => {}, timeoutMs = PREPARE_TIMEOUT_MS }) {
+  const absoluteLogPath = typeof logPath === 'string' ? path.resolve(logPath) : '';
+  try {
+    validateLaunchRequest({ executable, args, cwd, env, logPath: absoluteLogPath, platform });
+  } catch (error) {
+    if (absoluteLogPath) appendSafeDiagnostic(absoluteLogPath, 'prepare validation failed: ' + error.message);
+    return Promise.resolve({ ok: false, code: null, message: 'A preparação segura do processo falhou: ' + error.message });
+  }
+  if (preparing || activeLaunch) {
+    return Promise.resolve({ ok: false, code: null, message: 'Já existe uma preparação ou um jogo em execução.' });
+  }
+  appendSafeDiagnostic(absoluteLogPath, '--- Native prepare phase --- platform=' + platform + ' rom_sha256=' + romSha256);
+
+  preparing = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    let pending = '';
+    let timer = null;
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      preparing = false;
+      if (timer) clearTimeout(timer);
+      resolve(result);
+    };
+    const handleText = (text) => {
+      appendLog(absoluteLogPath, text);
+      pending += text;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop();
+      for (const line of lines) {
+        const match = /^\[Platina-Progress\]\s+(\w+)/.exec(line);
+        if (match) { try { onProgress(match[1]); } catch {} }
+      }
+    };
+    let child;
+    try {
+      child = spawn(executable, args, { cwd, shell: false, windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      appendLog(absoluteLogPath, 'prepare spawn threw: ' + error.message);
+      done({ ok: false, code: null, message: 'Falha ao iniciar a preparação: ' + error.message });
+      return;
+    }
+    child.stdout.on('data', (chunk) => handleText(chunk.toString('utf8')));
+    child.stderr.on('data', (chunk) => handleText(chunk.toString('utf8')));
+    child.once('error', (error) => {
+      appendLog(absoluteLogPath, 'prepare error: ' + error.message);
+      done({ ok: false, code: null, message: 'Falha ao iniciar a preparação: ' + error.message });
+    });
+    child.once('exit', (code, signal) => {
+      appendLog(absoluteLogPath, 'prepare exit: code=' + code + ' signal=' + (signal || 'none'));
+      if (code === 0) {
+        done({ ok: true, code });
+      } else {
+        done({
+          ok: false,
+          code,
+          message: 'A preparação dos dados do jogo falhou (código ' + code + '). Abra o log para ver o motivo exato: ' + absoluteLogPath
+        });
+      }
+    });
+    timer = setTimeout(() => {
+      appendLog(absoluteLogPath, 'prepare timeout after ' + timeoutMs + ' ms; killing process');
+      try { child.kill(); } catch {}
+      done({ ok: false, code: null, message: 'A preparação dos dados excedeu o tempo limite. Consulte o log: ' + absoluteLogPath });
+    }, timeoutMs);
+  });
+}
+
 function hasActiveNativeProcess() {
   return Boolean(activeLaunch);
 }
 
-module.exports = { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle };
+module.exports = { launchNativeProcess, runNativePrepare, hasActiveNativeProcess, onNativeProcessIdle };

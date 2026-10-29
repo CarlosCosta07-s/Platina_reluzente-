@@ -56,6 +56,12 @@ ROM_PREFLIGHT_INCLUDE_PATCHED = r'''#include <SDL2/SDL.h>
 #include "nds-extract.hpp"'''
 ROM_PREFLIGHT_ENTRY_ORIGINAL = "int main(int argc, char *argv[]) {\n#ifdef SDK_BUILD_NX"
 ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
+  // "--platina-prepare": the launcher runs the extraction/verification phase
+  // as a separate step (with progress in its own UI), then starts the game.
+  bool platinaPrepareOnly = false;
+  for (int argIndex = 1; argIndex < argc; ++argIndex) {
+    if (std::strcmp(argv[argIndex], "--platina-prepare") == 0) platinaPrepareOnly = true;
+  }
   // The native runtime package contains a path-only manifest derived from the
   // pinned filesys.csv. No ROM or extracted game contents are packaged.
   const auto isRegularFileWithoutSymlinks = [](const std::filesystem::path &relativePath) {
@@ -98,8 +104,16 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
                                     std::uint64_t &fileSize,
                                     std::uint32_t &crc32) {
     if (!isRegularFileWithoutSymlinks(std::filesystem::path(relativeName))) return false;
-    std::ifstream input(relativeName, std::ios::binary);
-    if (!input.is_open()) return false;
+    std::ifstream input;
+    for (int attempt = 0; attempt < 20 && !input.is_open(); ++attempt) {
+      input.clear();
+      input.open(relativeName, std::ios::binary);
+      if (!input.is_open()) SDL_Delay(150);
+    }
+    if (!input.is_open()) {
+      fprintf(stderr, "[Platina] Cannot open %s for verification (locked or missing).\n", relativeName.c_str());
+      return false;
+    }
 
     std::uint64_t totalBytes = 0;
     std::uint32_t crc = 0xFFFFFFFFu;
@@ -209,15 +223,25 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       for (; iterator != end; iterator.increment(iteratorError)) {
         if (iteratorError) return false;
         const std::string name = iterator->path().filename().string();
-        if (!isOverlayFileName(name, prefix)) return false;
+        if (!isOverlayFileName(name, prefix)) {
+          fprintf(stderr, "[Platina] Unexpected entry in %s: %s\n", directoryName.c_str(), name.c_str());
+          return false;
+        }
         const std::string relativeName = directoryName + "/" + name;
         std::uint64_t fileSize = 0;
         std::uint32_t crc32 = 0;
-        if (!inspectFileCrc32(relativeName, fileSize, crc32) || fileSize == 0) return false;
+        if (!inspectFileCrc32(relativeName, fileSize, crc32) || fileSize == 0) {
+          fprintf(stderr, "[Platina] Overlay failed verification: %s (size %llu)\n",
+                  relativeName.c_str(), static_cast<unsigned long long>(fileSize));
+          return false;
+        }
         paths.push_back(relativeName);
         ++count;
       }
       if (iteratorError) return false;
+      if (requireAtLeastOne && count == 0) {
+        fprintf(stderr, "[Platina] No overlay files found in %s.\n", directoryName.c_str());
+      }
       return !requireAtLeastOne || count > 0;
     };
 
@@ -521,7 +545,10 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       return 4;
     }
 
+    fprintf(stdout, "[Platina-Progress] verifying\n");
+    fflush(stdout);
     if (!verifyExtractionCache(expectedDataPaths, romSha256)) {
+      fprintf(stdout, "[Platina-Progress] extracting\n");
       fprintf(stdout, "[Platina] Cache validation failed; rebuilding extracted data from the imported ROM.\n");
       fflush(stdout);
       if (!clearInvalidExtraction(expectedDataPaths)) {
@@ -568,6 +595,16 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       fprintf(stdout, "[Platina] Reusing local game data after per-file CRC32 verification.\n");
       fflush(stdout);
     }
+  }
+  if (platinaPrepareOnly) {
+    const char *prepareRom = getenv("PLATINA_IMPORTED_ROM");
+    if (prepareRom == NULL || prepareRom[0] == '\0') {
+      fprintf(stderr, "[Platina] --platina-prepare requires PLATINA_IMPORTED_ROM.\n");
+      return 2;
+    }
+    fprintf(stdout, "[Platina-Progress] ready\n");
+    fflush(stdout);
+    return 0;
   }
 #ifdef SDK_BUILD_NX'''
 

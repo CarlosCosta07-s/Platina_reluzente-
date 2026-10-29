@@ -2,7 +2,7 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
+const { launchNativeProcess, runNativePrepare, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
@@ -22,6 +22,16 @@ function createWindow() {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
 }
+function sendLaunchProgress(message) {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send('platina:launch-progress', String(message));
+  }
+}
+const PREPARE_PROGRESS_TEXT = {
+  verifying: 'Verificando os dados do jogo…',
+  extracting: 'Extraindo os dados da ROM (a primeira vez pode levar alguns minutos; não feche o launcher)…',
+  ready: 'Dados prontos. Abrindo a janela do jogo…'
+};
 function runtimeRoot() {
   return resolveRuntimeDirectory(app.isPackaged, process.resourcesPath, path.resolve(__dirname, '..'));
 }
@@ -367,6 +377,15 @@ ipcMain.handle('platina:launch-game', async () => {
       platform: process.platform,
       env: process.env
     });
+    // Phase 1 (no game window yet): verify/extract the game data with progress.
+    sendLaunchProgress('Preparando os dados do jogo…');
+    const prepared = await runNativePrepare({
+      ...launchSpec,
+      args: [...launchSpec.args, '--platina-prepare'],
+      onProgress: (stage) => sendLaunchProgress(PREPARE_PROGRESS_TEXT[stage] || stage)
+    });
+    if (!prepared.ok) return { ok: false, message: prepared.message, logPath };
+    // Phase 2: only now start the real game process and its window.
     return launchNativeProcess(launchSpec);
   } catch (error) {
     return {
