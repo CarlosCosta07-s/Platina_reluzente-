@@ -30,7 +30,8 @@ async function readImportedRom() {
   // Reconcile any interrupted import before exposing the saved ROM. When
   // staging/backup files exist, recovery checks the SHA-256 metadata pair.
   // Do not hide permission, disk, or ambiguous recovery errors as "no ROM".
-  await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile });
+  const recoveryResult = await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile });
+  if (recoveryResult === false) return null;
   try {
     const [metadataText, stat] = await Promise.all([
       fs.promises.readFile(metadataFile, 'utf8'),
