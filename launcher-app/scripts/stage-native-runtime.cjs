@@ -224,6 +224,61 @@ function createExtractedPathManifest(filesysCsvPath) {
   return 'PLATINA_DATA_PATHS_V1\n' + paths.length + '\n' + paths.join('\n') + '\n';
 }
 
+function loadExtractedPathManifest(manifestPath) {
+  if (typeof manifestPath !== 'string' || !path.isAbsolute(manifestPath)) {
+    throw new TypeError('O caminho absoluto para o manifesto de caminhos é obrigatório.');
+  }
+  const stat = fs.lstatSync(manifestPath);
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error('O manifesto de caminhos precisa ser um arquivo regular, sem link simbólico.');
+  }
+  const contents = fs.readFileSync(manifestPath, 'utf8').replace(/^\\uFEFF/, '');
+  if (!contents.startsWith('PLATINA_DATA_PATHS_V1\\n')) {
+    if (path.basename(manifestPath).toLowerCase().endsWith('.csv')) {
+      return createExtractedPathManifest(manifestPath);
+    }
+    throw new Error('O manifesto local de caminhos possui um cabeçalho inválido.');
+  }
+
+  const normalized = contents.replace(/\\r\\n/g, '\\n');
+  const lines = normalized.split('\\n');
+  if (lines[0] !== 'PLATINA_DATA_PATHS_V1' || !/^[0-9]+$/.test(lines[1] || '')) {
+    throw new Error('Cabeçalho/contagem inválidos no manifesto de caminhos.');
+  }
+  const expectedCount = Number(lines[1]);
+  if (!Number.isSafeInteger(expectedCount) || expectedCount < 300 || expectedCount > 2000
+      || lines.length !== expectedCount + 3 || lines[lines.length - 1] !== '') {
+    throw new Error('Manifesto de caminhos incompleto ou com contagem inválida.');
+  }
+
+  const reservedRootNames = new Set([
+    'main', 'main.exe', 'save.bin', 'sim_config.ini', 'launcher-runtime-version.txt',
+    'launcher-runtime-manifest.json', 'platina-data-paths.txt', 'platina-rom-extraction.manifest'
+  ]);
+  const seen = new Set();
+  let previousPath = '';
+  const paths = lines.slice(2, -1);
+  for (const value of paths) {
+    const target = normalizeManifestPath(value, 'manifesto');
+    if (!target.includes('/') && reservedRootNames.has(target.toLowerCase())) {
+      throw new Error('Manifesto tenta sobrescrever um arquivo reservado do runtime: ' + target);
+    }
+    const key = target.toLowerCase();
+    if (seen.has(key)) throw new Error('Manifesto contém caminhos duplicados: ' + target);
+    if (previousPath && target <= previousPath) {
+      throw new Error('Manifesto de caminhos não está em ordem lexicográfica determinística.');
+    }
+    seen.add(key);
+    previousPath = target;
+  }
+  for (const required of REQUIRED_EXTRACTED_PATHS) {
+    if (!seen.has(required.toLowerCase())) {
+      throw new Error('Manifesto de caminhos não contém recurso essencial: ' + required);
+    }
+  }
+  return 'PLATINA_DATA_PATHS_V1\\n' + expectedCount + '\\n' + paths.join('\\n') + '\\n';
+}
+
 function hashFile(filePath) {
   const hash = crypto.createHash('sha256');
   const descriptor = fs.openSync(filePath, 'r');
@@ -281,7 +336,7 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform, dataManifes
       sourcePath: null,
       relativePath: GAME_DATA_PATHS_FILE,
       mode: 0o644,
-      generatedContents: createExtractedPathManifest(normalizedManifestPath)
+      generatedContents: loadExtractedPathManifest(normalizedManifestPath)
     });
     files.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
   }
@@ -393,8 +448,16 @@ if (require.main === module) {
       'pokeplatinum'
     );
     const destinationRoot = path.join(repositoryRoot, 'launcher-app', 'runtime');
-    const dataManifestPath = path.resolve(sourceRoot, '..', '..', 'platinum.us', 'filesys.csv');
+    const localPathManifest = path.join(sourceRoot, GAME_DATA_PATHS_FILE);
+    const upstreamCsv = path.resolve(sourceRoot, '..', '..', 'platinum.us', 'filesys.csv');
+    const localManifestStat = lstatIfPresent(localPathManifest);
+    const csvStat = lstatIfPresent(upstreamCsv);
+    const dataManifestPath = localManifestStat ? localPathManifest : (csvStat ? upstreamCsv : undefined);
     try {
+      if (!dataManifestPath) {
+        throw new Error('Manifesto de caminhos ausente: o runtime de origem deve trazer '
+          + GAME_DATA_PATHS_FILE + ' ou o checkout upstream deve conter platinum.us/filesys.csv.');
+      }
       const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform, dataManifestPath });
       process.stdout.write(
         'Runtime ' + result.platform + ' preparado com ' + result.files
@@ -408,4 +471,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { stageNativeRuntime, inspectRuntimeTree, createExtractedPathManifest, parseCsv, TARGETS };
+module.exports = { stageNativeRuntime, inspectRuntimeTree, createExtractedPathManifest, loadExtractedPathManifest, parseCsv, TARGETS };
