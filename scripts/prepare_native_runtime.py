@@ -76,7 +76,7 @@ LEGACY_ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
   }
 #endif'''
 
-PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
+PREVIOUS_PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
   // Windows/Linux receive the file path from the launcher; Android uses SDL's
   // private app-storage path, matching Capacitor Filesystem Directory.Data.
   FILE *romFile = NULL;
@@ -104,6 +104,43 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
   if (romFile != NULL) {
     fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
     fclose(romFile);
+  }'''
+
+
+PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
+  // Windows/Linux receive the file path from the launcher; Android uses SDL's
+  // private app-storage path, matching Capacitor Filesystem Directory.Data.
+  FILE *romFile = NULL;
+#if defined(__ANDROID__)
+  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
+  std::string importedRomPath;
+  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
+    importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
+    romFile = fopen(importedRomPath.c_str(), "rb");
+  }
+  if (romFile == NULL) {
+    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
+            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
+    return 1;
+  }
+#else
+  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
+  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
+    romFile = fopen(importedRomPath, "rb");
+  }
+  if (romFile == NULL) {
+    romFile = fopen("header.bin", "rb");
+  }
+#endif
+  if (romFile == NULL) {
+    fprintf(stderr, "Unable to open a ROM header source or packaged header.bin\n");
+    return 1;
+  }
+  const size_t headerBytesRead = fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
+  fclose(romFile);
+  if (headerBytesRead != 0x160) {
+    fprintf(stderr, "Incomplete ROM header: expected 352 bytes, read %zu\n", headerBytesRead);
+    return 1;
   }'''
 
 
@@ -165,15 +202,18 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     original = path.read_text(encoding="utf-8")
     current = original
     current_load_count = current.count(PATCHED_HEADER_LOAD)
+    previous_load_count = current.count(PREVIOUS_PATCHED_HEADER_LOAD)
     legacy_count = current.count(LEGACY_PATCHED_HEADER_LOAD)
     upstream_count = current.count(ORIGINAL_HEADER_LOAD)
 
     if current_load_count == 1:
-        if legacy_count or upstream_count:
+        if previous_load_count or legacy_count or upstream_count:
             raise RuntimePreparationError("Multiple competing ROM-header loaders found; refusing an ambiguous patch.")
-    elif current_load_count == 0 and legacy_count == 1 and upstream_count == 0:
+    elif current_load_count == 0 and previous_load_count == 1 and legacy_count == 0 and upstream_count == 0:
+        current = current.replace(PREVIOUS_PATCHED_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
+    elif current_load_count == 0 and previous_load_count == 0 and legacy_count == 1 and upstream_count == 0:
         current = current.replace(LEGACY_PATCHED_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
-    elif current_load_count == 0 and legacy_count == 0 and upstream_count == 1:
+    elif current_load_count == 0 and previous_load_count == 0 and legacy_count == 0 and upstream_count == 1:
         current = current.replace(ORIGINAL_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
     else:
         raise RuntimePreparationError(
