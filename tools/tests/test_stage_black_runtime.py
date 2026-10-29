@@ -10,6 +10,7 @@ from scripts.stage_black_runtime import (
     stage_black_runtime,
     _windows_dependencies,
     _linux_dependencies,
+    _is_windows_system_dll,
 )
 
 
@@ -153,6 +154,22 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeStageError, "não resolvida"):
                     _linux_dependencies(executable, [dependency_dir])
+
+
+    def test_windows_system_dll_classification_does_not_trust_runner_system32_presence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            system32 = root / "Windows" / "System32"
+            system32.mkdir(parents=True)
+            # This models a VC runtime installed on the CI machine but not
+            # guaranteed to exist on a clean end-user Windows installation.
+            (system32 / "vcruntime140.dll").write_bytes(b"runner-only DLL")
+
+            with patch.dict("os.environ", {"WINDIR": str(root / "Windows"), "SystemRoot": str(root / "Windows")}):
+                self.assertFalse(_is_windows_system_dll("vcruntime140.dll"))
+                self.assertTrue(_is_windows_system_dll("KERNEL32.DLL"))
+                self.assertTrue(_is_windows_system_dll("api-ms-win-core-file-l1-1-0.dll"))
+                self.assertFalse(_is_windows_system_dll("SDL3.dll"))
 
     def test_windows_dependency_closure_is_case_insensitive_across_dlls(self):
         from types import SimpleNamespace
