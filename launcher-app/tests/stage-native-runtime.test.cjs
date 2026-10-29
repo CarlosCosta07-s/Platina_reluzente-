@@ -37,6 +37,13 @@ function createRuntime(sourceRoot, platform = 'linux') {
 }
 
 test('stages a Linux runtime, fingerprints all files, and omits local save/config files', (t) => {
+  // Windows filesystems/runners do not expose POSIX executable bits in
+  // fs.stat.mode. The Linux AppImage staging test must run on Unix; Windows
+  // staging is covered independently below.
+  if (process.platform === 'win32') {
+    t.skip('Linux AppImage permission checks require POSIX file mode bits.');
+    return;
+  }
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-stage-runtime-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.join(root, 'build_linux', 'pokeplatinum');
