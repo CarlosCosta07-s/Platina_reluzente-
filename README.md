@@ -4,6 +4,10 @@
 
 O projeto reúne uma biblioteca experimental de portes nativos comunitários para **Windows e Linux**. O desenvolvimento principal continua sendo o porte de **Pokémon Platinum**, que já possui runtimes desktop e um launcher integrado em fase de testes. Em paralelo, iniciamos a pesquisa técnica e o planejamento do porte nativo de **Pokémon Black Version**, usando código reconstruído e compilado para o host — sem emulador de Nintendo DS ou interpretador de instruções ARM. O runtime Black ainda não foi integrado: por enquanto, ele aparece no launcher como projeto em desenvolvimento. Nenhuma ROM, firmware ou recurso protegido do jogo será incluído nos releases.
 
+## Pokémon Black — etapa técnica
+
+O porte paralelo está agora fixado nas revisões compatíveis do [aletheia](https://github.com/Project-Holon/aletheia/tree/6c2aae879f123bcbc028cf6a8b7f8df614402ac8) e do [eidos](https://github.com/Project-Holon/eidos/tree/b79123f967980d1bb758161891205c03d606dec7). O workflow [Pokémon Black native source validation](.github/workflows/pokemon-black-native-check.yml) compila/testa sem ROM e não publica executáveis. A licença de `aletheia/src/` não concede licença do código reconstruído; a distribuição de binários Black fica bloqueada até análise jurídica adequada. Veja o [plano técnico](docs/POKEMON_BLACK_PORT.md).
+
 ## Projetos da biblioteca
 
 - **Pokémon Platinum** — porte nativo principal em Windows/Linux. O launcher integrado já pode ser compilado, mas tela de título e jogabilidade ainda precisam ser confirmadas com uma cópia local compatível.
