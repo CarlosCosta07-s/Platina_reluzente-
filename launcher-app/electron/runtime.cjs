@@ -139,8 +139,32 @@ function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
 
     const calculatedBuildId = fingerprint.digest('hex');
     const expectedExecutable = platform === 'win32' ? 'main.exe' : 'main';
-    if (!seen.has(expectedExecutable)) return false;
-    return calculatedBuildId === marker;
+    if (!seen.has(expectedExecutable) || calculatedBuildId !== marker) return false;
+
+    // User-writable runtime folders also contain extracted assets and saves.
+    // They must not be allowed to introduce unmanifested executable code or
+    // dynamic libraries that could be picked up by the native loader.
+    const nativeExtensions = platform === 'win32'
+      ? new Set(['.exe', '.dll', '.com', '.bat', '.cmd', '.ocx', '.node', '.pyd'])
+      : new Set(['.so', '.dylib', '.node', '.pyd']);
+    function inspectUnmanifestedCode(directory) {
+      for (const child of fs.readdirSync(directory, { withFileTypes: true })) {
+        const childPath = path.join(directory, child.name);
+        const stat = fs.lstatSync(childPath);
+        if (stat.isSymbolicLink()) return false;
+        if (stat.isDirectory()) {
+          if (!inspectUnmanifestedCode(childPath)) return false;
+          continue;
+        }
+        if (!stat.isFile()) return false;
+        const relative = path.relative(root, childPath).split(path.sep).join('/');
+        const extension = path.extname(child.name).toLowerCase();
+        const hasExecutableMode = platform !== 'win32' && (stat.mode & 0o111) !== 0;
+        if ((nativeExtensions.has(extension) || hasExecutableMode) && !seen.has(relative)) return false;
+      }
+      return true;
+    }
+    return inspectUnmanifestedCode(root);
   } catch {
     return false;
   }
