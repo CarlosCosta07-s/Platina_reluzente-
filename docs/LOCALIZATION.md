@@ -25,6 +25,22 @@ O upstream pret/pokeplatinum documenta estas impressões digitais para Pokémon 
 
 A cópia USA fornecida para o desenvolvimento corresponde à Rev. 1 e serve como referência inicial de compatibilidade.
 
+## Verificação do patch PT-BR v1.2.0 (29/10/2026)
+
+O arquivo enviado contém `Pokemon Platinum (BR) v1.2.0.xdelta`. O README incluído no pacote e a página da tradução identificam a ROM-base como `3541 – Pokémon Platinum Version (US)(XenoPhobia).nds`, CRC-32 `1D8A5220` ([informações da tradução E4T](https://e4t.com.br/downloads/pokemon-platina/informacoes-pokemon-platina/)).
+
+A base atualmente aceita pelo launcher é Pokémon Platinum USA Rev. 1: SHA-1 `0862ec35b24de5c7e2dcb88c9eea0873110d755c`, CRC-32 `69D628E8` e byte de revisão no offset `0x1E` igual a `1` ([referência pret/pokeplatinum](https://github.com/pret/pokeplatinum)). Portanto, a base documentada pelo patch não corresponde à impressão digital da ROM Rev. 1. Não aplicar esse patch diretamente à Rev. 1 sem prova de compatibilidade.
+
+A ROM PT-BR de referência examinada localmente tem SHA-1 `3d92f853eda6e70e9272809f01277db5fdb870ab`, CRC-32 `A00BE79B` e byte de revisão `0` em `0x1E`. Ela não é a mesma imagem da Rev. 1 esperada pelo launcher. O patch Xdelta em si não foi executado neste teste contra uma ROM-base com CRC `1D8A5220`; por isso, não se afirma que sua aplicação foi testada nem que funcionaria na Rev. 1.
+
+### Verificação local dos recursos de tradução
+
+Os sete arquivos NARC da lista permitida foram comparados com `tools/localization_manifest.py`: todos os sete SHA-256 correspondem exatamente aos valores aprovados e todos têm cabeçalhos NARC válidos, com blocos `BTAF`, `BTNF` e `GMIF`. A comparação por caminho entre a ROM Rev. 1 e a referência PT-BR encontrou nove arquivos nomeados com conteúdo/tamanho diferente: os sete NARC permitidos e `data/utility.bin` e `dwc/utility.bin`. Também existe uma entrada FAT sem caminho FNT conhecido. Os dois `utility.bin` e a entrada sem caminho continuam proibidos para importação.
+
+O `msgdata/pl_msg.narc` traduzido declara 4.185.274 bytes no cabeçalho NARC, enquanto seu intervalo FAT mede 4.184.402 bytes. O importador já contém recuperação condicionada ao tamanho do NARC e à verificação de que o intervalo não sobreponha outro arquivo FAT; esse comportamento precisa continuar coberto por testes.
+
+**Conclusão de compatibilidade:** a tradução pode ser representada pelos sete recursos aprovados no runtime local, mas o patch `.xdelta` enviado não está comprovado como aplicável diretamente à ROM USA Rev. 1. A próxima etapa é preparar um pacote de idioma/overlay isolado e validado — ou demonstrar, com a base correta, como gerar esses sete recursos — sem modificar a ROM original e sem distribuir ROMs ou arquivos extraídos no repositório.
+
 ## Diferenças encontradas na variante PT-BR
 
 A cópia PT-BR possui código de jogo CPUE, mas não tem a mesma impressão digital da Rev. 1. A impressão digital SHA-1 da cópia exata usada para estabelecer os hashes de referência é `3d92f853eda6e70e9272809f01277db5fdb870ab`. O verificador aceita somente os sete recursos com hashes correspondentes a essa variante; outra edição PT-BR será recusada até que seja analisada e adicionada deliberadamente. Uma comparação local de 462 entradas da tabela FAT encontrou dez entradas diferentes:
