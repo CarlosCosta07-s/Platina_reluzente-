@@ -57,7 +57,18 @@ jobs:
             }
             $runId = [string]$matchingRuns[0].id
           }
-          if ($runId -notmatch '^\d+
+          if ($runId -notmatch '^\d+$') {
+            throw "The native build workflow run ID is invalid: $runId"
+          }
+          $artifactUri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$runId/artifacts?per_page=100"
+          $artifactResponse = Invoke-RestMethod -Method Get -Uri $artifactUri -Headers $headers
+          $matchingArtifacts = @($artifactResponse.artifacts |
+            Where-Object { $_.name -eq "Platina-Reluzente-Windows-x64-native" -and -not $_.expired })
+          if ($matchingArtifacts.Count -lt 1) {
+            throw "The matching native build run has no unexpired Windows executable artifact."
+          }
+          "run_id=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Selected native Windows artifact from matching successful run $runId."
 
       - name: Download verified native Windows executable package
         uses: actions/download-artifact@v4
