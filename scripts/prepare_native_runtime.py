@@ -172,10 +172,11 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     return true;
   };
 
-  // The extractor also writes ARM7/ARM9 overlay files whose exact numeric
-  // names are recorded inside the imported ROM, not in filesys.csv. Include
-  // every discovered overlay in the integrity cache, and require both groups
-  // after a successful extraction. A partial cache then fails by entry count.
+  // ARM9 overlays are expected for the supported Platinum image. ARM7
+  // overlays are optional: the extractor can validly produce none when the
+  // ROM's ARM7 overlay table has no separate overlay payloads. Include every
+  // discovered overlay in the integrity cache and validate every file that
+  // exists, without rejecting a legitimate empty ARM7 overlay directory.
   const auto collectOverlayPaths = [&](std::vector<std::string> &paths, bool requireAll) {
     const auto isOverlayFileName = [](const std::string &name, const std::string &prefix) {
       const std::string stem = prefix + "_";
@@ -190,12 +191,13 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     };
 
     const auto collectOne = [&](const std::string &directoryName,
-                                const std::string &prefix) {
+                                const std::string &prefix,
+                                bool requireAtLeastOne) {
       std::error_code directoryError;
       const auto directoryStatus = std::filesystem::symlink_status(
           std::filesystem::path(directoryName), directoryError);
       if (directoryError == std::errc::no_such_file_or_directory ||
-          (!directoryError && !std::filesystem::exists(directoryStatus))) return !requireAll;
+          (!directoryError && !std::filesystem::exists(directoryStatus))) return !requireAtLeastOne;
       if (directoryError || std::filesystem::is_symlink(directoryStatus) ||
           !std::filesystem::is_directory(directoryStatus)) return false;
 
@@ -216,11 +218,15 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
         ++count;
       }
       if (iteratorError) return false;
-      return !requireAll || count > 0;
+      return !requireAtLeastOne || count > 0;
     };
 
-    if (!collectOne("overlay9", "overlay9") ||
-        !collectOne("overlay7", "overlay7")) return false;
+    // The pinned USA Rev. 1 runtime needs ARM9's overlay set. ARM7's static
+    // binary is sufficient for this source, so an empty/missing overlay7
+    // directory is valid; if ARM7 overlays exist, validate and cache all of
+    // them just like ARM9 overlays.
+    if (!collectOne("overlay9", "overlay9", requireAll) ||
+        !collectOne("overlay7", "overlay7", false)) return false;
     std::sort(paths.begin(), paths.end());
     return true;
   };
@@ -330,14 +336,12 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
                                          const std::string &romSha256) {
     bool hasOverlay9 = false;
-    bool hasOverlay7 = false;
     for (const std::string &relativeName : paths) {
       if (relativeName.rfind("overlay9/overlay9_", 0) == 0) hasOverlay9 = true;
-      if (relativeName.rfind("overlay7/overlay7_", 0) == 0) hasOverlay7 = true;
     }
-    // Old or interrupted cache markers without both overlay groups are not
-    // complete, even if the static paths and previous marker still match.
-    if (!hasOverlay9 || !hasOverlay7) return false;
+    // A usable Platinum cache must contain ARM9 overlays. ARM7 overlay files
+    // are included and CRC-verified when present, but the group may be empty.
+    if (!hasOverlay9) return false;
 
     const char *cachePath = "platina-rom-extraction.manifest";
     if (!isRegularFileWithoutSymlinks(std::filesystem::path(cachePath))) return false;
