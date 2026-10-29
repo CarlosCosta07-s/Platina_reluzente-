@@ -59,8 +59,10 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   // "--platina-prepare": the launcher runs the extraction/verification phase
   // as a separate step (with progress in its own UI), then starts the game.
   bool platinaPrepareOnly = false;
+  bool platinaPreparedByLauncher = false;
   for (int argIndex = 1; argIndex < argc; ++argIndex) {
     if (std::strcmp(argv[argIndex], "--platina-prepare") == 0) platinaPrepareOnly = true;
+    if (std::strcmp(argv[argIndex], "--platina-prepared") == 0) platinaPreparedByLauncher = true;
   }
   // The native runtime package contains a path-only manifest derived from the
   // pinned filesys.csv. No ROM or extracted game contents are packaged.
@@ -191,7 +193,14 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   // ROM's ARM7 overlay table has no separate overlay payloads. Include every
   // discovered overlay in the integrity cache and validate every file that
   // exists, without rejecting a legitimate empty ARM7 overlay directory.
-  const auto collectOverlayPaths = [&](std::vector<std::string> &paths, bool requireAll) {
+  const auto collectOverlayPaths = [&](std::vector<std::string> &paths,
+                                       bool requireAll,
+                                       std::string *failureReason) {
+    const auto fail = [&](const std::string &reason) {
+      if (failureReason != NULL) *failureReason = reason;
+      fprintf(stderr, "[Platina] Overlay validation failed: %s\n", reason.c_str());
+      return false;
+    };
     const auto isOverlayFileName = [](const std::string &name, const std::string &prefix) {
       const std::string stem = prefix + "_";
       if (name.compare(0, stem.size(), stem) != 0 ||
@@ -211,38 +220,51 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       const auto directoryStatus = std::filesystem::symlink_status(
           std::filesystem::path(directoryName), directoryError);
       if (directoryError == std::errc::no_such_file_or_directory ||
-          (!directoryError && !std::filesystem::exists(directoryStatus))) return !requireAtLeastOne;
+          (!directoryError && !std::filesystem::exists(directoryStatus))) {
+        if (requireAtLeastOne) {
+          return fail("required " + prefix + " overlay directory is missing: " + directoryName);
+        }
+        return true;
+      }
       if (directoryError || std::filesystem::is_symlink(directoryStatus) ||
-          !std::filesystem::is_directory(directoryStatus)) return false;
+          !std::filesystem::is_directory(directoryStatus)) {
+        return fail("overlay directory is inaccessible, linked, or not a directory: " + directoryName);
+      }
 
       std::error_code iteratorError;
       std::filesystem::directory_iterator iterator(directoryName, iteratorError);
       const std::filesystem::directory_iterator end;
-      if (iteratorError) return false;
+      if (iteratorError) {
+        return fail("cannot enumerate overlay directory " + directoryName + ": " + iteratorError.message());
+      }
       std::size_t count = 0;
       for (; iterator != end; iterator.increment(iteratorError)) {
-        if (iteratorError) return false;
+        if (iteratorError) {
+          return fail("failed while enumerating overlay directory " + directoryName + ": " + iteratorError.message());
+        }
         const std::string name = iterator->path().filename().string();
         if (!isOverlayFileName(name, prefix)) {
-          fprintf(stderr, "[Platina] Unexpected entry in %s: %s\n", directoryName.c_str(), name.c_str());
-          return false;
+          return fail("unexpected entry in " + directoryName + ": " + name);
         }
         const std::string relativeName = directoryName + "/" + name;
         std::uint64_t fileSize = 0;
         std::uint32_t crc32 = 0;
-        if (!inspectFileCrc32(relativeName, fileSize, crc32) || fileSize == 0) {
-          fprintf(stderr, "[Platina] Overlay failed verification: %s (size %llu)\n",
-                  relativeName.c_str(), static_cast<unsigned long long>(fileSize));
-          return false;
+        if (!inspectFileCrc32(relativeName, fileSize, crc32)) {
+          return fail("could not read or verify overlay file: " + relativeName);
+        }
+        if (fileSize == 0) {
+          return fail("overlay file is empty: " + relativeName);
         }
         paths.push_back(relativeName);
         ++count;
       }
-      if (iteratorError) return false;
-      if (requireAtLeastOne && count == 0) {
-        fprintf(stderr, "[Platina] No overlay files found in %s.\n", directoryName.c_str());
+      if (iteratorError) {
+        return fail("failed while finishing overlay directory " + directoryName + ": " + iteratorError.message());
       }
-      return !requireAtLeastOne || count > 0;
+      if (requireAtLeastOne && count == 0) {
+        return fail("no " + prefix + " overlay files were produced in " + directoryName);
+      }
+      return true;
     };
 
     // The pinned USA Rev. 1 runtime needs ARM9's overlay set. ARM7's static
@@ -361,7 +383,8 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   };
 
   const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
-                                         const std::string &romSha256) {
+                                         const std::string &romSha256,
+                                         bool verifyFullCrc) {
     bool hasOverlay9 = false;
     for (const std::string &relativeName : paths) {
       if (relativeName.rfind("overlay9/overlay9_", 0) == 0) hasOverlay9 = true;
@@ -416,10 +439,17 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
         return false;
       }
 
-      std::uint64_t actualSize = 0;
-      std::uint32_t actualCrc = 0;
-      if (!inspectFileCrc32(paths[index], actualSize, actualCrc) ||
-          actualSize != cachedSize || actualCrc != cachedCrc) return false;
+      const std::filesystem::path relativePath(paths[index]);
+      if (!isRegularFileWithoutSymlinks(relativePath)) return false;
+      std::error_code sizeError;
+      const std::uintmax_t actualSize = std::filesystem::file_size(relativePath, sizeError);
+      if (sizeError || actualSize != cachedSize) return false;
+      if (verifyFullCrc) {
+        std::uint64_t verifiedSize = 0;
+        std::uint32_t actualCrc = 0;
+        if (!inspectFileCrc32(paths[index], verifiedSize, actualCrc) ||
+            verifiedSize != cachedSize || actualCrc != cachedCrc) return false;
+      }
     }
 
     if (std::getline(cache, line)) return false;
@@ -540,14 +570,20 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       return 4;
     }
     std::vector<std::string> expectedDataPaths = baseDataPaths;
-    if (!collectOverlayPaths(expectedDataPaths, false)) {
-      fprintf(stderr, "[Platina] The local overlay directories contain unsafe or unexpected entries.\n");
+    std::string overlayInspectionFailure;
+    if (!collectOverlayPaths(expectedDataPaths, false, &overlayInspectionFailure)) {
+      fprintf(stderr, "[Platina] The local overlay directories failed validation: %s\n",
+              overlayInspectionFailure.c_str());
       return 4;
     }
 
     fprintf(stdout, "[Platina-Progress] verifying\n");
     fflush(stdout);
-    if (!verifyExtractionCache(expectedDataPaths, romSha256)) {
+    if (!verifyExtractionCache(expectedDataPaths, romSha256, !platinaPreparedByLauncher)) {
+      if (platinaPreparedByLauncher) {
+        fprintf(stderr, "[Platina] Prepared game data changed after launcher verification. Close the game and run data preparation again from the launcher.\n");
+        return 4;
+      }
       fprintf(stdout, "[Platina-Progress] extracting\n");
       fprintf(stdout, "[Platina] Cache validation failed; rebuilding extracted data from the imported ROM.\n");
       fflush(stdout);
@@ -568,8 +604,10 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       }
 
       expectedDataPaths = baseDataPaths;
-      if (!collectOverlayPaths(expectedDataPaths, true)) {
-        fprintf(stderr, "[Platina] Extraction did not produce valid ARM7/ARM9 overlay files.\n");
+      std::string overlayExtractionFailure;
+      if (!collectOverlayPaths(expectedDataPaths, true, &overlayExtractionFailure)) {
+        fprintf(stderr, "[Platina] Extraction did not produce a valid ARM9 overlay set: %s\n",
+                overlayExtractionFailure.c_str());
         return 4;
       }
       std::string missingDataPath;
@@ -583,13 +621,16 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       } else {
         // Re-read the just-written manifest to ensure it can be trusted on the
         // next launch, before renderer startup begins.
-        if (!verifyExtractionCache(expectedDataPaths, romSha256)) {
+        if (!verifyExtractionCache(expectedDataPaths, romSha256, true)) {
           fprintf(stderr, "[Platina] Integrity manifest self-check failed after extraction.\n");
           return 4;
         }
       }
 
       fprintf(stdout, "[Platina] Local game data extraction and integrity check completed.\n");
+      fflush(stdout);
+    } else if (platinaPreparedByLauncher) {
+      fprintf(stdout, "[Platina] Reusing launcher-prepared game data after regular-file and size verification.\n");
       fflush(stdout);
     } else {
       fprintf(stdout, "[Platina] Reusing local game data after per-file CRC32 verification.\n");
