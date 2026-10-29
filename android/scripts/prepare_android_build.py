@@ -430,6 +430,41 @@ def patch_android_ppwlobby_map_allocators(root: Path) -> list[str]:
         for path in sorted(staged)
     ]
 
+def patch_android_ppwlobby_map_subscript(root: Path) -> list[str]:
+    """Avoid libc++'s const-key construction error in the legacy PPW allocator.
+
+    std::map::operator[] on this custom allocator tries to construct the const
+    key through a legacy allocator path that casts const int* to void*. Use
+    find + insert/assignment instead, preserving map semantics in the staged
+    Android source tree without changing the upstream desktop sources.
+    """
+    path = root / "lib" / "ppwlobby" / "libraries" / "ilobby" / "src" / "dwci_lobbydata.cpp"
+    if not path.is_file():
+        raise PatchError(f"PPW lobby map subscript source missing: {path}")
+
+    original = path.read_text(encoding="utf-8")
+    old = "    unk_70[v0] = param0;"
+    new = (
+        "    UnkClass_ov66_02243B64_UnkMap0::iterator v2 = unk_70.find(v0);\n"
+        "    if (v2 == unk_70.end()) {\n"
+        "        unk_70.insert(std::make_pair(v0, param0));\n"
+        "    } else {\n"
+        "        v2->second = param0;\n"
+        "    }"
+    )
+    if new in original:
+        if original.count(new) != 1 or old in original:
+            raise PatchError("PPW lobby map subscript patch is partial or duplicated")
+        return []
+    if original.count(old) != 1:
+        raise PatchError(
+            f"PPW lobby map subscript marker missing or duplicated in {path}: {old}"
+        )
+
+    path.write_text(original.replace(old, new, 1), encoding="utf-8")
+    return ["PPW lobby: avoid libc++ const-key construction through map::operator[]"]
+
+
 def patch_android_ppwlobby_stdlib_compat(root: Path) -> list[str]:
     """Adapt PPW lobby's legacy allocators and opaque callback IDs to libc++/ARM64."""
     base_path = root / "lib" / "ppwlobby" / "include" / "ilobby" / "dwci_lobbybase.h"
