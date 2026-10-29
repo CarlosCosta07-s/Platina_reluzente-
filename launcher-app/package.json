@@ -66,6 +66,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "black-runtime",
+        "to": "black-runtime",
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
