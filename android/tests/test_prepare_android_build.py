@@ -4,8 +4,10 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from android.scripts.prepare_android_build import PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
+from android.scripts.prepare_android_build import check_pin, PatchError, android_patch_copy_paths, patch_android_copy_script, patch_android_dwc_auth_headers, patch_android_wifi_socket_headers, patch_libntr, patch_libvct, patch_android_ppwlobby_c_args, patch_android_ppwlobby_map_allocators, patch_android_ppwlobby_stdlib_compat, patch_android_sim_config_path, patch_ppwlobby_pic, patch_root, patch_sdk_g3d_inline_linkage, patch_sdk_project, stage_android_copy_script, stage_headers
 
 ROOT = """project('pokeplatinum', ['c', 'cpp', 'nasm'],
     version: '1.0')
@@ -75,6 +77,29 @@ class AndroidMesonPatchTests(unittest.TestCase):
             with self.assertRaisesRegex(PatchError, "SDL_thread.h"):
                 stage_headers(root, sdl, enet)
             self.assertFalse((root / "libraries" / "sim" / "android_include").exists())
+
+    def test_revision_pin_fails_when_git_checkout_cannot_be_verified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            result = SimpleNamespace(
+                returncode=128,
+                stdout="",
+                stderr="fatal: not a git repository",
+            )
+            with patch("android.scripts.prepare_android_build.subprocess.run", return_value=result):
+                with self.assertRaisesRegex(PatchError, "revision could not be verified"):
+                    check_pin(root, "a" * 40, "libvct")
+
+    def test_revision_pin_rejects_a_different_git_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            actual = "b" * 40
+            result = SimpleNamespace(returncode=0, stdout=actual + "\\n", stderr="")
+            with patch("android.scripts.prepare_android_build.subprocess.run", return_value=result):
+                with self.assertRaisesRegex(PatchError, "revision mismatch"):
+                    check_pin(root, "a" * 40, "libvct")
 
     def test_stages_android_copy_script_before_patching(self):
         with tempfile.TemporaryDirectory() as tmp:
