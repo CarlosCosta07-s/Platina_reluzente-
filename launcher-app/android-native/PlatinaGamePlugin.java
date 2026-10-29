@@ -136,11 +136,15 @@ public class PlatinaGamePlugin extends Plugin {
             }
         }
 
-        if (isCompleteRuntime(destination, expectedVersion)) return;
-
+        // Remove staging residue even when the currently installed runtime is
+        // already valid. A process may have crashed before its previous install
+        // started, and that temporary tree must not accumulate across launches.
         if (staging.exists() && !deleteRecursively(staging)) {
             throw new IOException("Não foi possível limpar a importação anterior dos recursos locais.");
         }
+
+        if (isCompleteRuntime(destination, expectedVersion)) return;
+
         copyAssetTree("pokeplatinum", staging);
         if (!isCompleteRuntime(staging, expectedVersion)) {
             if (!deleteRecursively(staging)) {
