@@ -63,12 +63,32 @@ function verifyRuntimeManifest(runtimeData, requiredRuntimeFiles) {
 
     const absolute = path.resolve(root, relative);
     const resolvedRelative = path.relative(root, absolute);
-    if (!resolvedRelative || resolvedRelative.startsWith('..') || path.isAbsolute(resolvedRelative)) {
+    if (!resolvedRelative || resolvedRelative === '..'
+        || resolvedRelative.startsWith('..' + path.sep) || path.isAbsolute(resolvedRelative)) {
       fail('Runtime manifest path escapes the runtime directory: ' + relative);
     }
-    const stat = fs.lstatSync(absolute);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== expectedSize) {
-      fail('Runtime manifest size mismatch or missing regular file: ' + relative);
+
+    // Validate every component, not just the final file: lstat(finalPath)
+    // would still follow a symlink used by one of its parent directories.
+    const components = relative.split('/');
+    let currentPath = root;
+    for (let index = 0; index < components.length; index += 1) {
+      currentPath = path.join(currentPath, components[index]);
+      let stat;
+      try {
+        stat = fs.lstatSync(currentPath);
+      } catch (error) {
+        if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+          fail('Runtime manifest size mismatch or missing regular file: ' + relative);
+        }
+        throw error;
+      }
+      if (stat.isSymbolicLink()) fail('Symbolic links are not allowed in the runtime: ' + relative);
+      if (index < components.length - 1) {
+        if (!stat.isDirectory()) fail('Runtime manifest parent is not a directory: ' + relative);
+      } else if (!stat.isFile() || stat.size !== expectedSize) {
+        fail('Runtime manifest size mismatch or missing regular file: ' + relative);
+      }
     }
     if (seen.has(relative)) fail('Duplicate runtime manifest entry: ' + relative);
     seen.add(relative);
