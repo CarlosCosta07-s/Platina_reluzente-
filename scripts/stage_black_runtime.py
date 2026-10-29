@@ -171,12 +171,27 @@ def _is_windows_system_dll(name: str) -> bool:
     return bool(root and (Path(root) / "System32" / name).is_file())
 
 
-def _windows_dependencies(executable: Path, source_dir: Path,
-                          dependency_dirs: list[Path]) -> dict[str, Path]:
-    objdump = shutil.which("objdump")
+def _windows_dependencies(
+    executable: Path,
+    source_dir: Path,
+    dependency_dirs: list[Path],
+    objdump_path: str | Path | None = None,
+) -> dict[str, Path]:
+    if objdump_path is None:
+        objdump = shutil.which("objdump")
+    else:
+        candidate = Path(objdump_path).expanduser().absolute()
+        try:
+            candidate_stat = candidate.lstat()
+        except OSError as exc:
+            raise RuntimeStageError(f"objdump configurado não foi encontrado: {candidate}") from exc
+        if candidate.is_symlink() or not candidate.is_file() or candidate_stat.st_size == 0:
+            raise RuntimeStageError(f"objdump precisa ser um arquivo regular e não vazio: {candidate}")
+        objdump = str(candidate)
     if objdump is None:
         raise RuntimeStageError(
-            "objdump não foi encontrado. Execute esta ferramenta em um ambiente MSYS2/MinGW."
+            "objdump não foi encontrado. Execute esta ferramenta em um ambiente MSYS2/MinGW "
+            "ou informe --objdump com o caminho para o executável de análise."
         )
     search_dirs = [source_dir, *dependency_dirs]
     pending = [executable]
@@ -240,6 +255,7 @@ def stage_black_runtime(
     destination_dir: str | Path,
     platform: str,
     dependency_dirs: list[str | Path] | None = None,
+    objdump_path: str | Path | None = None,
 ) -> dict[str, object]:
     """Stage a local, dependency-complete runtime without touching game data."""
     if platform not in {"linux", "windows"}:
@@ -286,7 +302,7 @@ def stage_black_runtime(
     if platform == "linux":
         libraries = _linux_dependencies(executable, dependencies)
     else:
-        libraries = _windows_dependencies(executable, source, dependencies)
+        libraries = _windows_dependencies(executable, source, dependencies, objdump_path)
         if not any(name.casefold() == "sdl3.dll" for name in libraries):
             raise RuntimeStageError(
                 "O runtime Windows não resolveu SDL3.dll; não será preparado um pacote incompleto."
@@ -347,6 +363,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Pasta adicional com bibliotecas nativas; pode ser informada várias vezes.",
     )
     parser.add_argument(
+        "--objdump",
+        help="Caminho explícito para objdump; útil quando o toolchain MinGW fornece um binário específico.",
+    )
+    parser.add_argument(
         "--destination", default=str(repo_root / "launcher-app" / "black-runtime"),
         help="Pasta local de runtime (por padrão, launcher-app/black-runtime, ignorada pelo Git).",
     )
@@ -354,7 +374,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         report = stage_black_runtime(
-            args.source_dir, args.destination, args.platform, args.dependency_dir
+            args.source_dir, args.destination, args.platform,
+            args.dependency_dir, args.objdump
         )
     except (OSError, RuntimeStageError, ValueError) as exc:
         print(f"Falha ao preparar runtime local de Pokémon Black: {exc}", file=sys.stderr)
