@@ -430,15 +430,60 @@ function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.pl
     throw new Error('O porte nativo de Platinum só oferece suporte a Windows e Linux.');
   }
 
+  const childEnv = {
+    ...env,
+    PLATINA_IMPORTED_ROM: rom.filePath,
+    PLATINA_IMPORTED_ROM_SHA256: rom.sha256
+  };
+  if (platform === 'linux') {
+    // The launcher may itself be running from an AppImage. Do not let its
+    // mount path or command identity leak into the nested game AppImage.
+    // AppImage runtimes publish APPIMAGE, APPDIR, OWD and ARGV0 for their own
+    // payload; the child must establish its own values.
+    const hostAppDir = typeof env.APPDIR === 'string' && path.posix.isAbsolute(env.APPDIR)
+      ? path.posix.resolve(env.APPDIR)
+      : '';
+    const isInsideHostAppDir = (candidate) => {
+      if (!hostAppDir || typeof candidate !== 'string' || candidate.length === 0) return false;
+      const normalized = path.posix.resolve(candidate);
+      return normalized === hostAppDir || normalized.startsWith(hostAppDir + '/');
+    };
+    for (const name of ['APPIMAGE', 'APPDIR', 'OWD', 'ARGV0']) {
+      delete childEnv[name];
+    }
+
+    // Match the CI smoke test and support runtimes that prefer the environment
+    // switch to the command-line option for extract-and-run.
+    childEnv.APPIMAGE_EXTRACT_AND_RUN = '1';
+
+    if (typeof env.LD_LIBRARY_PATH === 'string') {
+      const entries = env.LD_LIBRARY_PATH.split(':').filter((entry) =>
+        entry.length > 0 && !isInsideHostAppDir(entry)
+      );
+      if (entries.length > 0) childEnv.LD_LIBRARY_PATH = entries.join(':');
+      else delete childEnv.LD_LIBRARY_PATH;
+    }
+
+    // Preserve custom/system loader hooks, but never reuse a hook loaded from
+    // the launcher's temporary AppImage mount inside the game runtime.
+    for (const [name, separator] of [['LD_PRELOAD', /[:\\s]+/], ['LD_AUDIT', /[:]+/]]) {
+      if (typeof env[name] !== 'string') continue;
+      const entries = env[name].split(separator).filter((entry) =>
+        entry.length > 0 && !isInsideHostAppDir(entry)
+      );
+      if (entries.length > 0) {
+        childEnv[name] = entries.join(name === 'LD_PRELOAD' ? ' ' : ':');
+      } else {
+        delete childEnv[name];
+      }
+    }
+  }
+
   return {
     executable: runtime.executable,
     args: platform === 'linux' ? ['--appimage-extract-and-run'] : [],
     cwd: runtime.root,
-    env: {
-      ...env,
-      PLATINA_IMPORTED_ROM: rom.filePath,
-      PLATINA_IMPORTED_ROM_SHA256: rom.sha256
-    },
+    env: childEnv,
     logPath,
     platform,
     romSha256: rom.sha256
