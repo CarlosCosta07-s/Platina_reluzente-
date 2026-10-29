@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import os
 import struct
+import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -288,45 +289,141 @@ def extract_localization(
             + "\n  ".join(existing)
         )
 
+    # Prepare every archive before touching the live runtime. If a write or
+    # replacement fails midway, restore all previously installed files so the
+    # game cannot be left with a mixture of old and new localization resources.
+    destination.mkdir(parents=True, exist_ok=True)
+
+    for target, relative_path, _entry, _effective_size in output_paths:
+        current = destination
+        for component in relative_path.parts[:-1]:
+            current = current / component
+            if current.is_symlink():
+                raise RomFormatError(
+                    f"Diretório de destino não pode ser link simbólico: {current}."
+                )
+            if current.exists():
+                if not current.is_dir():
+                    raise RomFormatError(
+                        f"Componente do destino não é diretório: {current}."
+                    )
+            else:
+                current.mkdir()
+        if target.is_symlink():
+            raise RomFormatError(
+                f"Arquivo de destino não pode ser link simbólico: {target}."
+            )
+        if target.exists() and not target.is_file():
+            raise RomFormatError(
+                f"Destino já existe e não é arquivo regular: {target}."
+            )
+
+    # Check once more after validating all paths so the force flag never
+    # silently overwrites files created by another process during validation.
+    existing = [str(target) for target, _relative, _entry, _size in output_paths if target.exists()]
+    if existing and not force:
+        raise FileExistsError(
+            "Arquivos de destino já existem; nada foi substituído. Use --force para sobrescrevê-los:\n  "
+            + "\n  ".join(existing)
+        )
+
+    transaction_root = Path(tempfile.mkdtemp(prefix=".ptbr-localization-", dir=destination))
+    staged_root = transaction_root / "staged"
+    backup_root = transaction_root / "backup"
     written: list[dict[str, str | int | bool]] = []
-    with rom_path.open("rb") as source:
-        for target, relative_path, entry, effective_size in output_paths:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            digest = hashlib.sha256()
-            temp_name: str | None = None
-            try:
-                with tempfile.NamedTemporaryFile(
-                    mode="wb", dir=target.parent, prefix=f".{target.name}.", suffix=".tmp", delete=False
-                ) as temporary:
-                    temp_name = temporary.name
+    moved_backups: list[tuple[Path, Path]] = []
+    installed_targets: list[Path] = []
+
+    try:
+        with rom_path.open("rb") as source:
+            for target, relative_path, entry, effective_size in output_paths:
+                staged_target = staged_root.joinpath(*relative_path.parts)
+                staged_target.parent.mkdir(parents=True, exist_ok=True)
+                digest = hashlib.sha256()
+                with staged_target.open("xb") as temporary:
                     source.seek(entry.start)
                     remaining = effective_size
                     while remaining:
                         chunk = source.read(min(CHUNK_SIZE, remaining))
                         if not chunk:
-                            raise RomFormatError(f"ROM truncada durante a extração de {relative_path}.")
+                            raise RomFormatError(
+                                f"ROM truncada durante a extração de {relative_path}."
+                            )
                         temporary.write(chunk)
                         digest.update(chunk)
                         remaining -= len(chunk)
                     temporary.flush()
                     os.fsync(temporary.fileno())
-                os.replace(temp_name, target)
-            except Exception:
-                if temp_name is not None:
-                    try:
-                        os.unlink(temp_name)
-                    except FileNotFoundError:
-                        pass
-                raise
-            written.append({
-                "path": relative_path.as_posix(),
-                "size_bytes": effective_size,
-                "fat_size_bytes": entry.size,
-                "size_recovered_from_narc_header": effective_size != entry.size,
-                "sha256": digest.hexdigest(),
-            })
 
-    return written
+                digest_text = digest.hexdigest()
+                expected_sha256 = PTBR_RESOURCE_SHA256[relative_path.as_posix()]
+                if digest_text != expected_sha256:
+                    raise RomFormatError(
+                        f"O SHA-256 de {relative_path} mudou durante a extração "
+                        "da ROM. Nenhum arquivo de destino foi substituído."
+                    )
+
+                written.append({
+                    "path": relative_path.as_posix(),
+                    "size_bytes": effective_size,
+                    "fat_size_bytes": entry.size,
+                    "size_recovered_from_narc_header": effective_size != entry.size,
+                    "sha256": digest_text,
+                })
+
+        # Recheck the destinations immediately before the transaction starts.
+        for target, relative_path, _entry, _size in output_paths:
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                raise RomFormatError(f"Destino deixou de ser um arquivo regular: {target}.")
+            if target.exists() and not force:
+                raise FileExistsError(
+                    f"O destino foi criado durante a importação; nada foi substituído: {target}"
+                )
+
+        # Back up all old files first, then install all staged files. Every
+        # rename stays under destination, keeping it on the same filesystem.
+        for target, relative_path, _entry, _size in output_paths:
+            if target.exists():
+                backup_target = backup_root.joinpath(*relative_path.parts)
+                backup_target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(target, backup_target)
+                moved_backups.append((target, backup_target))
+
+        for target, relative_path, _entry, _size in output_paths:
+            staged_target = staged_root.joinpath(*relative_path.parts)
+            os.replace(staged_target, target)
+            installed_targets.append(target)
+
+    except Exception as install_error:
+        rollback_errors: list[str] = []
+        for target in reversed(installed_targets):
+            try:
+                target.unlink(missing_ok=True)
+            except OSError as rollback_error:
+                rollback_errors.append(f"remoção de {target}: {rollback_error}")
+
+        for target, backup_target in reversed(moved_backups):
+            try:
+                if target.exists() or target.is_symlink():
+                    if target.is_dir() and not target.is_symlink():
+                        raise OSError(f"Destino inesperadamente virou diretório: {target}")
+                    target.unlink()
+                if backup_target.exists():
+                    os.replace(backup_target, target)
+            except OSError as rollback_error:
+                rollback_errors.append(f"restauração de {target}: {rollback_error}")
+
+        if rollback_errors:
+            raise OSError(
+                "A importação de localização falhou e a restauração não terminou. "
+                f"Backups preservados em {transaction_root}. "
+                + "; ".join(rollback_errors)
+            ) from install_error
+
+        shutil.rmtree(transaction_root, ignore_errors=True)
+        raise
+
+    shutil.rmtree(transaction_root, ignore_errors=True)
 
 
 def main(argv: list[str] | None = None) -> int:
