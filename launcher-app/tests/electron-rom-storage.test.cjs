@@ -28,22 +28,58 @@ test('desktop ROM replacement commits verified ROM bytes and metadata together',
   const bytes = Buffer.from('valid-rom-fixture-data');
   await fs.writeFile(sourcePath, bytes);
 
+  const expectedSha1 = crypto.createHash('sha1').update(bytes).digest('hex');
   const metadata = await commitDesktopRom({
     sourcePath,
     destinationPath: store.destinationPath,
     metadataPath: store.metadataPath,
-    metadata: { name: 'selected.nds', size: bytes.length, importedAt: 'test-time' }
+    metadata: { name: 'selected.nds', size: bytes.length, importedAt: 'test-time' },
+    expectedSha1
   });
 
   assert.deepEqual(await fs.readFile(store.destinationPath), bytes);
   assert.equal(metadata.name, 'selected.nds');
   assert.equal(metadata.size, bytes.length);
   assert.equal(metadata.sha256, await digest(store.destinationPath));
+  assert.equal(metadata.sha1, expectedSha1);
   assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), metadata);
   for (const suffix of ['.importing', '.previous']) {
     await assert.rejects(fs.access(store.destinationPath + suffix));
     await assert.rejects(fs.access(store.metadataPath + suffix));
   }
+});
+
+
+test('desktop ROM import rejects a revision with the wrong full-image SHA-1 without replacing the previous ROM', async (t) => {
+  const store = await makeStore(t);
+  const previous = Buffer.from('known-good-previous-rom');
+  const previousMetadata = {
+    name: 'previous.nds',
+    size: previous.length,
+    sha256: crypto.createHash('sha256').update(previous).digest('hex'),
+    storedName: 'current.nds',
+    importedAt: 'previous-time'
+  };
+  const sourcePath = path.join(store.root, 'wrong-revision.nds');
+  const sourceBytes = Buffer.from('same Nintendo DS header, different full image');
+  await fs.mkdir(store.romDir, { recursive: true });
+  await fs.writeFile(store.destinationPath, previous);
+  await fs.writeFile(store.metadataPath, JSON.stringify(previousMetadata));
+  await fs.writeFile(sourcePath, sourceBytes);
+
+  const wrongExpectedSha1 = '0'.repeat(40);
+  await assert.rejects(commitDesktopRom({
+    sourcePath,
+    destinationPath: store.destinationPath,
+    metadataPath: store.metadataPath,
+    metadata: { name: 'wrong-revision.nds', size: sourceBytes.length, importedAt: 'new-time' },
+    expectedSha1: wrongExpectedSha1
+  }), /SHA-1 esperado: .*Nenhuma ROM foi instalada/);
+
+  assert.deepEqual(await fs.readFile(store.destinationPath), previous);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.metadataPath, 'utf8')), previousMetadata);
+  await assert.rejects(fs.access(store.destinationPath + '.importing'));
+  await assert.rejects(fs.access(store.metadataPath + '.importing'));
 });
 
 test('failed desktop ROM staging leaves the last committed ROM and metadata untouched', async (t) => {
