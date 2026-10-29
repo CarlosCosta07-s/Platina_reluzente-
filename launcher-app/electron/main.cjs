@@ -27,9 +27,9 @@ function metadataPath() {
 async function readImportedRom() {
   const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
   const metadataFile = metadataPath();
-  // Reconcile any interrupted import before exposing the saved ROM. When
-  // staging/backup files exist, recovery checks the SHA-256 metadata pair.
-  // Do not hide permission, disk, or ambiguous recovery errors as "no ROM".
+  // Verify the saved ROM against its SHA-256 sidecar and recover interrupted
+  // imports before exposing it. Unverified files are not shown as imported;
+  // ambiguous transaction residue and storage errors still surface to the UI.
   const recoveryResult = await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataFile });
   if (recoveryResult === false) return null;
   try {
