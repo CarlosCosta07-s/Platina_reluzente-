@@ -69,11 +69,8 @@
         ]
       },
       {
-        "from": "black-runtime",
-        "to": "black-runtime",
-        "filter": [
-          "**/*"
-        ]
+        "from": "black-runtime/README.md",
+        "to": "black-runtime/README.md"
       }
     ]
   },
