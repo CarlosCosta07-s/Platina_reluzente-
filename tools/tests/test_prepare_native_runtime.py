@@ -13,6 +13,8 @@ from scripts.prepare_native_runtime import (
     CARD_IDENTIFY_BACKUP_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
+    FS_OPEN_FALLBACK_PATCHED_LEGACY,
+    FS_OPEN_FALLBACK_ORIGINAL,
     GL_LOADER_PATCHED,
     SDL_INIT_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
@@ -363,9 +365,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             fs_content = (root / "subprojects/libntr/libraries/fs/src/fs_file.c").read_text(encoding="utf-8")
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
-            self.assertIn("sLauncherManagedRomExtractionAttempted", fs_content)
-            self.assertIn("return FS_OpenFile(p_file, path);", FS_OPEN_FALLBACK_PATCHED)
-            self.assertIn("sLauncherManagedRomExtractionAttempted = TRUE;", FS_OPEN_FALLBACK_PATCHED)
+            self.assertNotIn("sLauncherManagedRomExtractionAttempted", fs_content)
+            self.assertNotIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
+            self.assertNotIn("return FS_OpenFile(p_file, path);", FS_OPEN_FALLBACK_PATCHED)
+            self.assertIn("No extraction will be attempted while the game window is open.", FS_OPEN_FALLBACK_PATCHED)
             self.assertIn("return FALSE;", FS_OPEN_FALLBACK_PATCHED)
             self.assertNotIn("SDK_BUILD_ANDROID", fs_content)
             extractor_content = (root / "subprojects/libntr/libraries/sim/src/sim_RomExtractor.cpp").read_text(encoding="utf-8")
@@ -430,10 +433,20 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("PLATINA_DATA_PATHS_V1", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("platinum-data-paths.txt", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("verifyExtractionCache", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("--platina-prepared", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("bool verifyFullCrc", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("if (verifyFullCrc)", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("file_size(relativePath, sizeError)", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("Prepared game data changed after launcher verification", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("inspectFileCrc32", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("platina-rom-extraction.manifest", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("required local data is missing/corrupted", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("collectOverlayPaths", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("Overlay validation failed: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("required " + " + prefix + " + " overlay directory is missing", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("unexpected entry in ", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("could not read or verify overlay file", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("Extraction did not produce a valid ARM9 overlay set: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('const std::string stem = prefix + "_";', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('collectOne("overlay9", "overlay9", requireAll)', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('collectOne("overlay7", "overlay7", false)', ROM_PREFLIGHT_ENTRY_PATCHED)
@@ -526,6 +539,31 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(source.read_text(encoding="utf-8"), original_main)
             self.assertEqual(config.read_text(encoding="utf-8"), original_config)
             self.assertEqual(fs_source.read_text(encoding="utf-8"), "unknown filesystem fallback\n")
+
+    def test_upgrades_legacy_managed_rom_fallback_without_extracting_inside_game(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_source(root)
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            legacy_include = (
+                "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>\n"
+                "static BOOL sLauncherManagedRomExtractionAttempted = FALSE;"
+            )
+            source = UPSTREAM_FS_FILE.replace(
+                FS_OPEN_FALLBACK_ORIGINAL, FS_OPEN_FALLBACK_PATCHED_LEGACY, 1
+            ).replace(
+                "#include <string.h>\n#include <SDL2/SDL.h>", legacy_include, 1
+            )
+            fs_source.write_text(source, encoding="utf-8")
+
+            self.assertTrue(prepare_native_runtime(root))
+            upgraded = fs_source.read_text(encoding="utf-8")
+            self.assertIn(FS_OPEN_FALLBACK_PATCHED, upgraded)
+            self.assertNotIn(FS_OPEN_FALLBACK_PATCHED_LEGACY, upgraded)
+            self.assertNotIn("sLauncherManagedRomExtractionAttempted", upgraded)
+            self.assertNotIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), upgraded)
 
     def test_backup_io_hardening_upgrades_the_earlier_save_path_only_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
