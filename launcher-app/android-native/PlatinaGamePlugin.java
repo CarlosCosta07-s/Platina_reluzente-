@@ -18,6 +18,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -29,7 +31,8 @@ public class PlatinaGamePlugin extends Plugin {
             "firmware.bin",
             "build-version.txt",
             "wazaeffect/we.arc",
-            "battle/skill/waza_seq.narc"
+            "battle/skill/waza_seq.narc",
+            "runtime-manifest.txt"
     };
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
@@ -203,12 +206,56 @@ public class PlatinaGamePlugin extends Plugin {
             File required = new File(directory, relativePath);
             if (!required.isFile() || required.length() <= 0) return false;
         }
+
         File stamp = new File(directory, "build-version.txt");
+        File manifest = new File(directory, "runtime-manifest.txt");
         try {
-            return expectedVersion.equals(readFileText(stamp).trim());
+            if (!expectedVersion.equals(readFileText(stamp).trim())) return false;
+
+            Set<String> listedFiles = new HashSet<>();
+            try (InputStream input = new FileInputStream(manifest);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] fields = line.split("\\t", -1);
+                    if (fields.length != 2 || !isSafeRuntimePath(fields[0])
+                            || "runtime-manifest.txt".equals(fields[0])) return false;
+
+                    final long expectedSize;
+                    try {
+                        expectedSize = Long.parseLong(fields[1]);
+                    } catch (NumberFormatException invalidSize) {
+                        return false;
+                    }
+                    if (expectedSize < 0) return false;
+
+                    File listedFile = new File(directory, fields[0]);
+                    if (!listedFile.isFile() || listedFile.length() != expectedSize
+                            || !listedFiles.add(fields[0])) return false;
+                }
+            }
+
+            if (listedFiles.isEmpty()) return false;
+            for (String requiredPath : REQUIRED_RUNTIME_FILES) {
+                if (!"runtime-manifest.txt".equals(requiredPath) && !listedFiles.contains(requiredPath)) {
+                    return false;
+                }
+            }
+            return true;
         } catch (IOException ignored) {
             return false;
         }
+    }
+
+    private boolean isSafeRuntimePath(String relativePath) {
+        if (relativePath == null || relativePath.isEmpty() || relativePath.startsWith("/")
+                || relativePath.contains("\\\\") || relativePath.indexOf((char) 0) >= 0) {
+            return false;
+        }
+        for (String component : relativePath.split("/", -1)) {
+            if (component.isEmpty() || ".".equals(component) || "..".equals(component)) return false;
+        }
+        return true;
     }
 
     private void copyAssetTree(String assetPath, File destination) throws IOException {
