@@ -19,6 +19,7 @@ from scripts.prepare_native_runtime import (
     WINDOW_EVENT_PATCHED,
     KEYDOWN_PATCHED,
     MAIN_RENDER_HANDOFF_PATCHED,
+    NVRAM_FILE_READ_PATCHED,
     ORIGINAL_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
     ROM_PREFLIGHT_ENTRY_PATCHED,
@@ -28,6 +29,33 @@ from scripts.prepare_native_runtime import (
     SIM_ROM_EXTRACTOR_PATCHED,
     prepare_native_runtime,
 )
+
+UPSTREAM_NVRAM_INSTRUCTION = r'''#include <stdio.h>
+typedef unsigned int u32;
+typedef int s32;
+typedef unsigned char u8;
+#ifndef SDK_BUILD_ARM
+static FILE * s_nvramFilePtr = NULL;
+#define NVRAM_FILE_PATH "firmware.bin"
+#endif
+
+void NVRAM_ReadDataBytes(u32 address, u32 size, u8 *buf)
+{
+    s32 i;
+    if (size < 1) return;
+#ifdef SDK_BUILD_ARM
+    // Hardware NVRAM path omitted from this desktop fixture.
+#else
+    if(s_nvramFilePtr == NULL) {
+        s_nvramFilePtr = fopen(NVRAM_FILE_PATH, "rb+");
+    }
+
+    fseek(s_nvramFilePtr, address, SEEK_SET);
+    fread(buf, 1, size, s_nvramFilePtr);
+    fclose(s_nvramFilePtr);
+    s_nvramFilePtr = NULL;
+#endif
+}'''
 
 UPSTREAM_SIM_CONFIG = r'''#include <stdio.h>
 #define SIM_CONFIG_FILE_PATH "./sim_config.ini"
@@ -267,6 +295,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
         backup_header.parent.mkdir(parents=True, exist_ok=True)
         backup_header.write_text(UPSTREAM_BACKUP_HEADER, encoding="utf-8")
+        nvram_source = root / "subprojects/libntr/libraries/sim7/src/spi/nvram/nvram_instruction.c"
+        nvram_source.parent.mkdir(parents=True, exist_ok=True)
+        nvram_source.write_text(UPSTREAM_NVRAM_INSTRUCTION, encoding="utf-8")
         return source
 
     def test_uses_imported_rom_header_and_hardens_desktop_runtime(self):
@@ -335,6 +366,12 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(GL_LOADER_PATCHED, content)
             self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
             self.assertIn(SDL_VIEWPORT_PATCHED, content)
+            nvram_content = (root / "subprojects/libntr/libraries/sim7/src/spi/nvram/nvram_instruction.c").read_text(encoding="utf-8")
+            self.assertIn(NVRAM_FILE_READ_PATCHED, nvram_content)
+            self.assertIn('fopen(NVRAM_FILE_PATH, "rb")', nvram_content)
+            self.assertIn("buf[i] = 0xFF;", nvram_content)
+            self.assertNotIn('fseek(s_nvramFilePtr, address, SEEK_SET);', nvram_content)
+            self.assertFalse(prepare_native_runtime(root))
             self.assertIn(INPUT_RELEASE_HELPER_PATCHED, content)
             self.assertIn(WINDOW_EVENT_PATCHED, content)
             self.assertIn(KEYDOWN_PATCHED, content)
