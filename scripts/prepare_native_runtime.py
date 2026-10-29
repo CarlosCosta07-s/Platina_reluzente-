@@ -1396,7 +1396,7 @@ def _prepare_card_backup_identification(source_root: str | Path) -> tuple[Path, 
 
 
 def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path, str, bool]:
-    """Avoid a recursive ROM picker when a launcher-managed runtime is incomplete."""
+    """Fail clearly instead of extracting synchronously after the game window opens."""
     fs_path = (
         Path(source_root).expanduser().resolve()
         / "subprojects" / "libntr" / "libraries" / "fs" / "src" / "fs_file.c"
@@ -1410,33 +1410,41 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
     if FS_OPEN_FALLBACK_PATCHED in current:
         if current.count(FS_OPEN_FALLBACK_PATCHED) != 1:
             raise RuntimePreparationError("Duplicate launcher-managed missing-resource guard in fs_file.c.")
-        if FS_OPEN_FALLBACK_ORIGINAL in current:
-            raise RuntimePreparationError("Both original and patched ROM-extraction fallback exist in fs_file.c.")
-        patched = False
+        if FS_OPEN_FALLBACK_ORIGINAL in current or FS_OPEN_FALLBACK_PATCHED_LEGACY in current:
+            raise RuntimePreparationError("Multiple ROM-extraction fallback implementations exist in fs_file.c.")
+    elif FS_OPEN_FALLBACK_PATCHED_LEGACY in current:
+        if current.count(FS_OPEN_FALLBACK_PATCHED_LEGACY) != 1:
+            raise RuntimePreparationError("Duplicate legacy launcher-managed fallback in fs_file.c.")
+        current = current.replace(FS_OPEN_FALLBACK_PATCHED_LEGACY, FS_OPEN_FALLBACK_PATCHED, 1)
     else:
         if current.count(FS_OPEN_FALLBACK_ORIGINAL) != 1:
             raise RuntimePreparationError(
                 "Expected exactly one known ROM-extraction fallback in fs_file.c; refusing uncertain patch."
             )
         current = current.replace(FS_OPEN_FALLBACK_ORIGINAL, FS_OPEN_FALLBACK_PATCHED, 1)
-        patched = True
 
     original_include = "#include <string.h>\n#include <SDL2/SDL.h>"
-    patched_include = (
+    legacy_include = (
         "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>\n"
         "static BOOL sLauncherManagedRomExtractionAttempted = FALSE;"
     )
+    patched_include = "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>"
     if patched_include in current:
         if current.count(patched_include) != 1:
-            raise RuntimePreparationError("Duplicate stdlib include in fs_file.c.")
+            raise RuntimePreparationError("Duplicate standard-library include block in fs_file.c.")
+    elif legacy_include in current:
+        if current.count(legacy_include) != 1:
+            raise RuntimePreparationError("Duplicate legacy extraction-state declaration in fs_file.c.")
+        current = current.replace(legacy_include, patched_include, 1)
     else:
         if current.count(original_include) != 1:
             raise RuntimePreparationError("Expected exactly one SDK_PORT include block in fs_file.c.")
         current = current.replace(original_include, patched_include, 1)
-        patched = True
+
+    if "sLauncherManagedRomExtractionAttempted" in current:
+        raise RuntimePreparationError("Obsolete synchronous extraction state remains in fs_file.c.")
 
     return fs_path, current, current != original
-
 
 def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool]:
     """Use the launcher-imported ROM automatically when runtime data is missing."""
