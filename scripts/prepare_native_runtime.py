@@ -675,7 +675,7 @@ SDL_VIEWPORT_PATCHED = r'''  int drawableWidth = 0;
 
 INPUT_RELEASE_HELPER_ORIGINAL = "static bool sFastForward = false;"
 INPUT_RELEASE_HELPER_PATCHED = r'''// Must be declared before ReleaseDesktopInputState(), which clears it.
-static u8 isMouseDown = 0;
+static u8 isMouseDown = 0; // Storage is declared before the focus-loss release helper.
 static bool sFastForward = false;
 
 // Release every DS button and the touch panel when focus is lost or a
@@ -1103,6 +1103,25 @@ class RuntimePreparationError(RuntimeError):
 def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
     """Fail cleanly when SDL or the desktop OpenGL loader cannot initialize."""
     current = source
+    # Move the upstream declaration before inserting a helper that references it.
+    hasMovedComment = current.count(MOUSE_DOWN_DECLARATION_PATCHED) == 1
+    if current.count(MOUSE_DOWN_DECLARATION_PATCHED) > 1:
+        raise RuntimePreparationError("Duplicate moved desktop mouse-state declaration.")
+    standalone_old_count = sum(
+        line.strip() == MOUSE_DOWN_DECLARATION_ORIGINAL
+        for line in current.splitlines()
+    )
+    if hasMovedComment:
+        if standalone_old_count != 0:
+            raise RuntimePreparationError("Both old and moved desktop mouse-state declarations remain.")
+    elif standalone_old_count == 1:
+        current = current.replace(
+            MOUSE_DOWN_DECLARATION_ORIGINAL,
+            MOUSE_DOWN_DECLARATION_PATCHED,
+            1,
+        )
+    elif standalone_old_count > 1:
+        raise RuntimePreparationError("Duplicate upstream mouse-state declarations detected.")
     blocks = (
         (
             SDL_SWAP_INTERVAL_SETUP_ORIGINAL,
@@ -1129,22 +1148,6 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
             )
         current = current.replace(original, patched, 1)
 
-    # ReleaseDesktopInputState is inserted near sFastForward, before the
-    # upstream declaration of isMouseDown. Move that storage forward rather
-    # than merely forward-declaring it: otherwise C++ sees an undeclared name.
-    if MOUSE_DOWN_DECLARATION_PATCHED in current:
-        if current.count(MOUSE_DOWN_DECLARATION_PATCHED) != 1:
-            raise RuntimePreparationError("Duplicate moved desktop mouse-state declaration.")
-        if current.count(MOUSE_DOWN_DECLARATION_ORIGINAL) != 0:
-            raise RuntimePreparationError("Both old and moved desktop mouse-state declarations remain.")
-    elif current.count(MOUSE_DOWN_DECLARATION_ORIGINAL) == 1:
-        current = current.replace(
-            MOUSE_DOWN_DECLARATION_ORIGINAL,
-            MOUSE_DOWN_DECLARATION_PATCHED,
-            1,
-        )
-    elif current.count(MOUSE_DOWN_DECLARATION_ORIGINAL) > 1:
-        raise RuntimePreparationError("Duplicate upstream mouse-state declarations detected.")
     return current, current != source
 
 
