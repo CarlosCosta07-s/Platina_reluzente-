@@ -45,6 +45,11 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 - [x] Comparar localmente 462 entradas FAT das ROMs de referência usadas na análise.
 - [x] Identificar dez diferenças e separar sete recursos NARC localizados de dois utility.bin e uma entrada FAT sem caminho conhecido.
 - [x] Definir allowlist dos sete recursos NARC não executáveis; os binários fora dessa lista continuam excluídos.
+- [x] Verificar localmente que os sete NARC da referência PT-BR correspondem ao manifesto SHA-256 e têm blocos NARC essenciais válidos.
+- [x] Comparar os caminhos das duas imagens: sete NARC localizados são permitidos; `data/utility.bin`, `dwc/utility.bin` e a entrada FAT sem caminho são excluídos.
+- [x] Conferir que a ROM PT-BR de referência tem byte de revisão `0`, enquanto o launcher exige Rev. 1 (`0x1E == 1`).
+- [ ] Validar o patch Xdelta v1.2.0 contra uma ROM que corresponda à base documentada CRC-32 `1D8A5220`; essa aplicação ainda não foi executada.
+- [ ] Criar e testar o pacote/overlay PT-BR isolado sem modificar a ROM original.
 - [ ] Refatorar o importador atual, que ainda espera uma fonte PT-BR e substitui arquivos no runtime, para criar/validar uma camada de tradução isolada sem modificar a base original.
 - [ ] Definir um manifesto versionado do pacote de idioma, com versão-base compatível, caminho permitido, tamanho e SHA-256 por recurso.
 - [ ] Adicionar ao launcher o seletor English/PT-BR e persistir a preferência em armazenamento local do aplicativo.
