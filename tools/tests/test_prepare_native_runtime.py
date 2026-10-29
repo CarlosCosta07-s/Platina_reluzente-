@@ -222,7 +222,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('fopen(importedRomPath, "rb")', content)
             self.assertNotIn("SDL_AndroidGetInternalStoragePath", content)
             self.assertNotIn("SDK_BUILD_ANDROID", content)
-            self.assertNotIn("SDL_MAIN_HANDLED", content)
+            self.assertIn("#define SDL_MAIN_HANDLED", content)
             self.assertIn("importedRomPath[0]", content)
             self.assertIn('fopen("header.bin", "rb")', content)
             self.assertIn("headerBytesRead != 0x160", content)
