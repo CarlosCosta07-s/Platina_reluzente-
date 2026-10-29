@@ -443,7 +443,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("required local data is missing/corrupted", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("collectOverlayPaths", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("Overlay validation failed: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn("required " + " + prefix + " + " overlay directory is missing", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn('return fail("required " + prefix + " overlay directory is missing:', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("unexpected entry in ", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("could not read or verify overlay file", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("Extraction did not produce a valid ARM9 overlay set: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
