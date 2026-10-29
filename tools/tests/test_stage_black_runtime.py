@@ -1,0 +1,127 @@
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from scripts.stage_black_runtime import (
+    RuntimeStageError,
+    parse_ldd_dependencies,
+    parse_objdump_imports,
+    stage_black_runtime,
+)
+
+
+class BlackRuntimeStagingTests(unittest.TestCase):
+    def test_linux_dependency_parser_keeps_shared_library_names(self):
+        output = """\
+        linux-vdso.so.1 (0x00007fff00000000)
+        libSDL3.so.0 => /tmp/sdl/libSDL3.so.0 (0x00007f0000000000)
+        libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000001)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f0000000002)
+        """
+        parsed = parse_ldd_dependencies(output)
+        self.assertEqual(
+            [(name, str(path)) for name, path in parsed],
+            [
+                ("libSDL3.so.0", "/tmp/sdl/libSDL3.so.0"),
+                ("libc.so.6", "/lib/x86_64-linux-gnu/libc.so.6"),
+                ("ld-linux-x86-64.so.2", "/lib64/ld-linux-x86-64.so.2"),
+            ],
+        )
+
+    def test_linux_dependency_parser_fails_closed_when_a_library_is_missing(self):
+        with self.assertRaisesRegex(RuntimeStageError, "não resolvida"):
+            parse_ldd_dependencies("libSDL3.so.0 => not found")
+
+    def test_windows_import_parser_deduplicates_names_case_insensitively(self):
+        self.assertEqual(
+            parse_objdump_imports(
+                "  DLL Name: SDL3.dll\n  DLL Name: KERNEL32.dll\n  DLL Name: sdl3.DLL\n"
+            ),
+            ["SDL3.dll", "KERNEL32.dll"],
+        )
+
+    def test_linux_staging_copies_only_native_runtime_and_resolved_non_system_libraries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "eidos-build" / "build64" / "host"
+            source.mkdir(parents=True)
+            executable = source / "eidos"
+            executable.write_bytes(b"fake native executable")
+            executable.chmod(0o755)
+
+            library = root / "sdl-prefix" / "libSDL3.so.0"
+            library.parent.mkdir(parents=True)
+            library.write_bytes(b"fake SDL3 shared library")
+
+            # Deliberately put ROM-like and extracted data beside the build. The
+            # staging helper must not copy arbitrary files from the build tree.
+            (source / "local.nds").write_bytes(b"not to be copied")
+            (source / "data").mkdir()
+            (source / "data" / "asset.narc").write_bytes(b"not to be copied")
+
+            destination = root / "launcher-app" / "black-runtime"
+            with patch(
+                "scripts.stage_black_runtime._linux_dependencies",
+                return_value={"libSDL3.so.0": library},
+            ):
+                report = stage_black_runtime(source, destination, "linux")
+
+            self.assertTrue((destination / "eidos").is_file())
+            self.assertTrue((destination / "eidos").stat().st_mode & 0o111)
+            self.assertEqual(
+                (destination / "libSDL3.so.0").read_bytes(),
+                b"fake SDL3 shared library",
+            )
+            self.assertEqual(
+                sorted(item.name for item in destination.iterdir()),
+                ["eidos", "libSDL3.so.0"],
+            )
+            self.assertEqual(report["file_count"], 2)
+            self.assertFalse((destination / "local.nds").exists())
+            self.assertFalse((destination / "data").exists())
+
+    def test_windows_staging_requires_and_copies_sdl3_and_native_dll_dependencies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "eidos-build" / "build64" / "host"
+            source.mkdir(parents=True)
+            (source / "eidos.exe").write_bytes(b"fake Windows executable")
+            sdl = source / "SDL3.dll"
+            sdl.write_bytes(b"fake SDL3 DLL")
+            toolchain = root / "toolchain" / "bin"
+            toolchain.mkdir(parents=True)
+            c_runtime = toolchain / "libstdc++-6.dll"
+            c_runtime.write_bytes(b"fake C++ runtime")
+            destination = root / "launcher-app" / "black-runtime"
+
+            with patch(
+                "scripts.stage_black_runtime._windows_dependencies",
+                return_value={"SDL3.dll": sdl, "libstdc++-6.dll": c_runtime},
+            ):
+                report = stage_black_runtime(source, destination, "windows")
+
+            self.assertEqual((destination / "eidos.exe").read_bytes(), b"fake Windows executable")
+            self.assertEqual((destination / "SDL3.dll").read_bytes(), b"fake SDL3 DLL")
+            self.assertEqual((destination / "libstdc++-6.dll").read_bytes(), b"fake C++ runtime")
+            self.assertEqual(report["file_count"], 3)
+
+    def test_failed_staging_preserves_previous_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "incomplete-build"
+            source.mkdir()
+            destination = root / "black-runtime"
+            destination.mkdir()
+            marker = destination / "preserve.txt"
+            marker.write_text("existing runtime", encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeStageError, "Executável nativo Eidos"):
+                stage_black_runtime(source, destination, "linux")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "existing runtime")
+            self.assertEqual(sorted(item.name for item in destination.iterdir()), ["preserve.txt"])
+
+
+if __name__ == "__main__":
+    unittest.main()
