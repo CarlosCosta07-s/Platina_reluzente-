@@ -93,8 +93,8 @@ jobs:
             --data-root "$PWD/no-game-data/extract/data" \
             --sdl3-prefix "$sdl_prefix" \
             --relay "$EIDOS_DEFAULT_RELAY"
-          test -x build64/host/eidos_boot
-          file build64/host/eidos_boot
+          test -x build64/host/eidos
+          file build64/host/eidos
 
   windows-x64:
     name: Windows x64 native compile and tests
@@ -192,8 +192,8 @@ jobs:
             --data-root "$(cygpath -m "$PWD/no-game-data/extract/data")" \
             --cc "$gcc_bin/x86_64-w64-mingw32-gcc.exe" \
             --relay "$EIDOS_DEFAULT_RELAY"
-          test -f build64/host/eidos_boot.exe
-          file build64/host/eidos_boot.exe
+          test -f build64/host/eidos.exe
+          file build64/host/eidos.exe
 
 # This workflow validates source compatibility and compilation only. It does not
 # upload a Black executable, ROM, firmware, save, or extracted game data.
