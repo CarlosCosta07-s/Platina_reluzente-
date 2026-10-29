@@ -564,12 +564,44 @@ CONFIG_SAVE_OPEN_ORIGINAL = '    FILE * configFile = fopen(SIM_CONFIG_FILE_PATH,
 SDL_INIT_ORIGINAL = r'''  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
            SDL_INIT_JOYSTICK);
   SIM_Audio_Init(44100);'''
-SDL_INIT_PATCHED = r'''  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
-               SDL_INIT_JOYSTICK) != 0) {
-    fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
+SDL_INIT_PATCHED = r'''  // Video and timing are required; audio and joystick are optional host devices.
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+    fprintf(stderr, "SDL video/timer initialization failed: %s\n", SDL_GetError());
     return NULL;
   }
+  if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) != 0) {
+    fprintf(stderr, "SDL joystick initialization failed; keyboard/mouse input remains available: %s\n",
+            SDL_GetError());
+  }
+  if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+    fprintf(stderr, "SDL audio initialization failed; the audio layer will try its silent fallback: %s\n",
+            SDL_GetError());
+  }
   SIM_Audio_Init(44100);'''
+
+SIM_AUDIO_OPEN_ORIGINAL = r'''    s_requestedAudioSpec.callback = SIM_Audio_Callback;
+    if(SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
+        printf("SDL Error %s\\n", SDL_GetError());
+    }
+    SDL_PauseAudio(0);'''
+SIM_AUDIO_OPEN_PATCHED = r'''    s_requestedAudioSpec.callback = SIM_Audio_Callback;
+    if(SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
+        printf("[Platina] SDL audio device failed: %s. Retrying with the silent dummy driver.\\n",
+               SDL_GetError());
+        SDL_AudioQuit();
+        if (SDL_AudioInit("dummy") < 0) {
+            printf("[Platina] SDL dummy audio initialization failed: %s.\\n", SDL_GetError());
+            return;
+        }
+        if (SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
+            printf("[Platina] SDL dummy audio device failed: %s. Audio callback is unavailable.\\n",
+                   SDL_GetError());
+            SDL_AudioQuit();
+            return;
+        }
+        printf("[Platina] Silent SDL dummy audio driver is active; playback is disabled.\\n");
+    }
+    SDL_PauseAudio(0);'''
 
 SDL_SWAP_INTERVAL_SETUP_ORIGINAL = r'''  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);'''
@@ -1275,6 +1307,31 @@ def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool
     return extractor_path, current, current != original
 
 
+def _prepare_sim_audio(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Keep the game audio callback alive by falling back to SDL's silent driver."""
+    source_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "libraries" / "sim" / "src" / "sim_audio.cpp"
+    )
+    if not source_path.is_file():
+        raise RuntimePreparationError(f"Simulator audio source missing: {source_path}")
+
+    original = source_path.read_text(encoding="utf-8")
+    current = original
+    if SIM_AUDIO_OPEN_PATCHED in current:
+        if current.count(SIM_AUDIO_OPEN_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate SDL audio fallback patch detected.")
+        if SIM_AUDIO_OPEN_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and patched SDL audio open blocks exist.")
+    else:
+        if current.count(SIM_AUDIO_OPEN_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one known SDL audio-open block; refusing an uncertain patch."
+            )
+        current = current.replace(SIM_AUDIO_OPEN_ORIGINAL, SIM_AUDIO_OPEN_PATCHED, 1)
+    return source_path, current, current != original
+
+
 def _prepare_nvram_file_backing(source_root: str | Path) -> tuple[Path, str, bool]:
     """Prevent missing/corrupt optional local NVRAM backing from crashing the native port."""
     source_path = (
@@ -1394,11 +1451,12 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
     extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
     backup_path, backup_updated, backup_changed = _prepare_backup_save_path(source_root)
+    audio_path, audio_updated, audio_changed = _prepare_sim_audio(source_root)
     nvram_path, nvram_updated, nvram_changed = _prepare_nvram_file_backing(source_root)
 
     changed = (
         current != original or config_changed or fs_changed or extractor_changed
-        or backup_changed or nvram_changed
+        or backup_changed or audio_changed or nvram_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
@@ -1410,6 +1468,8 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         extractor_path.write_text(extractor_updated, encoding="utf-8")
     if backup_changed:
         backup_path.write_text(backup_updated, encoding="utf-8")
+    if audio_changed:
+        audio_path.write_text(audio_updated, encoding="utf-8")
     if nvram_changed:
         nvram_path.write_text(nvram_updated, encoding="utf-8")
     return changed
