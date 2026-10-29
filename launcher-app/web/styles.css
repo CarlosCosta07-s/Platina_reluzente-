@@ -92,6 +92,31 @@ h1 { font-size: clamp(29px, 3.2vw, 43px); line-height: 1.08; letter-spacing: -.9
 .setup-card p { margin: 0; color: #9dacbf; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .setup-card .card-footnote { margin-top: 8px; font-size: 10px; color: #74849a; }
 .small-button { min-height: 32px; padding: 0 10px; border: 1px solid #3a4b61; background: #1b2637; color: #dce8f6; font-size: 10px; white-space: nowrap; }
+.black-project-section { margin-top: 12px; }
+.black-project-card { display: grid; grid-template-columns: minmax(210px, .72fr) minmax(0, 1.28fr); gap: 23px; border: 1px solid #303848; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #151923, #10141d); min-width: 0; }
+.black-project-art { min-height: 250px; position: relative; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 78% 30%, #47525e 0, #252c36 22%, transparent 53%), radial-gradient(ellipse at 15% 90%, #293341 0, transparent 45%), linear-gradient(145deg, #090c12, #171d26 60%, #07090d); }
+.black-project-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #07090d55, transparent 70%), linear-gradient(0deg, #07090dcc, transparent 55%); z-index: -1; }
+.black-art-grid { position: absolute; inset: 0; opacity: .12; background-image: linear-gradient(#e2edf725 1px, transparent 1px), linear-gradient(90deg, #e2edf725 1px, transparent 1px); background-size: 25px 25px; }
+.black-art-orbit { position: absolute; border: 1px solid #a7b4c340; border-radius: 50%; transform: rotate(-28deg); }
+.black-art-orbit-one { width: 250px; height: 130px; right: -55px; top: 35px; }
+.black-art-orbit-two { width: 300px; height: 175px; right: -65px; top: 12px; transform: rotate(22deg); }
+.black-art-mark { position: absolute; left: 24px; right: 12px; bottom: 26px; display: flex; flex-direction: column; text-shadow: 0 3px 14px #000; }
+.black-art-mark span { color: #a3b4c7; font-size: 8px; font-weight: 850; letter-spacing: 2px; margin-bottom: 8px; }
+.black-art-mark strong { color: #f0f3f7; font-size: clamp(34px, 4vw, 52px); line-height: .9; letter-spacing: 3px; font-weight: 950; }
+.black-art-mark em { margin-top: 6px; font-size: 12px; letter-spacing: 4px; font-style: normal; color: #9aa8b8; }
+.black-art-index { position: absolute; top: 15px; left: 18px; color: #8898ab; font-size: 8px; font-weight: 800; letter-spacing: 1.4px; }
+.black-project-copy { padding: 23px 22px 22px 0; min-width: 0; align-self: center; }
+.black-project-copy h2 { margin: 12px 0 10px; font-size: clamp(21px, 2.2vw, 28px); letter-spacing: -.45px; }
+.black-project-copy > p { color: #a0aec1; font-size: 12px; line-height: 1.7; margin: 0; }
+.black-project-copy .tag-row { margin: 16px 0; }
+.black-project-status { display: flex; gap: 10px; align-items: center; padding: 12px; border: 1px solid #393443; border-radius: 9px; background: #1b1a22; }
+.black-project-status .compat-symbol { flex: 0 0 24px; font-size: 15px; }
+.black-project-status strong, .black-project-status span { display: block; }
+.black-project-status strong { color: #e3be78; font-size: 11px; margin-bottom: 4px; }
+.black-project-status div span { color: #8e9bad; font-size: 10px; line-height: 1.5; }
+.black-project-copy .black-project-note { color: #77879c; font-size: 10px; margin-top: 12px; }
+.project-doc-link { display: inline-block; color: #b5d8ff; text-decoration: none; font-size: 11px; font-weight: 750; margin-top: 11px; }
+.project-doc-link:hover { text-decoration: underline; }
 .bottom-section { margin-top: 29px; }
 .compat-grid { border: 1px solid #283448; border-radius: 12px; background: #111722; padding: 0 17px; }
 .compat-row { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 15px 0; border-bottom: 1px solid #222d3f; }
@@ -125,7 +150,7 @@ h1 { font-size: clamp(29px, 3.2vw, 43px); line-height: 1.08; letter-spacing: -.9
   .hero { grid-template-columns: 1fr; gap: 21px; padding-top: 24px; }
   .hero-art { min-height: unset; aspect-ratio: 1.7; }
   .hero-copy { padding: 0 0 8px; }
-  .setup-grid { grid-template-columns: 1fr; }
+  .setup-grid { grid-template-columns: 1fr; }\n  .black-project-card { grid-template-columns: 1fr; gap: 0; }\n  .black-project-art { min-height: 215px; }\n  .black-project-copy { padding: 22px; }
 }
 @media (max-width: 520px) {
   .main-content { padding-left: 14px; padding-right: 14px; }
