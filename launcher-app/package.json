@@ -1,6 +1,6 @@
 {
   "name": "platina-reluzente-launcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Biblioteca desktop experimental de portes nativos para Windows e Linux",
   "private": true,
   "main": "electron/main.cjs",
