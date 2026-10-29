@@ -44,6 +44,13 @@ async function readImportedRom() {
     if (!stat.isFile() || !Number.isSafeInteger(metadata.size) || stat.size !== metadata.size) {
       return null;
     }
+    // Imports saved by older launcher versions did not carry the approved
+    // full-image SHA-1. Require it here too so stale metadata cannot bypass
+    // the strict revision check after an application update.
+    if (typeof metadata.sha1 !== 'string'
+        || metadata.sha1.toLowerCase() !== ORIGINAL_ROM_SHA1) {
+      return null;
+    }
     return { ...metadata, filePath };
   } catch (error) {
     if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return null;
