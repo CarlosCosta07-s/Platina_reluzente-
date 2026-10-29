@@ -34,6 +34,50 @@ function matchingBrace(text, openIndex) {
   }
   return -1;
 }
+function verifyRuntimeManifest(runtimeData, requiredRuntimeFiles) {
+  const root = path.resolve(runtimeData);
+  const manifestPath = path.join(root, 'runtime-manifest.txt');
+  const raw = fs.readFileSync(manifestPath, 'utf8');
+  const lines = raw.split(/\r?\n/);
+  if (lines[lines.length - 1] === '') lines.pop();
+  if (lines.length === 0) fail('Runtime manifest is empty');
+
+  const seen = new Set();
+  for (const line of lines) {
+    if (!line) fail('Runtime manifest contains an empty entry');
+    const separator = line.indexOf('\t');
+    if (separator <= 0 || line.indexOf('\t', separator + 1) !== -1) {
+      fail('Malformed runtime manifest entry: ' + line);
+    }
+    const relative = line.slice(0, separator);
+    const sizeText = line.slice(separator + 1);
+    if (relative === 'runtime-manifest.txt'
+        || path.isAbsolute(relative)
+        || relative.includes('\\')
+        || relative.split('/').some((part) => !part || part === '.' || part === '..')) {
+      fail('Unsafe runtime manifest path: ' + relative);
+    }
+    if (!/^(0|[1-9][0-9]*)$/.test(sizeText)) fail('Invalid runtime manifest size for ' + relative);
+    const expectedSize = Number(sizeText);
+    if (!Number.isSafeInteger(expectedSize)) fail('Runtime manifest size is out of range for ' + relative);
+
+    const absolute = path.resolve(root, relative);
+    const resolvedRelative = path.relative(root, absolute);
+    if (!resolvedRelative || resolvedRelative.startsWith('..') || path.isAbsolute(resolvedRelative)) {
+      fail('Runtime manifest path escapes the runtime directory: ' + relative);
+    }
+    const stat = fs.lstatSync(absolute);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== expectedSize) {
+      fail('Runtime manifest size mismatch or missing regular file: ' + relative);
+    }
+    if (seen.has(relative)) fail('Duplicate runtime manifest entry: ' + relative);
+    seen.add(relative);
+  }
+
+  for (const relative of requiredRuntimeFiles) {
+    if (!seen.has(relative)) fail('Runtime manifest omitted required game file: ' + relative);
+  }
+}
 function findMainActivity(javaRoot) {
   const matches = listFiles(javaRoot).filter((file) => path.basename(file) === 'MainActivity.java');
   if (matches.length !== 1) fail('Expected exactly one MainActivity.java, found ' + matches.length);
@@ -108,11 +152,16 @@ function integrateAndroidRuntime(options) {
     'firmware.bin',
     'build-version.txt',
     'wazaeffect/we.arc',
-    'battle/skill/waza_seq.narc'
+    'battle/skill/waza_seq.narc',
+    'runtime-manifest.txt'
   ];
   for (const file of requiredRuntimeFiles) {
     if (!fs.existsSync(path.join(runtimeData, file))) fail('Runtime data is missing ' + file);
   }
+  verifyRuntimeManifest(
+    runtimeData,
+    requiredRuntimeFiles.filter((file) => file !== 'runtime-manifest.txt'),
+  );
   if (!fs.existsSync(sdlJava) || listFiles(sdlJava).filter((file) => file.endsWith('.java')).length === 0) {
     fail('SDLActivity Java sources were not included in the Android native artifact');
   }
