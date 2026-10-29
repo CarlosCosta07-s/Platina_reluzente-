@@ -1,7 +1,7 @@
 name: Package Linux launcher from verified native engine
 
 concurrency:
-  group: linux-launcher-package-${{ github.ref }}
+  group: linux-launcher-package-v2-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -25,13 +25,33 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v6
 
-      - name: Download previously verified native Linux AppImage
+      - name: Find latest uploaded native Linux AppImage
+        id: native_artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          artifact_info="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "Platina-Reluzente-Linux-x86_64-AppImage" and .expired == false)] | sort_by(.created_at) | last | if . == null then empty else [.workflow_run.id, .created_at] | @tsv end')"
+          if [[ -z "$artifact_info" ]]; then
+            echo "No unexpired native Linux AppImage artifact was found." >&2
+            exit 1
+          fi
+          read -r run_id created_at <<< "$artifact_info"
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "The native artifact's workflow run ID is invalid: $run_id" >&2
+            exit 1
+          fi
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+          echo "Selected native AppImage uploaded by workflow run $run_id at $created_at."
+
+      - name: Download verified native Linux AppImage
         uses: actions/download-artifact@v4
         with:
           name: Platina-Reluzente-Linux-x86_64-AppImage
           path: ${{ runner.temp }}/native-engine
           repository: ${{ github.repository }}
-          run-id: 40888576142
+          run-id: ${{ steps.native_artifact.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare binary-only native runtime
