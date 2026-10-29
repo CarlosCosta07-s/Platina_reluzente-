@@ -117,12 +117,12 @@ jobs:
             --destination "$stage_dir"
           test -x "$stage_dir/eidos"
           loader_output="$(LD_LIBRARY_PATH="$stage_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$stage_dir/eidos")"
-          printf '%s\\n' "$loader_output"
+          printf '%s\n' "$loader_output"
           if grep -Fq "not found" <<< "$loader_output"; then
             echo "The staged Black runtime has unresolved shared libraries." >&2
             exit 1
           fi
-          if find "$stage_dir" -type f \\( -iname '*.nds' -o -iname '*.narc' -o -name 'save.bin' -o -name 'firmware.bin' \\) -print -quit | grep -q .; then
+          if find "$stage_dir" -type f \( -iname '*.nds' -o -iname '*.narc' -o -name 'save.bin' -o -name 'firmware.bin' \) -print -quit | grep -q .; then
             echo "Game data was unexpectedly copied into the staged runtime." >&2
             exit 1
           fi
@@ -247,7 +247,7 @@ jobs:
           test -f "$stage_dir/eidos.exe"
           test -s "$stage_dir/SDL3.dll"
           file "$stage_dir/eidos.exe" "$stage_dir/SDL3.dll"
-          if find "$stage_dir" -type f \\( -iname '*.nds' -o -iname '*.narc' -o -name 'save.bin' -o -name 'firmware.bin' \\) -print -quit | grep -q .; then
+          if find "$stage_dir" -type f \( -iname '*.nds' -o -iname '*.narc' -o -name 'save.bin' -o -name 'firmware.bin' \) -print -quit | grep -q .; then
             echo "Game data was unexpectedly copied into the staged runtime." >&2
             exit 1
           fi
