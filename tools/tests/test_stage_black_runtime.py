@@ -69,11 +69,11 @@ class BlackRuntimeStagingTests(unittest.TestCase):
                     ),
                     "libSDL3.so.0": (
                         f"libcodec-helper.so.1 => {helper} (0x00007f0000000001)\n"
-                        "/lib/x86_64-linux-gnu/libc.so.6 => "
+                        "libc.so.6 => "
                         "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000002)\n"
                     ),
                     "libcodec-helper.so.1": (
-                        "/lib/x86_64-linux-gnu/libc.so.6 => "
+                        "libc.so.6 => "
                         "/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000003)\n"
                     ),
                 }
