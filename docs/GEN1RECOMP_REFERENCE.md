@@ -17,6 +17,21 @@ Padrões úteis adaptados ao contexto de Platinum:
 
 Gen1Recomp é baseado em Lua/LÖVE e dá suporte a várias gerações de jogos Game Boy. Platinum usa código reconstruído C/C++ e a camada libntr/NitroSDK para um alvo desktop. Portanto, não copiamos o motor, o renderizador, as rotinas de importação de Game Boy nem suas estruturas internas. Adaptamos somente os princípios de importação local, cache, diagnóstico e testes.
 
+## Atualizações do launcher: o que vale adaptar
+
+O arquivo `docs/updater.md` do Gen1Recomp e a RFC 0008 do ZIP anexado documentam separação entre checagem, download, validação, cache e ativação. O Gen1Recomp pode montar um payload Lua mais novo sobre o engine em execução; esse mecanismo **não deve ser copiado literalmente** para o nosso executável nativo C/C++.
+
+Mecânicas adequadas ao Platina Reluzente:
+
+- **Metadados versionados:** cada pacote deve identificar versão do launcher, sistema-alvo e revisão do runtime nativo. O artefato Windows não pode reutilizar o runtime Linux, nem uma revisão antiga do motor.
+- **Manifesto e SHA-256:** publicar os hashes dos pacotes e validar o arquivo baixado antes de substituir a versão instalada. Não confiar apenas no nome do arquivo ou em um cabeçalho da ROM.
+- **Ativação segura após fechar o jogo:** separar a verificação/download da instalação. Não substituir DLLs, AppImage ou executável enquanto o runtime estiver aberto; instalar após reiniciar, ou usar um instalador/launcher auxiliar.
+- **Rollback e atualização interrompida:** baixar para arquivo temporário, confirmar tamanho e hash, e só então promover o novo pacote. Se a verificação ou instalação falhar, manter o pacote anterior intacto e apresentar o log.
+- **Cache com impressão da origem:** os dados extraídos são locais e associados ao SHA-256 da ROM; a mudança de ROM ou runtime deve invalidar apenas o cache afetado. Nunca incluir ROM ou arquivos extraídos em release artifacts.
+- **CI por etapas:** primeiro executar testes e compilar o motor, depois validar o pacote nativo, e só então empacotar o launcher usando o artefato da mesma execução bem-sucedida. O workflow de empacotamento foi ajustado para rejeitar artefatos antigos de outra execução.
+
+Esses são contratos e diretrizes para futuras atualizações automáticas, não uma afirmação de que o launcher já possui um atualizador integrado. Na versão 0.2.0, a melhoria implementada é a associação dos artefatos de empacotamento ao build nativo correspondente e o cache local da extração. Uma atualização automática de pacotes completos exige uma etapa separada com testes específicos de integridade, compatibilidade, reinício e rollback.
+
 ## Referências do porte nativo
 
 - **cybervisi0n/pokeplatinum**, base de porte desktop: https://github.com/cybervisi0n/pokeplatinum/tree/35067868f64f23d25d17ac3e536cfdd9a7f40523
