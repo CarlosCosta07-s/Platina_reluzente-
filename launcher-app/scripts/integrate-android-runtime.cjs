@@ -103,7 +103,14 @@ function integrateAndroidRuntime(options) {
   for (const file of requiredFiles) {
     if (!fs.existsSync(path.join(artifactDir, file))) fail('Native runtime is missing ' + file);
   }
-  for (const file of ['header.bin', 'firmware.bin', 'build-version.txt']) {
+  const requiredRuntimeFiles = [
+    'header.bin',
+    'firmware.bin',
+    'build-version.txt',
+    'wazaeffect/we.arc',
+    'battle/skill/waza_seq.narc'
+  ];
+  for (const file of requiredRuntimeFiles) {
     if (!fs.existsSync(path.join(runtimeData, file))) fail('Runtime data is missing ' + file);
   }
   if (!fs.existsSync(sdlJava) || listFiles(sdlJava).filter((file) => file.endsWith('.java')).length === 0) {
