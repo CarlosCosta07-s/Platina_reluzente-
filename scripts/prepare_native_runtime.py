@@ -51,17 +51,17 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   // must not block inside its event loop while a potentially large ROM is read.
   const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
   const char *managedRomSha256 = getenv("PLATINA_IMPORTED_ROM_SHA256");
-  if (managedRomPath != NULL && managedRomPath[0] != '\\0') {
+  if (managedRomPath != NULL && managedRomPath[0] != '\0') {
     std::error_code romError;
     if (!std::filesystem::is_regular_file(std::filesystem::path(managedRomPath), romError)
         || romError) {
-      fprintf(stderr, "[Platina] Imported ROM is not a readable regular file: %s\\n",
+      fprintf(stderr, "[Platina] Imported ROM is not a readable regular file: %s\n",
               managedRomPath);
       return 2;
     }
 
     bool extractionCacheValid = false;
-    if (managedRomSha256 != NULL && managedRomSha256[0] != '\\0') {
+    if (managedRomSha256 != NULL && managedRomSha256[0] != '\0') {
       std::ifstream cacheFile("platina-rom-extraction.sha256");
       std::string cachedSha256;
       if (std::getline(cacheFile, cachedSha256) && cachedSha256 == managedRomSha256) {
@@ -72,27 +72,27 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     }
 
     if (!extractionCacheValid) {
-      fprintf(stdout, "[Platina] Extracting local game data before renderer startup.\\n");
+      fprintf(stdout, "[Platina] Extracting local game data before renderer startup.\n");
       fflush(stdout);
       int extractionStatus = -1;
       try {
         extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
       } catch (const std::exception &exception) {
-        fprintf(stderr, "[Platina] ROM extraction threw an exception: %s\\n",
+        fprintf(stderr, "[Platina] ROM extraction threw an exception: %s\n",
                 exception.what());
         return 3;
       }
       if (extractionStatus != 0) {
-        fprintf(stderr, "[Platina] ROM extraction failed with status %d.\\n",
+        fprintf(stderr, "[Platina] ROM extraction failed with status %d.\n",
                 extractionStatus);
         return 3;
       }
 
-      if (managedRomSha256 != NULL && managedRomSha256[0] != '\\0') {
+      if (managedRomSha256 != NULL && managedRomSha256[0] != '\0') {
         const char *cacheTempPath = "platina-rom-extraction.sha256.tmp";
         std::ofstream cacheTemp(cacheTempPath, std::ios::trunc);
         if (cacheTemp.is_open()) {
-          cacheTemp << managedRomSha256 << '\\n';
+          cacheTemp << managedRomSha256 << '\n';
           cacheTemp.close();
           if (cacheTemp.good()) {
             std::error_code cacheError;
@@ -101,19 +101,19 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
             std::filesystem::rename(cacheTempPath, "platina-rom-extraction.sha256", cacheError);
             if (cacheError) {
               std::filesystem::remove(cacheTempPath, cacheError);
-              fprintf(stderr, "[Platina] Warning: unable to persist extraction cache marker.\\n");
+              fprintf(stderr, "[Platina] Warning: unable to persist extraction cache marker.\n");
             }
           } else {
-            fprintf(stderr, "[Platina] Warning: unable to write extraction cache marker.\\n");
+            fprintf(stderr, "[Platina] Warning: unable to write extraction cache marker.\n");
           }
         } else {
-          fprintf(stderr, "[Platina] Warning: unable to create extraction cache marker.\\n");
+          fprintf(stderr, "[Platina] Warning: unable to create extraction cache marker.\n");
         }
       }
-      fprintf(stdout, "[Platina] ROM extraction completed.\\n");
+      fprintf(stdout, "[Platina] ROM extraction completed.\n");
       fflush(stdout);
     } else {
-      fprintf(stdout, "[Platina] Reusing verified local game data.\\n");
+      fprintf(stdout, "[Platina] Reusing verified local game data.\n");
       fflush(stdout);
     }
   }
