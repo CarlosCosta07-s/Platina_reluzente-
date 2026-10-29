@@ -43,7 +43,7 @@ test('Black import and launch use an internal runtime slot; no external runtime 
   assert.match(electronMain, /ipcMain\.handle\('platina:launch-black-game'/);
   assert.doesNotMatch(electronMain, /platina:select-black-runtime|showOpenDialog\(\{[\s\S]*openDirectory/);
   assert.doesNotMatch(preload, /selectBlackRuntime|platina:select-black-runtime/);
-  assert.match(blackRuntimeNotice, /not included at this stage/i);
+  assert.match(blackRuntimeNotice, /not included in public builds at this stage/i);
   assert.match(blackRuntimeNotice, /must never browse for or launch its executable manually/i);
 });
 
