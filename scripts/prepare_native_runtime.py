@@ -16,151 +16,10 @@ ORIGINAL_HEADER_LOAD = r'''  // Read the first 0x160 bytes of the rom and put it
     fclose(romFile);
   }'''
 
-# Previous revision. Upgrade it in place so repeated runtime preparation is safe.
-LEGACY_PATCHED_HEADER_LOAD = r'''  // Prefer the ROM selected in the launcher for the cartridge header.
-  // Use the packaged header.bin as a safe fallback for direct/manual launches.
+PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header selected by the desktop launcher.
+  // Keep header.bin as a fallback for manual and legacy desktop launches.
   const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
   FILE *romFile = NULL;
-  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
-    romFile = fopen(importedRomPath, "rb");
-  }
-  if (romFile == NULL) {
-    romFile = fopen("header.bin", "rb");
-  }
-  if (romFile != NULL) {
-    fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
-    fclose(romFile);
-  }'''
-
-ANDROID_SYSTEM_INCLUDES = r'''#if defined(__ANDROID__)
-#include <SDL2/SDL_system.h>
-#include <unistd.h>
-#endif'''
-
-# SDLActivity resolves the exported SDL_main symbol on Android. Keep SDL_MAIN_HANDLED
-# only on desktop, where the upstream simulator intentionally owns a normal main().
-ANDROID_SDL_ENTRYPOINT_BLOCK = r'''#ifndef SDK_BUILD_ANDROID
-#define SDL_MAIN_HANDLED
-#endif'''
-
-ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
-  // The Android plugin extracts the complete runtime tree to this private path.
-  // Fail early with a clear diagnostic if the native runtime cannot be entered.
-  const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();
-  if (androidRuntimeStoragePath == NULL || *androidRuntimeStoragePath == '\0') {
-    fprintf(stderr, "Android internal storage path is unavailable\n");
-    return 1;
-  }
-  std::string androidRuntimeDirectory =
-      std::string(androidRuntimeStoragePath) + "/pokeplatinum";
-  if (chdir(androidRuntimeDirectory.c_str()) != 0) {
-    perror("Changing to the game runtime directory");
-    return 1;
-  }
-#endif'''
-
-# Older versions logged chdir failures but continued, which produced confusing
-# later resource errors. Keep this exact pattern so existing prepared trees can
-# be upgraded in place rather than receiving a second Android chdir block.
-LEGACY_ANDROID_MAIN_INIT = r'''#ifdef __ANDROID__
-  // The Android plugin extracts the complete runtime tree to this private path.
-  // Set it as the working directory before relative game/config/data files load.
-  const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();
-  if (androidRuntimeStoragePath != NULL) {
-    std::string androidRuntimeDirectory =
-        std::string(androidRuntimeStoragePath) + "/pokeplatinum";
-    if (chdir(androidRuntimeDirectory.c_str()) != 0) {
-      fprintf(stderr, "Unable to enter Android runtime directory: %s\\n",
-              androidRuntimeDirectory.c_str());
-    }
-  }
-#endif'''
-
-PREVIOUS_PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
-  // Windows/Linux receive the file path from the launcher; Android uses SDL's
-  // private app-storage path, matching Capacitor Filesystem Directory.Data.
-  FILE *romFile = NULL;
-#if defined(__ANDROID__)
-  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
-  std::string importedRomPath;
-  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
-    importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
-    romFile = fopen(importedRomPath.c_str(), "rb");
-  }
-  if (romFile == NULL) {
-    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
-            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
-    return 1;
-  }
-#else
-  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
-  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
-    romFile = fopen(importedRomPath, "rb");
-  }
-  if (romFile == NULL) {
-    romFile = fopen("header.bin", "rb");
-  }
-#endif
-  if (romFile != NULL) {
-    fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
-    fclose(romFile);
-  }'''
-
-
-PRIOR_PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
-  // Windows/Linux receive the file path from the launcher; Android uses SDL's
-  // private app-storage path, matching Capacitor Filesystem Directory.Data.
-  FILE *romFile = NULL;
-#if defined(__ANDROID__)
-  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
-  std::string importedRomPath;
-  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
-    importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
-    romFile = fopen(importedRomPath.c_str(), "rb");
-  }
-  if (romFile == NULL) {
-    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
-            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
-    return 1;
-  }
-#else
-  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
-  if (importedRomPath != NULL && importedRomPath[0] != '\0') {
-    romFile = fopen(importedRomPath, "rb");
-  }
-  if (romFile == NULL) {
-    romFile = fopen("header.bin", "rb");
-  }
-#endif
-  if (romFile == NULL) {
-    fprintf(stderr, "Unable to open a ROM header source or packaged header.bin\n");
-    return 1;
-  }
-  const size_t headerBytesRead = fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
-  fclose(romFile);
-  if (headerBytesRead != 0x160) {
-    fprintf(stderr, "Incomplete ROM header: expected 352 bytes, read %zu\n", headerBytesRead);
-    return 1;
-  }'''
-
-PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
-  // Windows/Linux receive the file path from the launcher; Android uses SDL's
-  // private app-storage path, matching Capacitor Filesystem Directory.Data.
-  FILE *romFile = NULL;
-#if defined(__ANDROID__)
-  const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();
-  std::string importedRomPath;
-  if (androidInternalStoragePath != NULL && *androidInternalStoragePath != '\0') {
-    importedRomPath = std::string(androidInternalStoragePath) + "/roms/current.nds";
-    romFile = fopen(importedRomPath.c_str(), "rb");
-  }
-  if (romFile == NULL) {
-    fprintf(stderr, "Unable to open imported Android ROM: %s\n",
-            importedRomPath.empty() ? "(internal storage unavailable)" : importedRomPath.c_str());
-    return 1;
-  }
-#else
-  const char *importedRomPath = getenv("PLATINA_IMPORTED_ROM");
   if (importedRomPath != NULL && importedRomPath[0] != '\0') {
     romFile = fopen(importedRomPath, "rb");
     if (romFile == NULL) {
@@ -168,14 +27,8 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
       return 1;
     }
   } else {
-    // The desktop UI must be able to start before the user imports a ROM.
-    // header.bin remains a compatibility fallback for manual/legacy launches.
     romFile = fopen("header.bin", "rb");
   }
-#endif
-  // A first desktop launch without a selected ROM is valid: the UI will offer
-  // the import/extraction flow after the window has initialized. If a header
-  // is present, however, it must be complete. Android always requires a ROM.
   if (romFile != NULL) {
     const size_t headerBytesRead = fread((void *)HW_ROM_HEADER_BUF, 1, 0x160, romFile);
     fclose(romFile);
@@ -184,9 +37,6 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
       return 1;
     }
   }'''
-
-
-
 
 CONFIG_ALARM_SECOND_ORIGINAL = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
         config->osNvramConfig.ncd.alarm.minute = atoi(value);
@@ -233,16 +83,14 @@ SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
   }'''
 
 GL_LOADER_ORIGINAL = "  gladLoadGLLoader(SDL_GL_GetProcAddress);"
-GL_LOADER_PATCHED = r'''#ifndef SDK_BUILD_ANDROID
-  if (!gladLoadGLLoader(SDL_GL_GetProcAddress)) {
+GL_LOADER_PATCHED = r'''  if (!gladLoadGLLoader(SDL_GL_GetProcAddress)) {
     fprintf(stderr, "OpenGL function loader initialization failed.\n");
     SDL_GL_DeleteContext(context);
     SDL_DestroyWindow(window);
     context = NULL;
     window = NULL;
     return NULL;
-  }
-#endif'''
+  }'''
 
 MAIN_RENDER_HANDOFF_ORIGINAL = "  SIM_RenderInit(NULL);\n  G3SIM_DrawInit();"
 MAIN_RENDER_HANDOFF_PATCHED = r'''  SIM_RenderInit(NULL);
@@ -266,11 +114,7 @@ FS_OPEN_FALLBACK_ORIGINAL = r'''        #if FS_FILE_OPEN_DEBUG
         // try again, because the ROM should be extracted at this point
         // yes, this is recursive, so if the user is dumb enough to keep extracting the wrong ROM and does this enough times, it will crash
         return FS_OpenFile(p_file, path);'''
-FS_OPEN_FALLBACK_PATCHED = r'''        #ifdef SDK_BUILD_ANDROID
-        OS_Warning("[file-system] Required runtime resource is missing: %s.\n", path);
-        return FALSE;
-        #else
-        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
+FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLATINA_IMPORTED_ROM");
         if (managedRomPath != NULL && managedRomPath[0] != '\0') {
             OS_Warning("[file-system] Required runtime resource is missing: %s.\n", path);
             return FALSE;
@@ -285,9 +129,8 @@ FS_OPEN_FALLBACK_PATCHED = r'''        #ifdef SDK_BUILD_ANDROID
 
         SIM_ShowRomExtractionDialog();
 
-        // Manual upstream launches may still use the legacy extraction flow.
-        return FS_OpenFile(p_file, path);
-        #endif'''
+        // Manual desktop launches may still use the legacy extraction flow.
+        return FS_OpenFile(p_file, path);'''
 BACKUP_SAVE_PATH_INCLUDE_ORIGINAL = '''#ifdef SDK_PORT
 #include <stdio.h>
 #include <stdlib.h>
@@ -298,11 +141,7 @@ BACKUP_SAVE_PATH_INCLUDE_PATCHED = '''#ifdef SDK_PORT
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef SDK_BUILD_ANDROID
-#define CARDI_BACKUP_SAVE_FILE "../save.bin"
-#else
 #define CARDI_BACKUP_SAVE_FILE "save.bin"
-#endif
 #endif'''
 
 BACKUP_FILE_IO_HELPERS_PATCHED = "static inline FILE *CARDi_OpenBackupFileForRange("
@@ -522,48 +361,6 @@ class RuntimePreparationError(RuntimeError):
     pass
 
 
-def _ensure_android_sdl_entrypoint(source: str) -> tuple[str, bool]:
-    """Let SDL rename the native entrypoint to SDL_main only for Android."""
-    original = "#define SDL_MAIN_HANDLED"
-    if source.count(ANDROID_SDL_ENTRYPOINT_BLOCK) == 1:
-        return source, False
-    if ANDROID_SDL_ENTRYPOINT_BLOCK in source:
-        raise RuntimePreparationError("Duplicate or partial Android SDL entrypoint patch detected.")
-    if source.count(original) != 1:
-        raise RuntimePreparationError("Expected exactly one SDL_MAIN_HANDLED definition for entrypoint patch.")
-    return source.replace(original, ANDROID_SDL_ENTRYPOINT_BLOCK, 1), True
-
-
-def _ensure_android_system_includes(source: str) -> tuple[str, bool]:
-    if ANDROID_SYSTEM_INCLUDES in source:
-        return source, False
-    if "SDL2/SDL_system.h" in source or "#include <unistd.h>" in source:
-        raise RuntimePreparationError("Partial Android SDL/system include patch detected.")
-    marker = "#include <SDL2/SDL.h>"
-    if source.count(marker) != 1:
-        raise RuntimePreparationError("Expected exactly one SDL.h include to add Android path support.")
-    return source.replace(marker, marker + "\n" + ANDROID_SYSTEM_INCLUDES, 1), True
-
-
-def _ensure_android_working_directory(source: str) -> tuple[str, bool]:
-    main_entry = "int main(int argc, char *argv[]) {\n"
-    patched_entry = main_entry + ANDROID_MAIN_INIT
-    legacy_entry = main_entry + LEGACY_ANDROID_MAIN_INIT
-
-    if source.count(patched_entry) == 1:
-        return source, False
-    if source.count(patched_entry) > 1:
-        raise RuntimePreparationError("Duplicate Android runtime working-directory setup detected.")
-
-    # Upgrade a previously prepared tree in place. Do not append a second
-    # chdir block after changing the failure behavior.
-    if source.count(legacy_entry) == 1:
-        return source.replace(legacy_entry, patched_entry, 1), True
-    if source.count(legacy_entry) > 1 or source.count(main_entry) != 1:
-        raise RuntimePreparationError("Expected exactly one simulator main entrypoint for Android working-directory setup.")
-    return source.replace(main_entry, patched_entry + "\n", 1), True
-
-
 def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
     """Fail cleanly when SDL or the desktop OpenGL loader cannot initialize."""
     current = source
@@ -592,7 +389,7 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
 
 
 def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]:
-    """Keep Android saves outside runtime updates and fail closed on save I/O errors."""
+    """Keep save I/O safe and fail closed on errors."""
     header_path = (
         Path(source_root).expanduser().resolve()
         / "subprojects" / "libntr" / "include" / "nitro" / "card" / "backup.h"
@@ -628,23 +425,19 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
             raise RuntimePreparationError("Legacy save.bin fopen call remains after hardening.")
         return header_path, current, current != original
 
-    # Upgrade the include block from upstream or from the earlier save-path-only patch.
+    # Upgrade an earlier desktop save-path-only patch, or start from upstream.
     legacy_include = '''#ifdef SDK_PORT
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef SDK_BUILD_ANDROID
-#define CARDI_BACKUP_SAVE_FILE "../save.bin"
-#else
 #define CARDI_BACKUP_SAVE_FILE "save.bin"
-#endif
 #endif'''
     if BACKUP_SAVE_PATH_INCLUDE_PATCHED in current:
         if current.count(BACKUP_SAVE_PATH_INCLUDE_PATCHED) != 1:
-            raise RuntimePreparationError("Duplicate Android save-path macro in backup.h.")
+            raise RuntimePreparationError("Duplicate desktop save-path macro in backup.h.")
     elif legacy_include in current:
         if current.count(legacy_include) != 1:
-            raise RuntimePreparationError("Duplicate legacy save-path macro in backup.h.")
+            raise RuntimePreparationError("Duplicate legacy desktop save-path macro in backup.h.")
         current = current.replace(legacy_include, BACKUP_SAVE_PATH_INCLUDE_PATCHED, 1)
     else:
         if current.count(BACKUP_SAVE_PATH_INCLUDE_ORIGINAL) != 1:
@@ -779,7 +572,7 @@ def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
 
 
 def prepare_native_runtime(source_root: str | Path) -> bool:
-    """Connect the imported ROM and use the extracted private runtime directory on Android."""
+    """Prepare the desktop ROM handoff, renderer startup, config, filesystem and saves."""
     path = (Path(source_root).expanduser().resolve() / "subprojects" / "libntr"
             / "libraries" / "sim" / "src" / "sim_main.cpp")
     if not path.is_file():
@@ -788,31 +581,18 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     original = path.read_text(encoding="utf-8")
     current = original
     current_load_count = current.count(PATCHED_HEADER_LOAD)
-    prior_patched_count = current.count(PRIOR_PATCHED_HEADER_LOAD)
-    previous_load_count = current.count(PREVIOUS_PATCHED_HEADER_LOAD)
-    legacy_count = current.count(LEGACY_PATCHED_HEADER_LOAD)
     upstream_count = current.count(ORIGINAL_HEADER_LOAD)
 
-    if current_load_count == 1:
-        if prior_patched_count or previous_load_count or legacy_count or upstream_count:
-            raise RuntimePreparationError("Multiple competing ROM-header loaders found; refusing an ambiguous patch.")
-    elif current_load_count == 0 and prior_patched_count == 1 and previous_load_count == 0 and legacy_count == 0 and upstream_count == 0:
-        current = current.replace(PRIOR_PATCHED_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
-    elif current_load_count == 0 and prior_patched_count == 0 and previous_load_count == 1 and legacy_count == 0 and upstream_count == 0:
-        current = current.replace(PREVIOUS_PATCHED_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
-    elif current_load_count == 0 and prior_patched_count == 0 and previous_load_count == 0 and legacy_count == 1 and upstream_count == 0:
-        current = current.replace(LEGACY_PATCHED_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
-    elif current_load_count == 0 and prior_patched_count == 0 and previous_load_count == 0 and legacy_count == 0 and upstream_count == 1:
+    if current_load_count == 1 and upstream_count == 0:
+        pass
+    elif current_load_count == 0 and upstream_count == 1:
         current = current.replace(ORIGINAL_HEADER_LOAD, PATCHED_HEADER_LOAD, 1)
     else:
         raise RuntimePreparationError(
-            "Expected exactly one recognized upstream or patched ROM-header loader in sim_main.cpp; refusing an uncertain patch."
+            "Expected exactly one recognized upstream or desktop-patched ROM-header loader; refusing an uncertain patch."
         )
 
-    current, entrypoint_changed = _ensure_android_sdl_entrypoint(current)
-    current, include_changed = _ensure_android_system_includes(current)
-    current, main_changed = _ensure_android_working_directory(current)
-    current, renderer_changed = _prepare_renderer_startup(current)
+    current, _ = _prepare_renderer_startup(current)
 
     # Validate all three source files before writing any of them.
     config_path = path.parent / "config" / "sim_config.c"

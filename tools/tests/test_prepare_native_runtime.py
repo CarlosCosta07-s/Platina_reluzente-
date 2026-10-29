@@ -3,7 +3,6 @@ import unittest
 from pathlib import Path
 
 from scripts.prepare_native_runtime import (
-    ANDROID_MAIN_INIT,
     CONFIG_ALARM_SECOND_PATCHED,
     BACKUP_FILE_IO_HELPERS_PATCHED,
     BACKUP_READ_BODY_PATCHED,
@@ -16,12 +15,8 @@ from scripts.prepare_native_runtime import (
     SDL_INIT_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
     MAIN_RENDER_HANDOFF_PATCHED,
-    LEGACY_ANDROID_MAIN_INIT,
-    LEGACY_PATCHED_HEADER_LOAD,
     ORIGINAL_HEADER_LOAD,
-    PREVIOUS_PATCHED_HEADER_LOAD,
     PATCHED_HEADER_LOAD,
-    PRIOR_PATCHED_HEADER_LOAD,
     RuntimePreparationError,
     prepare_native_runtime,
 )
@@ -217,7 +212,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         backup_header.write_text(UPSTREAM_BACKUP_HEADER, encoding="utf-8")
         return source
 
-    def test_uses_imported_rom_header_and_keeps_desktop_only_fallback(self):
+    def test_uses_imported_rom_header_and_hardens_desktop_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = self.make_source(root)
@@ -225,25 +220,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             content = source.read_text(encoding="utf-8")
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', content)
             self.assertIn('fopen(importedRomPath, "rb")', content)
-            self.assertIn('SDL_AndroidGetInternalStoragePath()', content)
-            self.assertIn('std::string(androidInternalStoragePath) + "/roms/current.nds"', content)
-            self.assertIn('std::string(androidRuntimeStoragePath) + "/pokeplatinum"', content)
-            self.assertIn('std::string(androidInternalStoragePath) + "/roms/current.nds"', content)
-            self.assertEqual(1, content.count('const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();'))
-            self.assertEqual(1, content.count('const char *androidInternalStoragePath = SDL_AndroidGetInternalStoragePath();'))
-            self.assertIn('chdir(androidRuntimeDirectory.c_str())', content)
-            self.assertIn('#include <SDL2/SDL_system.h>', content)
-            self.assertIn(
-                """#ifndef SDK_BUILD_ANDROID
-#define SDL_MAIN_HANDLED
-#endif""",
-                content,
-            )
-            self.assertEqual(1, content.count("SDL_MAIN_HANDLED"))
-            self.assertIn(r"importedRomPath[0] != '\0'", content)
-            self.assertIn(r'fprintf(stderr, "Android internal storage path is unavailable\n");', content)
-            self.assertIn('perror("Changing to the game runtime directory");', content)
-            self.assertIn("return 1;", content)
+            self.assertNotIn("SDL_AndroidGetInternalStoragePath", content)
+            self.assertNotIn("SDK_BUILD_ANDROID", content)
+            self.assertNotIn("SDL_MAIN_HANDLED", content)
+            self.assertIn("importedRomPath[0]", content)
             self.assertIn('fopen("header.bin", "rb")', content)
             self.assertIn("headerBytesRead != 0x160", content)
             self.assertIn("Incomplete ROM header: expected 352 bytes, read %zu", content)
@@ -255,7 +235,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             fs_content = (root / "subprojects/libntr/libraries/fs/src/fs_file.c").read_text(encoding="utf-8")
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
-            self.assertIn("#ifdef SDK_BUILD_ANDROID", fs_content)
+            self.assertNotIn("SDK_BUILD_ANDROID", fs_content)
             backup_content = (root / "subprojects/libntr/include/nitro/card/backup.h").read_text(encoding="utf-8")
             self.assertIn(BACKUP_SAVE_PATH_INCLUDE_PATCHED, backup_content)
             self.assertIn(BACKUP_FILE_IO_HELPERS_PATCHED, backup_content)
@@ -271,7 +251,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(1, backup_content.count('fopen(CARDI_BACKUP_SAVE_FILE, "rb+")'))
             self.assertEqual(1, backup_content.count('fopen(CARDI_BACKUP_SAVE_FILE, "wb+")'))
             self.assertNotIn('fopen("save.bin",', backup_content)
-            self.assertIn('CARDI_BACKUP_SAVE_FILE "../save.bin"', backup_content)
+            self.assertIn('CARDI_BACKUP_SAVE_FILE "save.bin"', backup_content)
             self.assertNotIn("return CARD_RESULT_SUCCESS;", backup_content)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
@@ -282,80 +262,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertFalse(prepare_native_runtime(root))
 
     def test_desktop_first_launch_can_start_without_a_rom_header(self):
-        desktop_branch = PATCHED_HEADER_LOAD.split("#else", 1)[1]
-        self.assertIn('romFile = fopen("header.bin", "rb");', desktop_branch)
-        self.assertIn("Unable to open imported desktop ROM", desktop_branch)
+        self.assertIn('romFile = fopen("header.bin", "rb");', PATCHED_HEADER_LOAD)
+        self.assertIn("Unable to open imported desktop ROM", PATCHED_HEADER_LOAD)
         self.assertIn("if (romFile != NULL) {", PATCHED_HEADER_LOAD)
-        self.assertNotIn("Unable to open a ROM header source or packaged header.bin", PATCHED_HEADER_LOAD)
-        self.assertIn("return 1;", desktop_branch)
-
-    def test_upgrades_prior_strict_rom_header_patch(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            prior_source = UPSTREAM_HEADER.replace(
-                ORIGINAL_HEADER_LOAD, PRIOR_PATCHED_HEADER_LOAD, 1
-            )
-            source = self.make_source(root, prior_source)
-            self.assertTrue(prepare_native_runtime(root))
-            content = source.read_text(encoding="utf-8")
-            self.assertEqual(1, content.count(PATCHED_HEADER_LOAD))
-            self.assertNotIn(PRIOR_PATCHED_HEADER_LOAD, content)
-            self.assertFalse(prepare_native_runtime(root))
-
-    def test_android_rom_open_failure_does_not_fall_back_to_packaged_header(self):
-        android_branch, desktop_branch = PATCHED_HEADER_LOAD.split("#else", 1)
-        self.assertIn("Unable to open imported Android ROM", android_branch)
-        self.assertIn("return 1;", android_branch)
-        self.assertNotIn('fopen("header.bin", "rb")', android_branch)
-        self.assertIn('fopen("header.bin", "rb")', desktop_branch)
-
-    def test_upgrades_legacy_android_runtime_path_patch_without_duplicate_chdir(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            legacy_content = UPSTREAM_HEADER.replace(
-                "int main(int argc, char *argv[]) {\n",
-                "int main(int argc, char *argv[]) {\n" + LEGACY_ANDROID_MAIN_INIT + "\n",
-                1,
-            )
-            source = self.make_source(root, legacy_content)
-
-            self.assertTrue(prepare_native_runtime(root))
-            content = source.read_text(encoding="utf-8")
-            self.assertEqual(1, content.count(ANDROID_MAIN_INIT))
-            self.assertNotIn(LEGACY_ANDROID_MAIN_INIT, content)
-            self.assertIn('perror("Changing to the game runtime directory");', content)
-            self.assertEqual(1, content.count("const char *androidRuntimeStoragePath = SDL_AndroidGetInternalStoragePath();"))
-            self.assertFalse(prepare_native_runtime(root))
-
-
-    def test_upgrades_the_previous_patched_rom_header_reader(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            previous_source = UPSTREAM_HEADER.replace(
-                ORIGINAL_HEADER_LOAD, PREVIOUS_PATCHED_HEADER_LOAD, 1
-            )
-            source = self.make_source(root, previous_source)
-
-            self.assertTrue(prepare_native_runtime(root))
-            content = source.read_text(encoding="utf-8")
-            self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
-            self.assertNotIn(PREVIOUS_PATCHED_HEADER_LOAD, content)
-            self.assertIn("headerBytesRead != 0x160", content)
-            self.assertFalse(prepare_native_runtime(root))
-
-    def test_upgrades_the_previous_desktop_only_rom_handoff_patch(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            legacy_source = UPSTREAM_HEADER.replace(
-                ORIGINAL_HEADER_LOAD, LEGACY_PATCHED_HEADER_LOAD, 1
-            )
-            source = self.make_source(root, legacy_source)
-            self.assertTrue(prepare_native_runtime(root))
-            content = source.read_text(encoding="utf-8")
-            self.assertIn('SDL_AndroidGetInternalStoragePath()', content)
-            self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
-            self.assertNotIn(LEGACY_PATCHED_HEADER_LOAD, content)
-            self.assertFalse(prepare_native_runtime(root))
 
     def test_refuses_unknown_upstream_source_without_overwriting_it(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -412,11 +321,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef SDK_BUILD_ANDROID
-#define CARDI_BACKUP_SAVE_FILE "../save.bin"
-#else
 #define CARDI_BACKUP_SAVE_FILE "save.bin"
-#endif
 #endif"""
             self.assertEqual(content.count(original_include), 1)
             self.assertEqual(content.count('fopen("save.bin",'), 5)
