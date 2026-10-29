@@ -140,7 +140,7 @@
       && typeof window.platina.getBlackStatus === 'function';
     const canUseDesktop = desktopAvailable && !blackState.busy;
     blackRomButton.disabled = !canUseDesktop;
-    blackRomButton.textContent = blackState.romImported ? 'Importar / trocar ROM' : 'Importar / trocar ROM';
+    blackRomButton.textContent = 'Importar / trocar ROM';
     blackLaunchButton.disabled = !canUseDesktop
       || !blackState.runtimeAvailable || !blackState.romImported;
     blackRomSummary.textContent = blackState.romImported
