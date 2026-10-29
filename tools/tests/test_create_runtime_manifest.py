@@ -40,7 +40,10 @@ class RuntimeManifestTests(unittest.TestCase):
             runtime.mkdir()
             external = Path(tmp) / "external.bin"
             external.write_bytes(b"outside")
-            (runtime / "link.bin").symlink_to(external)
+            try:
+                (runtime / "link.bin").symlink_to(external)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
 
             with self.assertRaisesRegex(RuntimeManifestError, "Symlinks are not allowed"):
                 create_runtime_manifest(runtime)
