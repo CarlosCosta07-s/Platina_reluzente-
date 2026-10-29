@@ -154,10 +154,10 @@ test('prepares a writable runtime, preserves local game data and refreshes bundl
     assert.equal(reused.reused, true);
     assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user settings');
 
-    fs.writeFileSync(path.join(source, 'launcher-runtime-version.txt'), 'build-2\n');
     fs.writeFileSync(path.join(source, 'main'), 'updated native executable');
+    const buildTwoId = writeRuntimeManifest(source, 'linux');
     const refreshed = prepareWritableRuntime(source, destination, 'linux');
-    assert.equal(refreshed.buildId, 'build-2');
+    assert.equal(refreshed.buildId, buildTwoId);
     assert.equal(refreshed.reused, false);
     assert.equal(fs.readFileSync(path.join(destination, 'main'), 'utf8'), 'updated native executable');
     assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user settings');
@@ -177,9 +177,10 @@ test('allows an executable-only runtime and preserves assets extracted from the 
     fs.mkdirSync(source, { recursive: true });
     fs.writeFileSync(path.join(source, 'main'), 'portable native executable');
     fs.chmodSync(path.join(source, 'main'), 0o755);
-    fs.writeFileSync(path.join(source, 'launcher-runtime-version.txt'), 'native-code-only-build\n');
+    writeRuntimeManifest(source, 'linux');
 
     assert.equal(hasRequiredRuntimeData(source), false);
+    assert.equal(verifyRuntimeManifest(source, 'linux'), true);
     assert.equal(isRuntimeUsable(source, 'linux'), true);
 
     const first = prepareWritableRuntime(source, destination, 'linux');
