@@ -53,6 +53,8 @@ test('one Android package combines ROM importer, SDLActivity, native libraries a
     assert.match(plugin, /A atividade SDL foi aberta/);
     assert.match(plugin, /abrir a atividade ainda não confirma que o jogo carregou/);
     assert.match(plugin, /roms\/current\.nds/);
+    assert.match(plugin, /!\"CPUE\"\.equals\(code\)/);
+    assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /"CPUE"/);
     assert.match(plugin, /Pokémon Platinum USA Rev\. 1/);
     assert.match(plugin, /Unable to recover|Não foi possível recuperar a pasta de recursos anterior/);
