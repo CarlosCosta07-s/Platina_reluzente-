@@ -19,7 +19,7 @@ Não anunciamos o porte como concluído nem jogável do início ao fim antes de 
 
 ## Compilação e validação
 
-Depois de compilar o runtime nativo para a plataforma desejada, o empacotamento do launcher prepara automaticamente a pasta local de runtime. Os comandos completos de Windows/Linux estão no [guia de compilação](docs/BUILDING.md). O staging e os builds continuam locais, sem disponibilizar ROMs ou recursos de jogo como artefatos públicos.
+Depois de compilar o runtime nativo, o launcher inclui apenas o executável portátil e as bibliotecas necessárias: a AppImage nativa no Linux ou `main.exe` e DLLs no Windows. Ele não empacota `header.bin`, firmware, NARC ou outros dados do jogo. Após importar a ROM USA Rev. 1 compatível, o primeiro início prepara os recursos que faltarem na pasta gravável privada do aplicativo. Os comandos completos estão no [guia de compilação](docs/BUILDING.md). ROMs e dados extraídos permanecem locais.
 
 A CI verifica os testes de manutenção, a compilação nativa e a inicialização pré-ROM da interface Linux. Após uma execução bem-sucedida, publica artefatos temporários por 14 dias em **GitHub Actions → execução do workflow → Artifacts**: a AppImage Linux (executável e bibliotecas) e um pacote Windows com apenas arquivos `.exe`/`.dll`, aviso e hashes SHA-256. Esses artefatos não incluem ROM, firmware, recursos extraídos do jogo, arquivos NARC, saves, patches ou pacote completo de dados. São builds de teste, não releases finais: a janela pré-ROM no Linux foi verificada, mas o carregamento da ROM, a tela de título e a jogabilidade ainda não foram confirmados. O launcher desktop registra stdout/stderr do runtime em `native-startup.log` no diretório privado do aplicativo para ajudar no diagnóstico.
 
