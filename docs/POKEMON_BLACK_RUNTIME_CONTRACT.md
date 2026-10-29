@@ -16,10 +16,10 @@
 
 | Dado | Windows x64 | Linux x86-64 |
 |---|---|---|
-| ROM privada importada | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\roms\\current.nds` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/roms/current.nds` (ou `~/.local/share/platina-reluzente/pokemon-black/roms/current.nds`) |
-| Dados extraídos | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\extract` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/extract` (ou `~/.local/share/platina-reluzente/pokemon-black/extract`) |
-| Home/config Eidos | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\eidos-home` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/eidos-home` (ou `~/.local/share/platina-reluzente/pokemon-black/eidos-home`) |
-| Log do launcher | `%LOCALAPPDATA%\\Platina-Reluzente\\PokemonBlack\\logs\\native-startup.log` | `$XDG_STATE_HOME/platina-reluzente/pokemon-black/native-startup.log` ou pasta de logs dos dados locais |
+| ROM privada importada | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\roms\current.nds` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/roms/current.nds` (ou `~/.local/share/platina-reluzente/pokemon-black/roms/current.nds`) |
+| Dados extraídos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\extract` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/extract` (ou `~/.local/share/platina-reluzente/pokemon-black/extract`) |
+| Home/config Eidos | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\eidos-home` | `$XDG_DATA_HOME/platina-reluzente/pokemon-black/eidos-home` (ou `~/.local/share/platina-reluzente/pokemon-black/eidos-home`) |
+| Log do launcher | `%LOCALAPPDATA%\Platina-Reluzente\PokemonBlack\logs\native-startup.log` | `$XDG_STATE_HOME/platina-reluzente/pokemon-black/native-startup.log` ou pasta de logs dos dados locais |
 
 Os caminhos acima são o contrato proposto para a integração futura, não uma afirmação de que o launcher já os cria. Resolver e normalizar os caminhos uma vez, validar permissões e diretórios antes de importar, e não escrever nada na raiz do repositório.
 
@@ -37,19 +37,19 @@ A chamada do processo segue este formato, após a validação da ROM e a criaç�
 
 Windows (PowerShell):
 ```powershell
-$env:EIDOS_HOME = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\\PokemonBlack\\eidos-home"
+$env:EIDOS_HOME = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\eidos-home"
 $eidosArgs = @(
-  "--rom", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\\PokemonBlack\\roms\\current.nds"),
-  "--data-root", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\\PokemonBlack\\extract")
+  "--rom", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\roms\current.nds"),
+  "--data-root", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\extract")
 )
-& "C:\\caminho\\do\\build64\\host\\eidos.exe" @eidosArgs
+& "C:\caminho\do\build64\host\eidos.exe" @eidosArgs
 ```
 
 Linux:
 ```sh
 export EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home"
-./build64/host/eidos \\
-  --rom "$HOME/.local/share/platina-reluzente/pokemon-black/roms/current.nds" \\
+./build64/host/eidos \
+  --rom "$HOME/.local/share/platina-reluzente/pokemon-black/roms/current.nds" \
   --data-root "$HOME/.local/share/platina-reluzente/pokemon-black/extract"
 ```
 
