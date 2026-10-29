@@ -93,29 +93,29 @@ O arquivo esperado é `build64/host/eidos.exe`. Os nomes exatos de pacotes e pr�
 
 ## 5. Testar o contrato de inicialização sem um segundo seletor de ROM
 
-O Eidos fixado aceita \`--rom\` e \`--data-root\`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados do jogo. Essa interface permite que uma futura ação do Platina Reluzente passe o arquivo já importado pelo launcher, sem abrir um segundo seletor. \`EIDOS_HOME\` pode isolar a configuração do Eidos da configuração de outras instalações.
+O Eidos fixado aceita `--rom` e `--data-root`. O primeiro parâmetro valida e extrai a ROM para a pasta indicada; o segundo fixa a pasta de dados do jogo. Essa interface permite que uma futura ação do Platina Reluzente passe o arquivo já importado pelo launcher, sem abrir um segundo seletor. `EIDOS_HOME` pode isolar a configuração do Eidos da configuração de outras instalações.
 
 Linux:
 
-\`\`\`sh
+```sh
 EIDOS_HOME="$HOME/.local/share/platina-reluzente/pokemon-black/eidos-home" \\
   ./build64/host/eidos \\
   --rom "/caminho/local/Pokemon Black.nds" \\
   --data-root "$HOME/.local/share/platina-reluzente/pokemon-black/extract"
-\`\`\`
+```
 
 Windows (PowerShell):
 
-\`\`\`powershell
+```powershell
 $env:EIDOS_HOME = Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\eidos-home"
-$args = @(
+$eidosArgs = @(
   "--rom", "C:\caminho\local\Pokemon Black.nds",
   "--data-root", (Join-Path $env:LOCALAPPDATA "Platina-Reluzente\PokemonBlack\extract")
 )
-& ".\build64\host\eidos.exe" @args
-\`\`\`
+& ".\build64\host\eidos.exe" @eidosArgs
+```
 
-Execute a partir do diretório do build e mantenha \`EIDOS_HOME\`, a pasta de extração, a ROM importada e os saves separados do diretório de Platinum. Esses comandos são para teste local com um runtime que você compilou; o launcher ainda não expõe essa ação e não há um pacote Black redistribuível aprovado.
+Execute a partir do diretório do build e mantenha `EIDOS_HOME`, a pasta de extração, a ROM importada e os saves separados do diretório de Platinum. Esses comandos são para teste local com um runtime que você compilou; o launcher ainda não expõe essa ação e não há um pacote Black redistribuível aprovado.
 
 ## 6. Validação mínima antes de pensar na integração
 
