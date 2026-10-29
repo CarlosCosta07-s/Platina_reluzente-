@@ -4,7 +4,12 @@
 
 O projeto reúne uma biblioteca experimental de portes nativos comunitários para **Windows e Linux**. O desenvolvimento principal continua sendo o porte de **Pokémon Platinum**, que já possui runtimes desktop e um launcher integrado em fase de testes. Em paralelo, iniciamos a pesquisa técnica e o planejamento do porte nativo de **Pokémon Black Version**, usando código reconstruído e compilado para o host — sem emulador de Nintendo DS ou interpretador de instruções ARM. O runtime Black ainda não foi integrado: por enquanto, ele aparece no launcher como projeto em desenvolvimento. Nenhuma ROM, firmware ou recurso protegido do jogo será incluído nos releases.
 
-## Projetos da biblioteca\n\n- **Pokémon Platinum** — porte nativo principal em Windows/Linux. O launcher integrado já pode ser compilado, mas tela de título e jogabilidade ainda precisam ser confirmadas com uma cópia local compatível.\n- **Pokémon Black Version** — porte nativo paralelo em fase inicial de auditoria técnica. A entrada informativa já foi adicionada ao launcher; importação, execução e builds Black ainda não estão disponíveis. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md).\n\n## Estado real do projeto
+## Projetos da biblioteca
+
+- **Pokémon Platinum** — porte nativo principal em Windows/Linux. O launcher integrado já pode ser compilado, mas tela de título e jogabilidade ainda precisam ser confirmadas com uma cópia local compatível.
+- **Pokémon Black Version** — porte nativo paralelo em fase inicial de auditoria técnica. A entrada informativa já foi adicionada ao launcher; importação, execução e builds Black ainda não estão disponíveis. Consulte o [plano técnico de Pokémon Black](docs/POKEMON_BLACK_PORT.md).
+
+## Estado real do projeto
 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
 - **Linux x86-64 e Windows x64:** ambos os alvos passaram na execução [40647214112 do GitHub Actions](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40647214112), em 28 de outubro de 2026. Os testes automatizados também passaram e cada pacote foi validado contra os 340 caminhos do manifesto upstream, incluindo recursos de animação. Isso valida compilação e integridade do pacote, não a inicialização nem a jogabilidade.
