@@ -1,0 +1,111 @@
+name: Package Linux launcher from verified native engine
+
+concurrency:
+  group: linux-launcher-package-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/package-linux-launcher.yml"
+      - "launcher-app/**"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  package-linux:
+    name: Build integrated Linux x86-64 launcher
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+
+      - name: Download previously verified native Linux AppImage
+        uses: actions/download-artifact@v4
+        with:
+          name: Platina-Reluzente-Linux-x86_64-AppImage
+          path: ${{ runner.temp }}/native-engine
+          repository: ${{ github.repository }}
+          run-id: 40888576142
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare binary-only native runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t appimages < <(find "$RUNNER_TEMP/native-engine" -maxdepth 2 -type f -name '*.AppImage' -print)
+          if [[ "${#appimages[@]}" -ne 1 ]]; then
+            echo "Expected one verified native AppImage; found ${#appimages[@]}." >&2
+            find "$RUNNER_TEMP/native-engine" -maxdepth 2 -type f -print || true
+            exit 1
+          fi
+          runtime_dir="$GITHUB_WORKSPACE/vendor/pokeplatinum-native/build_linux/pokeplatinum"
+          mkdir -p "$runtime_dir"
+          install -m 0755 "${appimages[0]}" "$runtime_dir/pokeplatinum.AppImage"
+          test -x "$runtime_dir/pokeplatinum.AppImage"
+          echo "Prepared native AppImage only; no ROM or extracted data is included."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install launcher dependencies
+        working-directory: launcher-app
+        run: npm install --no-audit --no-fund
+
+      - name: Run launcher regression tests
+        working-directory: launcher-app
+        run: npm test
+
+      - name: Build integrated Linux launcher
+        working-directory: launcher-app
+        run: npm run build:linux
+
+      - name: Stage and validate Linux launcher artifacts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          dist_dir="$GITHUB_WORKSPACE/launcher-app/dist"
+          stage_dir="$RUNNER_TEMP/Platina-Reluzente-Launcher-Linux-x64"
+          mapfile -t appimages < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*-linux-x64.AppImage' -print)
+          mapfile -t archives < <(find "$dist_dir" -maxdepth 1 -type f -name 'Platina-Reluzente-Launcher-*-linux-x64.tar.gz' -print)
+          if [[ "${#appimages[@]}" -ne 1 || "${#archives[@]}" -ne 1 ]]; then
+            echo "Expected exactly one launcher AppImage and tar.gz; found ${#appimages[@]} AppImage(s), ${#archives[@]} archive(s)." >&2
+            find "$dist_dir" -maxdepth 1 -type f -print || true
+            exit 1
+          fi
+          rm -rf "$stage_dir"
+          mkdir -p "$stage_dir"
+          cp -- "${appimages[0]}" "${archives[0]}" "$stage_dir/"
+          cat > "$stage_dir/README-FIRST-START.txt" <<'EOF'
+          Platina Reluzente Launcher - Linux x86-64 experimental build
+
+          This launcher includes the native executable and its bundled libraries.
+          It does not include a ROM, firmware, extracted NARC/game resources,
+          game saves, or patches.
+
+          Import a legally obtained and compatible Pokemon Platinum USA Rev. 1
+          .nds file in the launcher. The app validates the exact supported image
+          and should extract missing runtime data locally on first launch.
+
+          This build packages the previously CI-verified Linux native AppImage.
+          CI has verified the native window without a ROM, not actual gameplay.
+          If startup fails, inspect the local native-startup.log and report the
+          error text only. Do not upload ROMs or extracted game files.
+          EOF
+          (cd "$stage_dir" && sha256sum *.AppImage *.tar.gz README-FIRST-START.txt > SHA256SUMS.txt)
+          ls -lh "$stage_dir"
+
+      - name: Upload integrated Linux launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platina-Reluzente-Launcher-Linux-x64
+          path: ${{ runner.temp }}/Platina-Reluzente-Launcher-Linux-x64/
+          if-no-files-found: error
+          retention-days: 14
