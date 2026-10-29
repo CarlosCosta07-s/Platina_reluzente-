@@ -25,15 +25,22 @@ _LINUX_SYSTEM_ROOTS = tuple(
     Path(value) for value in ("/lib", "/lib64", "/usr/lib", "/usr/lib64")
 )
 _WINDOWS_SYSTEM_DLLS = {
-    "advapi32.dll", "bcrypt.dll", "cfgmgr32.dll", "combase.dll",
-    "comdlg32.dll", "crypt32.dll", "cryptbase.dll", "dnsapi.dll",
-    "gdi32.dll", "gdi32full.dll", "imm32.dll", "iphlpapi.dll",
-    "kernel32.dll", "kernelbase.dll", "msvcrt.dll", "nsi.dll",
-    "ntdll.dll", "ole32.dll", "oleaut32.dll", "powrprof.dll",
-    "psapi.dll", "rpcrt4.dll", "sechost.dll", "setupapi.dll",
-    "shell32.dll", "shlwapi.dll", "ucrtbase.dll", "user32.dll",
-    "userenv.dll", "version.dll", "win32u.dll", "winmm.dll",
-    "ws2_32.dll",
+    # Windows OS components and API-set forwarders. Do not infer that an
+    # arbitrary DLL is an OS dependency merely because the CI runner happens
+    # to have a copy in System32; redistributable runtimes must be staged.
+    "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "cfgmgr32.dll",
+    "combase.dll", "comctl32.dll", "comdlg32.dll", "crypt32.dll",
+    "cryptbase.dll", "cryptsp.dll", "d2d1.dll", "d3d11.dll", "dcomp.dll",
+    "ddraw.dll", "dnsapi.dll", "dwmapi.dll", "dxgi.dll", "gdi32.dll",
+    "gdi32full.dll", "hid.dll", "imm32.dll", "iphlpapi.dll",
+    "kernel32.dll", "kernelbase.dll", "mpr.dll", "msimg32.dll",
+    "msvcrt.dll", "nsi.dll", "ntdll.dll", "ole32.dll", "oleacc.dll",
+    "oleaut32.dll", "opengl32.dll", "powrprof.dll", "psapi.dll",
+    "rpcrt4.dll", "sechost.dll", "setupapi.dll", "shell32.dll",
+    "shcore.dll", "shlwapi.dll", "ucrtbase.dll", "user32.dll",
+    "userenv.dll", "uxtheme.dll", "version.dll", "win32u.dll",
+    "windowscodecs.dll", "winmm.dll", "winspool.drv", "wintrust.dll",
+    "ws2_32.dll", "wtsapi32.dll", "xinput1_4.dll",
 }
 
 
@@ -183,10 +190,7 @@ def _find_windows_dll(name: str, search_dirs: list[Path]) -> Path | None:
 
 def _is_windows_system_dll(name: str) -> bool:
     key = name.casefold()
-    if key.startswith(("api-ms-win-", "ext-ms-win-")) or key in _WINDOWS_SYSTEM_DLLS:
-        return True
-    root = os.environ.get("WINDIR") or os.environ.get("SystemRoot")
-    return bool(root and (Path(root) / "System32" / name).is_file())
+    return key.startswith(("api-ms-win-", "ext-ms-win-")) or key in _WINDOWS_SYSTEM_DLLS
 
 
 def _windows_dependencies(
