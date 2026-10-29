@@ -9,8 +9,11 @@ async function exists(filePath) {
   try {
     await fs.access(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // Only absence should be treated as false. Permission and storage failures
+    // must interrupt recovery instead of making a backup look nonexistent.
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+    throw error;
   }
 }
 
@@ -77,6 +80,31 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
     return;
   }
 
+  // First-import crash after the ROM rename but before the metadata rename.
+  // The temporary metadata carries the expected SHA-256, so recover only if
+  // it proves that the installed ROM is exactly the staged version.
+  if (hasRom && !hasMetadata && !hasRomBackup && !hasMetadataBackup
+      && hasMetadataStaging && await matchesMetadata(destinationPath, metadataStaging)) {
+    await fs.rename(metadataStaging, metadataPath);
+    await cleanupBestEffort([romStaging, romBackup, metadataBackup]);
+    return;
+  }
+
+  // First-import crash before the first rename: if both staging files match,
+  // finish the commit. Otherwise no committed ROM exists, so stale staging
+  // files can be discarded without touching a last-good destination.
+  if (!hasRom && !hasMetadata && !hasRomBackup && !hasMetadataBackup) {
+    if (hasRomStaging && hasMetadataStaging
+        && await matchesMetadata(romStaging, metadataStaging)) {
+      await fs.rename(romStaging, destinationPath);
+      await fs.rename(metadataStaging, metadataPath);
+      await cleanupBestEffort([romBackup, metadataBackup]);
+      return;
+    }
+    await cleanupBestEffort([romStaging, metadataStaging]);
+    return;
+  }
+
   if (hasRomBackup && hasMetadataBackup && await matchesMetadata(romBackup, metadataBackup)) {
     await removeIfPresent(destinationPath);
     await removeIfPresent(metadataPath);
@@ -95,13 +123,6 @@ async function recoverDesktopRom({ destinationPath, metadataPath }) {
   if (hasRom && !hasMetadata && hasMetadataBackup && await matchesMetadata(destinationPath, metadataBackup)) {
     await fs.rename(metadataBackup, metadataPath);
     await Promise.all([removeIfPresent(romBackup), removeIfPresent(romStaging), removeIfPresent(metadataStaging)]);
-    return;
-  }
-
-  // First import interrupted before either file had a committed metadata pair.
-  if (!hasRomBackup && !hasMetadataBackup && !hasMetadata) {
-    await removeIfPresent(destinationPath);
-    await cleanupBestEffort([romStaging, metadataStaging]);
     return;
   }
 
