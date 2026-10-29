@@ -257,8 +257,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(ROM_PREFLIGHT_ENTRY_PATCHED, content)
             self.assertIn(ROM_PREFLIGHT_INCLUDE_PATCHED, content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM_SHA256")', content)
-            self.assertIn("platina-rom-extraction.sha256", content)
-            self.assertIn("Reusing verified local game data.", content)
+            self.assertIn("platina-rom-extraction.manifest", content)
+            self.assertIn("Reusing local game data after per-file CRC32 verification.", content)
             self.assertLess(
                 content.index("SIM_NDSExtract(std::string(managedRomPath))"),
                 content.index("SIM_RenderInit(NULL)"),
@@ -312,6 +312,15 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(GL_LOADER_PATCHED, content)
             self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
             self.assertFalse(prepare_native_runtime(root))
+
+    def test_extraction_cache_requires_the_complete_path_manifest_and_per_file_integrity(self):
+        self.assertIn("PLATINA_DATA_PATHS_V1", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("platinum-data-paths.txt", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("verifyExtractionCache", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("inspectFileCrc32", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("platina-rom-extraction.manifest", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("required local data is missing/corrupted", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertNotIn('std::filesystem::path("msgdata/msg.narc")', ROM_PREFLIGHT_ENTRY_PATCHED)
 
     def test_desktop_first_launch_can_start_without_a_rom_header(self):
         self.assertIn('romFile = fopen("header.bin", "rb");', PATCHED_HEADER_LOAD)
