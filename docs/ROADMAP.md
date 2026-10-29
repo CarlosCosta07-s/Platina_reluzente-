@@ -24,6 +24,8 @@ O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimiza�
 - [x] Confirmar que os pacotes Linux e Windows contêm os arquivos de animação obrigatórios `wazaeffect/we.arc` e `battle/skill/waza_seq.narc` e passam pela verificação dos 340 caminhos do manifesto.
 - [ ] Executar o jogo com a ROM local USA Rev. 1, confirmar extração dos dados, tela de título e início de uma nova partida; a execução atual da CI não fornece ROM.
 - [x] Testar o AppImage Linux em diretório temporário vazio: a janela `libntr Application` foi encontrada e o processo permaneceu ativo por 15 segundos na execução [40691585390](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40691585390). Isso só cobre a interface pré-ROM.
+- [x] Automatizar o staging local do runtime nativo para o launcher Windows/Linux, com validação de executável/arquivos obrigatórios e rejeição de ROMs, patches, saves, configurações pessoais, links simbólicos e entradas especiais.
+- [x] Adicionar testes do staging: layout Linux/Windows, ausência de saves/configs no pacote, rejeição de runtime incompleto e preservação do destino anterior quando a validação falha. A suíte do launcher passou na execução [40884304283](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40884304283).
 - [ ] Reproduzir as instruções numa máquina limpa.
 - [ ] Reproduzir o primeiro carregamento com uma cópia local válida da ROM USA Rev. 1 e verificar os erros de extração/carregamento.
 - [ ] Confirmar que logs e erros de carregamento identificam os problemas.
