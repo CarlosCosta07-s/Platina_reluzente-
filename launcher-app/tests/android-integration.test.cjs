@@ -148,6 +148,47 @@ test('Android runtime integration rejects a runtime asset with the wrong manifes
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
+test('Android runtime integration rejects a manifest path through a symlinked directory', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-android-symlink-manifest-'));
+  try {
+    const runtime = path.join(temp, 'native-artifact');
+    const runtimeData = path.join(runtime, 'runtime-data');
+    const external = path.join(temp, 'external');
+    fs.mkdirSync(path.join(runtimeData, 'wazaeffect'), { recursive: true });
+    fs.mkdirSync(path.join(runtimeData, 'battle', 'skill'), { recursive: true });
+    fs.mkdirSync(external, { recursive: true });
+
+    for (const name of ['libmain.so', 'libSDL2.so', 'libc++_shared.so']) {
+      fs.writeFileSync(path.join(runtime, name), Buffer.from('binary ' + name));
+    }
+    const files = {
+      'header.bin': 'header',
+      'firmware.bin': 'firmware',
+      'build-version.txt': 'test-build\\n',
+      'wazaeffect/we.arc': 'waza-effect archive',
+      'battle/skill/waza_seq.narc': 'move-animation archive',
+    };
+    for (const [relative, value] of Object.entries(files)) {
+      fs.writeFileSync(path.join(runtimeData, relative), value);
+    }
+    fs.writeFileSync(path.join(external, 'secret.bin'), 'outside runtime');
+    fs.symlinkSync(external, path.join(runtimeData, 'linked'), 'dir');
+
+    const manifestLines = Object.entries(files).map(([relative, value]) => {
+      return relative + '\\t' + Buffer.byteLength(value);
+    });
+    manifestLines.push('linked/secret.bin\\t' + Buffer.byteLength('outside runtime'));
+    fs.writeFileSync(path.join(runtimeData, 'runtime-manifest.txt'), manifestLines.join('\\n') + '\\n');
+
+    assert.throws(
+      () => integrateAndroidRuntime({ projectDir: path.join(temp, 'android'), runtimeArtifactDir: runtime }),
+      /Symbolic links are not allowed in the runtime: linked\\/secret\\.bin/,
+    );
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('Android runtime integration rejects an artifact missing a required game archive', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-android-missing-archive-'));
   try {
