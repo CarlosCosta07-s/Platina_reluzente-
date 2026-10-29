@@ -5,7 +5,7 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/rom-storage.cjs && node --check web/app.js",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/rom-storage.cjs && node --check electron/native-process.cjs && node --check web/app.js",
     "test": "npm run check && node --test tests/*.test.cjs && npm run build:web",
     "build:windows": "npm run build:web && electron-builder --win portable --x64",
     "build:linux": "npm run build:web && electron-builder --linux AppImage tar.gz --x64",
