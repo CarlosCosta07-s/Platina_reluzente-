@@ -1097,6 +1097,9 @@ static inline BOOL CARDi_VerifyBackupFileRange(u32 offset, const void *expectedB
 
 '''
 
+CARD_IDENTIFY_BACKUP_ORIGINAL = """\tCARDi_BeginBackupCommand(CARD_ACCESS_LEVEL_NONE, NULL, NULL);\n\n\tCARDi_IdentifyBackupCore2(type);\n\n\treturn CARDi_ExecuteOldTypeTask(CARDi_IdentifyBackupCore, FALSE);"""
+CARD_IDENTIFY_BACKUP_PATCHED = """  CARDi_BeginBackupCommand(CARD_ACCESS_LEVEL_NONE, NULL, NULL);\n\n  // Desktop Platinum uses the launcher's file-backed save implementation.\n  // The SDK_PORT simulator does not provide an ARM7 card/PXI peer, so asking\n  // the emulated cartridge to identify its backup chip would block forever.\n  // Populate the same backup geometry locally and finish the normal task.\n  CARDi_IdentifyBackupCore2(type);\n#ifdef SDK_PORT\n  const BOOL supported = (cardi_common.cmd->type == type);\n  cardi_common.cmd->result = supported ? CARD_RESULT_SUCCESS : CARD_RESULT_UNSUPPORTED;\n  CARDi_EndTask(&cardi_common);\n  return supported;\n#else\n  return CARDi_ExecuteOldTypeTask(CARDi_IdentifyBackupCore, FALSE);\n#endif"""
+
 CONFIG_SAVE_OPEN_PATCHED = (
     CONFIG_SAVE_OPEN_ORIGINAL
     + "\n    if (configFile == NULL) {\n        return;\n    }"
@@ -1266,6 +1269,34 @@ def _prepare_backup_save_path(source_root: str | Path) -> tuple[Path, str, bool]
         raise RuntimePreparationError("Checked card-backup I/O helper was not installed exactly once.")
     return header_path, current, current != original
 
+
+
+def _prepare_card_backup_identification(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Avoid a desktop boot deadlock waiting for a nonexistent ARM7 card peer."""
+    source_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "libraries" / "card" / "src" / "card_backup.c"
+    )
+    if not source_path.is_file():
+        raise RuntimePreparationError(f"Card backup implementation missing: {source_path}")
+
+    original = source_path.read_text(encoding="utf-8")
+    current = original
+    if CARD_IDENTIFY_BACKUP_PATCHED in current:
+        if current.count(CARD_IDENTIFY_BACKUP_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate SDK_PORT card-identification patch detected.")
+        if CARD_IDENTIFY_BACKUP_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and patched card-identification paths exist.")
+        return source_path, current, False
+
+    if current.count(CARD_IDENTIFY_BACKUP_ORIGINAL) != 1:
+        raise RuntimePreparationError(
+            "Expected exactly one known SDK v5 card-identification path; refusing an uncertain patch."
+        )
+    current = current.replace(CARD_IDENTIFY_BACKUP_ORIGINAL, CARD_IDENTIFY_BACKUP_PATCHED, 1)
+    if current.count(CARD_IDENTIFY_BACKUP_PATCHED) != 1:
+        raise RuntimePreparationError("SDK_PORT card-identification patch was not installed exactly once.")
+    return source_path, current, current != original
 
 
 def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path, str, bool]:
@@ -1493,12 +1524,13 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
     extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
     backup_path, backup_updated, backup_changed = _prepare_backup_save_path(source_root)
+    card_path, card_updated, card_changed = _prepare_card_backup_identification(source_root)
     audio_path, audio_updated, audio_changed = _prepare_sim_audio(source_root)
     nvram_path, nvram_updated, nvram_changed = _prepare_nvram_file_backing(source_root)
 
     changed = (
         current != original or config_changed or fs_changed or extractor_changed
-        or backup_changed or audio_changed or nvram_changed
+        or backup_changed or card_changed or audio_changed or nvram_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
@@ -1510,6 +1542,8 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         extractor_path.write_text(extractor_updated, encoding="utf-8")
     if backup_changed:
         backup_path.write_text(backup_updated, encoding="utf-8")
+    if card_changed:
+        card_path.write_text(card_updated, encoding="utf-8")
     if audio_changed:
         audio_path.write_text(audio_updated, encoding="utf-8")
     if nvram_changed:
