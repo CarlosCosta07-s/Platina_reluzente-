@@ -4,6 +4,8 @@ from pathlib import Path
 
 from scripts.prepare_native_runtime import (
     ANDROID_MAIN_INIT,
+    CONFIG_ALARM_SECOND_PATCHED,
+    CONFIG_SAVE_OPEN_PATCHED,
     LEGACY_ANDROID_MAIN_INIT,
     LEGACY_PATCHED_HEADER_LOAD,
     ORIGINAL_HEADER_LOAD,
@@ -12,6 +14,21 @@ from scripts.prepare_native_runtime import (
     RuntimePreparationError,
     prepare_native_runtime,
 )
+
+UPSTREAM_SIM_CONFIG = r'''#include <stdio.h>
+#define SIM_CONFIG_FILE_PATH "./sim_config.ini"
+static int IniHandler(void* user, const char* section, const char* name, const char* value) {
+    if(MATCH("OSNVRAM", "Alarm_Second")) {
+        config->osNvramConfig.ncd.alarm.minute = atoi(value);
+    }
+    return 0;
+}
+void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
+{
+    FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");
+    fprintf(configFile, "test=%d\\n", aConfig->internalResolutionScale);
+    fclose(configFile);
+}'''
 
 UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
@@ -39,6 +56,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         source_dir.mkdir(parents=True)
         source = source_dir / "sim_main.cpp"
         source.write_text(content, encoding="utf-8")
+        config = source_dir / "config" / "sim_config.c"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(UPSTREAM_SIM_CONFIG, encoding="utf-8")
         return source
 
     def test_uses_imported_rom_header_and_keeps_desktop_only_fallback(self):
@@ -72,6 +92,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("headerBytesRead != 0x160", content)
             self.assertIn("Incomplete ROM header: expected 352 bytes, read %zu", content)
             self.assertEqual(content.count(PATCHED_HEADER_LOAD), 1)
+            config_content = (source.parent / "config" / "sim_config.c").read_text(encoding="utf-8")
+            self.assertIn('config->osNvramConfig.ncd.alarm.second = atoi(value);', config_content)
+            self.assertNotIn('config->osNvramConfig.ncd.alarm.minute = atoi(value);', config_content)
+            self.assertIn('if (configFile == NULL) {\n        return;\n    }', config_content)
             self.assertFalse(prepare_native_runtime(root))
 
     def test_android_rom_open_failure_does_not_fall_back_to_packaged_header(self):
@@ -138,3 +162,36 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             with self.assertRaises(RuntimePreparationError):
                 prepare_native_runtime(root)
             self.assertEqual(source.read_text(encoding="utf-8"), "// changed upstream source\n")
+
+
+    def test_config_patches_are_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            config = source.parent / "config" / "sim_config.c"
+
+            self.assertTrue(prepare_native_runtime(root))
+            once = config.read_text(encoding="utf-8")
+            self.assertEqual(once.count(CONFIG_ALARM_SECOND_PATCHED), 1)
+            self.assertEqual(once.count(CONFIG_SAVE_OPEN_PATCHED), 1)
+
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(config.read_text(encoding="utf-8"), once)
+
+    def test_unknown_sim_config_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            config.write_text("unknown upstream config implementation\\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(
+                config.read_text(encoding="utf-8"),
+                "unknown upstream config implementation\\n",
+            )
+

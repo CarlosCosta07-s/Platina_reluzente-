@@ -146,6 +146,19 @@ PATCHED_HEADER_LOAD = r'''  // Prefer the imported ROM header on all platforms.
 
 
 
+CONFIG_ALARM_SECOND_ORIGINAL = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
+        config->osNvramConfig.ncd.alarm.minute = atoi(value);
+    }'''
+CONFIG_ALARM_SECOND_PATCHED = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
+        config->osNvramConfig.ncd.alarm.second = atoi(value);
+    }'''
+CONFIG_SAVE_OPEN_ORIGINAL = '    FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");'
+CONFIG_SAVE_OPEN_PATCHED = (
+    CONFIG_SAVE_OPEN_ORIGINAL
+    + "\n    if (configFile == NULL) {\n        return;\n    }"
+)
+
+
 class RuntimePreparationError(RuntimeError):
     pass
 
@@ -192,6 +205,39 @@ def _ensure_android_working_directory(source: str) -> tuple[str, bool]:
     return source.replace(main_entry, patched_entry + "\n", 1), True
 
 
+def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
+    """Fix known simulator config bugs; reject unknown source rather than patching blindly."""
+    if not config_path.is_file():
+        raise RuntimePreparationError(f"Simulator config source missing: {config_path}")
+
+    original = config_path.read_text(encoding="utf-8")
+    current = original
+
+    if CONFIG_ALARM_SECOND_PATCHED in current:
+        if current.count(CONFIG_ALARM_SECOND_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate Alarm_Second patch in sim_config.c.")
+        if CONFIG_ALARM_SECOND_ORIGINAL in current:
+            raise RuntimePreparationError("Both old and patched Alarm_Second handlers exist.")
+    else:
+        if current.count(CONFIG_ALARM_SECOND_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one upstream Alarm_Second handler in sim_config.c."
+            )
+        current = current.replace(CONFIG_ALARM_SECOND_ORIGINAL, CONFIG_ALARM_SECOND_PATCHED, 1)
+
+    if CONFIG_SAVE_OPEN_PATCHED in current:
+        if current.count(CONFIG_SAVE_OPEN_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate configuration fopen guard in sim_config.c.")
+    else:
+        if current.count(CONFIG_SAVE_OPEN_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one SIM_Config_SaveConfigFile fopen marker in sim_config.c."
+            )
+        current = current.replace(CONFIG_SAVE_OPEN_ORIGINAL, CONFIG_SAVE_OPEN_PATCHED, 1)
+
+    return current, current != original
+
+
 def prepare_native_runtime(source_root: str | Path) -> bool:
     """Connect the imported ROM and use the extracted private runtime directory on Android."""
     path = (Path(source_root).expanduser().resolve() / "subprojects" / "libntr"
@@ -223,9 +269,16 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     current, entrypoint_changed = _ensure_android_sdl_entrypoint(current)
     current, include_changed = _ensure_android_system_includes(current)
     current, main_changed = _ensure_android_working_directory(current)
-    changed = current != original
-    if changed:
+
+    # Validate both source files before writing either one.
+    config_path = path.parent / "config" / "sim_config.c"
+    config_updated, config_changed = _prepare_sim_config(config_path)
+
+    changed = current != original or config_changed
+    if current != original:
         path.write_text(current, encoding="utf-8")
+    if config_changed:
+        config_path.write_text(config_updated, encoding="utf-8")
     return changed
 
 
