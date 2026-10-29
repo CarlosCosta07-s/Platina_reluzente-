@@ -13,6 +13,7 @@
     romName: '',
     romSize: 0,
     runtimeAvailable: false,
+    runtimeDataAvailable: false,
     importing: false
   };
 
@@ -69,7 +70,9 @@
         sha256: result.sha256
       }));
       renderRom();
-      setStatus('ROM validada e copiada para os dados privados do aplicativo.');
+      setStatus(state.runtimeDataAvailable
+        ? 'ROM validada e copiada para os dados privados do aplicativo. Os dados locais do jogo já estão disponíveis.'
+        : 'ROM validada e copiada. Os recursos do jogo serão extraídos localmente na primeira inicialização.');
     } catch (error) {
       setStatus('Falha ao importar ROM: ' + error.message, true);
     } finally {
@@ -88,7 +91,7 @@
       return;
     }
     if (!state.runtimeAvailable) {
-      setStatus('O pacote não contém todos os componentes do motor nativo.', true);
+      setStatus('O pacote desktop está incompleto: o executável nativo não está disponível.', true);
       return;
     }
     launchButton.disabled = true;
@@ -123,6 +126,7 @@
       window.platina.getImportedRom()
     ]);
     state.runtimeAvailable = Boolean(runtime && runtime.available);
+    state.runtimeDataAvailable = Boolean(runtime && runtime.runtimeDataAvailable);
     if (rom) {
       state.romName = rom.name;
       state.romSize = rom.size || 0;
@@ -131,11 +135,15 @@
     renderRom();
     renderPrimaryAction();
     if (!state.runtimeAvailable) {
-      setStatus('O pacote desktop está incompleto: o executável nativo ou os recursos obrigatórios estão ausentes.', true);
+      setStatus('O pacote desktop está incompleto: o executável nativo está ausente.', true);
+    } else if (state.romImported) {
+      setStatus(state.runtimeDataAvailable
+        ? 'ROM importada. Os dados locais do jogo estão preparados.'
+        : 'ROM importada. Os recursos serão extraídos localmente ao iniciar o jogo.');
     } else {
-      setStatus(state.romImported
-        ? 'ROM importada. O executável nativo já está incluído.'
-        : 'Importe sua ROM .nds. O executável nativo já vem incluído.');
+      setStatus(state.runtimeDataAvailable
+        ? 'Importe sua ROM .nds. O executável nativo já vem incluído.'
+        : 'Importe sua ROM .nds. O executável está incluído; os recursos do jogo serão extraídos localmente na primeira inicialização.');
     }
   }
 
