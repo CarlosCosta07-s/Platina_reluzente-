@@ -1,6 +1,6 @@
 # Pokémon Black Version — porte nativo para PC
 
-**Estado em 29/10/2026:** desenvolvimento paralelo em auditoria técnica. A entrada na biblioteca continua informativa; não existe runtime Black validado nem um pacote Black para baixar.
+**Estado em 29/10/2026:** os builds host Windows x64 e Linux x86-64 e os testes upstream sem ROM passaram na CI. O cartão de Black está integrado à biblioteca unificada e tem importação local de ROM; o runtime ainda não é distribuído nem integrado ao pacote, e não existe pacote Black jogável para baixar.
 
 ## Objetivo e regra de arquitetura
 
@@ -33,7 +33,7 @@ A documentação upstream exige Python 3.11+, CMake 3.16+, Ninja e um compilador
 2. Compilar e executar os testes de regressão do motor sem ROM nem assets.
 3. Compilar o executável nativo x86-64 no Linux e no Windows, sem distribuir o resultado da compilação.
 4. Em ambiente local, usar uma cópia legal da ROM para validar a extração, a tela de título, o início de uma nova partida, controles, áudio, salvamento e retomada.
-5. Só após o build sem ROM passar, conectar um perfil independente de Black ao launcher e validar o importador por SHA-1 integral, separação de diretórios e preservação dos testes de Platinum.
+5. Conectar Black à mesma biblioteca, validar o importador por SHA-1 integral e separar diretórios — etapa de interface e importação já concluída. O próximo bloqueio é integrar um runtime interno legalmente distribuível; o usuário não deve selecionar um executável local separado.
 
 O novo workflow `[Pokémon Black native source validation (no game data)](../.github/workflows/pokemon-black-native-check.yml)` está configurado para Linux x86-64 e Windows x64. Ele fixa os dois commits upstream, executa testes e tenta compilar o porte sem dados do jogo. Ele **não** publica executáveis, ROMs, firmware, saves ou arquivos extraídos. O primeiro resultado da CI será usado para corrigir as instruções, não tratado como prova de que a tela de título funciona.
 
@@ -48,7 +48,7 @@ Logo, o fato de as ferramentas serem MIT, o uso de ROM própria ou a finalidade 
 
 ## Limites de progresso
 
-Nenhuma compilação de Black foi produzida por este repositório antes deste workflow, e ainda não validamos a ROM local, a tela de título ou gameplay. A entrada no launcher permanece desativada para importação/inicialização. Não marcaremos o marco como concluído até haver logs de CI reproduzíveis e testes locais documentados, mantendo a ROM e seus dados fora do GitHub.
+A CI produziu builds de verificação de Windows x64 e Linux x86-64, sem ROM nem recursos do jogo. A tela de título, controles, áudio, salvamento e gameplay com uma ROM local ainda não foram validados. A importação de ROM está disponível no cartão de Black, mas Iniciar permanece bloqueado porque o runtime não está no pacote. Não marcaremos o marco jogável como concluído até resolver a distribuição, integrar o runtime internamente e executar os testes reproduzíveis, mantendo a ROM e os dados extraídos fora do GitHub.
 
 ## Referências
 
