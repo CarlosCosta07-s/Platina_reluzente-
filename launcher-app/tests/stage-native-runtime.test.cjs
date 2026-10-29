@@ -90,8 +90,14 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
   const dataPaths = fs.readFileSync(path.join(destinationRoot, 'platinum-data-paths.txt'), 'utf8').split('\n');
   assert.equal(dataPaths[0], 'PLATINA_DATA_PATHS_V1');
   assert.equal(Number(dataPaths[1]), dataPaths.slice(2).filter(Boolean).length);
-  assert.ok(dataPaths.includes('wazaeffect/we.arc'));
-  assert.ok(dataPaths.includes('battle/skill/waza_seq.narc'));
+  for (const required of [
+    'header.bin', 'arm9.bin', 'arm7.bin', 'arm9ovt.bin', 'arm7ovt.bin',
+    'banner.bin', 'fnt.bin', 'fat.bin', 'rsasig.bin',
+    'wazaeffect/we.arc', 'battle/skill/waza_seq.narc'
+  ]) {
+    assert.ok(dataPaths.includes(required), 'missing required extracted path: ' + required);
+  }
+  assert.equal(dataPaths.includes('firmware.bin'), false);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'data', 'file-000.bin')), false);
   assert.equal(manifest.files[0].sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(destinationRoot, 'main'))).digest('hex'));
 });
