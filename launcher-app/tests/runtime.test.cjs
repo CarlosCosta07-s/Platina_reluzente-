@@ -150,6 +150,47 @@ test('prepares a writable runtime, preserves local game data and refreshes bundl
   }
 });
 
+test('allows an executable-only runtime and preserves assets extracted from the imported ROM', (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-rom-extraction-'));
+  const source = path.join(temp, 'bundled-runtime');
+  const destination = path.join(temp, 'user-data', 'runtime');
+  try {
+    fs.mkdirSync(source, { recursive: true });
+    fs.writeFileSync(path.join(source, 'main'), 'portable native executable');
+    fs.chmodSync(path.join(source, 'main'), 0o755);
+    fs.writeFileSync(path.join(source, 'launcher-runtime-version.txt'), 'native-code-only-build\n');
+
+    assert.equal(hasRequiredRuntimeData(source), false);
+    assert.equal(isRuntimeUsable(source, 'linux'), true);
+
+    const first = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(first.executable, path.join(destination, 'main'));
+    assert.equal(first.reused, false);
+    assert.equal(hasRequiredRuntimeData(destination), false);
+
+    // The native engine writes extracted files relative to its working
+    // directory. A later launch should keep these files when refreshing code.
+    for (const relative of [
+      'header.bin',
+      'firmware.bin',
+      'wazaeffect/we.arc',
+      'battle/skill/waza_seq.narc'
+    ]) {
+      const target = path.join(destination, relative);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, 'extracted-from-user-rom:' + relative);
+    }
+    assert.equal(hasRequiredRuntimeData(destination), true);
+
+    const reused = prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(reused.reused, true);
+    assert.equal(fs.readFileSync(path.join(destination, 'battle', 'skill', 'waza_seq.narc'), 'utf8'),
+      'extracted-from-user-rom:battle/skill/waza_seq.narc');
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('writable runtime preparation rejects a linked bundled runtime tree', (t) => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-writable-runtime-symlink-'));
   const source = path.join(temp, 'bundled-runtime');
