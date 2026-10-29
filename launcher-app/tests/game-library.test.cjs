@@ -8,39 +8,49 @@ const path = require('node:path');
 const appRoot = path.join(__dirname, '..');
 const webRoot = path.join(appRoot, 'web');
 const html = fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8');
+const appJs = fs.readFileSync(path.join(webRoot, 'app.js'), 'utf8');
 const electronMain = fs.readFileSync(path.join(appRoot, 'electron', 'main.cjs'), 'utf8');
-const blackRuntime = fs.readFileSync(path.join(appRoot, 'electron', 'black-runtime.cjs'), 'utf8');
+const preload = fs.readFileSync(path.join(appRoot, 'electron', 'preload.cjs'), 'utf8');
 const packageConfig = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8'));
+const blackRuntimeNotice = fs.readFileSync(path.join(appRoot, 'black-runtime', 'README.md'), 'utf8');
 
-test('Black card provides import and start controls for a user-supplied local runtime', () => {
-  const start = html.indexOf('<article class="black-project-card"');
-  assert.notEqual(start, -1, 'Black project card should be present in the launcher');
-  const end = html.indexOf('</article>', start);
-  assert.notEqual(end, -1, 'Black project card should be closed');
-  const card = html.slice(start, end);
+test('Platinum and Black are presented in one selectable launcher library', () => {
+  assert.match(html, /id="platinum-library-card"/);
+  assert.match(html, /id="black-library-card"/);
+  assert.match(html, /Pokémon Platinum/);
+  assert.match(html, /Pokémon Black Version/);
+  assert.match(html, /data-game-select="platinum"/);
+  assert.match(html, /data-game-select="black"/);
+  assert.match(appJs, /function selectGame\(game\)/);
+  assert.match(appJs, /platinumDetail\.hidden = blackSelected/);
+  assert.match(appJs, /blackDetail\.hidden = !blackSelected/);
+  assert.match(html, /aria-label="Escolher jogo"/);
+});
 
-  assert.match(card, /Pokémon Black Version/);
-  assert.match(card, /black-runtime-button/);
-  assert.match(card, /black-rom-button/);
-  assert.match(card, /black-launch-button/);
-  assert.match(card, /launcher não inclui o executável Black/i);
-  assert.match(card, /contrato do runtime local/i);
+test('Black import and launch use an internal runtime slot; no external runtime picker exists', () => {
+  assert.match(html, /black-rom-button/);
+  assert.match(html, /black-launch-button/);
+  assert.doesNotMatch(html, /Selecionar runtime Eidos local|black-runtime-button/i);
+  assert.match(electronMain, /function blackRuntimeDirectory\(\)/);
+  assert.match(electronMain, /path\.join\(process\.resourcesPath, 'black-runtime'\)/);
   assert.match(electronMain, /ipcMain\.handle\('platina:black-status'/);
-  assert.match(electronMain, /ipcMain\.handle\('platina:select-black-runtime'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:import-black-rom'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:launch-black-game'/);
+  assert.doesNotMatch(electronMain, /platina:select-black-runtime|showOpenDialog\(\{[\s\S]*openDirectory/);
+  assert.doesNotMatch(preload, /selectBlackRuntime|platina:select-black-runtime/);
+  assert.match(blackRuntimeNotice, /not included at this stage/i);
+  assert.match(blackRuntimeNotice, /must never browse for or launch its executable manually/i);
 });
 
-test('Black runtime is selected locally and is not bundled in public launcher resources', () => {
-  assert.match(blackRuntime, /function inspectBlackRuntime/);
-  assert.match(blackRuntime, /function createBlackLaunchSpec/);
-  assert.match(blackRuntime, /const BLACK_ROM_SHA1/);
+test('launcher reserves the internal Black resource path without bundling an unlicensed runtime', () => {
   const resources = packageConfig.build.extraResources.map((resource) => resource.to);
-  assert.deepEqual(resources, ['runtime'], 'only the existing Platinum runtime directory is bundled');
+  assert.deepEqual(resources, ['runtime', 'black-runtime']);
   assert.doesNotMatch(JSON.stringify(packageConfig.build), /eidos\.exe|SDL3\.dll|PokemonBlack/i);
+  assert.match(electronMain, /O runtime nativo de Pokémon Black ainda não está integrado/);
+  assert.match(electronMain, /readBundledBlackRuntime\(\)/);
 });
 
-test('Platinum ROM validation remains pinned to its own revision and IPC handlers', () => {
+test('Platinum ROM validation and launch IPC remain part of the same app', () => {
   assert.match(electronMain, /const ORIGINAL_ROM_SHA1 = '0862ec35b24de5c7e2dcb88c9eea0873110d755c'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:import-rom'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:launch-game'/);
