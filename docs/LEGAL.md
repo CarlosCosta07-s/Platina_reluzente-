@@ -8,7 +8,7 @@ Platina Reluzente é um projeto comunitário e experimental, sem fins comerciais
 
 ## Direitos de terceiros
 
-Pokémon, Pokémon Platinum, personagens, marcas, músicas, gráficos, textos e demais conteúdos originais pertencem aos respectivos titulares, incluindo Nintendo, The Pokémon Company, Game Freak e/ou seus licenciantes, conforme o material. O projeto não reivindica propriedade sobre esses elementos, não é oficial e não sugere endosso ou associação.
+Pokémon, Pokémon Platinum, Pokémon Black Version, personagens, marcas, músicas, gráficos, textos e demais conteúdos originais pertencem aos respectivos titulares, incluindo Nintendo, The Pokémon Company, Game Freak e/ou seus licenciantes, conforme o material. O projeto não reivindica propriedade sobre esses elementos, não é oficial e não sugere endosso ou associação.
 
 A árvore de código de referência é fornecida por projetos de terceiros. Cada repositório, submódulo e biblioteca mantém seus próprios direitos e licenças. A licença `GPL-3.0` presente na raiz deste repositório não concede direitos sobre Pokémon, ROMs, recursos derivados ou código externo cuja licença seja diferente, ausente ou não confirmada. A licença do código fonte da decompilação/porte de referência não está claramente declarada em todos os repositórios envolvidos; nenhuma distribuição será tratada como automaticamente autorizada até que haja revisão das licenças aplicáveis.
 
