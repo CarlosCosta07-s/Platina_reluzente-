@@ -194,6 +194,14 @@ function createExtractedPathManifest(filesysCsvPath) {
     normalizeManifestPath(row[0], 'source');
     const target = normalizeManifestPath(row[1], 'target');
     const key = target.toLowerCase();
+    const reservedRootNames = new Set([
+      'main', 'main.exe', 'save.bin', 'sim_config.ini', 'header.bin', 'firmware.bin',
+      'launcher-runtime-version.txt', 'launcher-runtime-manifest.json',
+      'platina-data-paths.txt', 'platina-rom-extraction.manifest'
+    ]);
+    if (!target.includes('/') && reservedRootNames.has(key)) {
+      throw new Error('filesys.csv tenta sobrescrever um arquivo reservado do runtime: ' + target);
+    }
     if (seen.has(key)) throw new Error('Destino duplicado em filesys.csv: ' + target);
     seen.add(key);
     targets.add(target);
