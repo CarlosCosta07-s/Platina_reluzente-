@@ -5,7 +5,19 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { stageNativeRuntime } = require('../scripts/stage-native-runtime.cjs');
+const { stageNativeRuntime, createExtractedPathManifest } = require('../scripts/stage-native-runtime.cjs');
+
+function createFilesysCsv(root, entries = 340) {
+  const file = path.join(root, 'platinum.us', 'filesys.csv');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const lines = ['Source File,Target File'];
+  for (let index = 0; index < entries; index += 1) {
+    const name = 'file-' + String(index).padStart(3, '0') + '.bin';
+    lines.push('res/prebuilt/data/' + name + ',/data/' + name);
+  }
+  fs.writeFileSync(file, lines.join('\\n') + '\\n');
+  return file;
+}
 
 function createRuntime(sourceRoot, platform = 'linux') {
   fs.mkdirSync(sourceRoot, { recursive: true });
@@ -48,14 +60,15 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.join(root, 'build_linux', 'pokeplatinum');
   const destinationRoot = path.join(root, 'launcher-app', 'runtime');
+  const dataManifestPath = createFilesysCsv(root);
   createRuntime(sourceRoot, 'linux');
   fs.writeFileSync(path.join(sourceRoot, 'save.bin'), 'user save should not be packaged');
   fs.writeFileSync(path.join(sourceRoot, 'sim_config.ini'), 'user settings should not be packaged');
 
-  const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux' });
+  const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'linux', dataManifestPath });
   assert.equal(result.platform, 'linux');
   assert.equal(result.destination, destinationRoot);
-  assert.equal(result.files, 1);
+  assert.equal(result.files, 3);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main')), true);
   assert.equal(fs.readFileSync(path.join(destinationRoot, 'main'), 'utf8'), 'portable-linux-appimage');
   assert.equal(fs.existsSync(path.join(destinationRoot, 'msgdata', 'pl_msg.narc')), false);
@@ -73,7 +86,13 @@ test('stages a Linux runtime, fingerprints all files, and omits local save/confi
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.platform, 'linux');
   assert.equal(manifest.buildId, result.buildId);
-  assert.deepEqual(manifest.files.map((entry) => entry.path), ['main']);
+  assert.deepEqual(manifest.files.map((entry) => entry.path), ['main', 'platinum-data-paths.txt']);
+  const dataPaths = fs.readFileSync(path.join(destinationRoot, 'platinum-data-paths.txt'), 'utf8').split('\\n');
+  assert.equal(dataPaths[0], 'PLATINA_DATA_PATHS_V1');
+  assert.equal(Number(dataPaths[1]), dataPaths.slice(2).filter(Boolean).length);
+  assert.ok(dataPaths.includes('wazaeffect/we.arc'));
+  assert.ok(dataPaths.includes('battle/skill/waza_seq.narc'));
+  assert.equal(fs.existsSync(path.join(destinationRoot, 'data', 'file-000.bin')), false);
   assert.equal(manifest.files[0].sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(destinationRoot, 'main'))).digest('hex'));
 });
 
@@ -82,9 +101,10 @@ test('stages a Windows runtime with main.exe without requiring Unix executable b
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.join(root, 'build_win64', 'pokeplatinum');
   const destinationRoot = path.join(root, 'launcher-app', 'runtime');
+  const dataManifestPath = createFilesysCsv(root);
   createRuntime(sourceRoot, 'windows');
 
-  const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'windows' });
+  const result = stageNativeRuntime({ sourceRoot, destinationRoot, platform: 'windows', dataManifestPath });
   assert.equal(result.executable, path.join(destinationRoot, 'main.exe'));
   assert.equal(result.files, 2);
   assert.equal(fs.existsSync(path.join(destinationRoot, 'main.exe')), true);
@@ -94,7 +114,8 @@ test('stages a Windows runtime with main.exe without requiring Unix executable b
   const manifest = JSON.parse(fs.readFileSync(path.join(destinationRoot, 'launcher-runtime-manifest.json'), 'utf8'));
   assert.equal(manifest.platform, 'windows');
   assert.equal(manifest.buildId, result.buildId);
-  assert.deepEqual(manifest.files.map((entry) => entry.path), ['SDL2.dll', 'main.exe']);
+  assert.deepEqual(manifest.files.map((entry) => entry.path), ['SDL2.dll', 'main.exe', 'platinum-data-paths.txt']);
+  assert.ok(fs.readFileSync(path.join(destinationRoot, 'platinum-data-paths.txt'), 'utf8').includes('data/file-000.bin'));
 });
 
 test('refuses to stage a Windows runtime that contains a ROM or patch and preserves the previous destination', (t) => {
@@ -155,4 +176,31 @@ test('does not replace a previous runtime when the portable executable is missin
     /Executável nativo portátil Linux ausente/
   );
   assert.equal(fs.readFileSync(path.join(destinationRoot, 'preserve.txt'), 'utf8'), 'previous destination');
+});
+
+test('extracted path manifest rejects truncated, duplicated and traversing paths', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-data-paths-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const csv = createFilesysCsv(root, 340);
+  const content = createExtractedPathManifest(csv);
+  assert.match(content, /^PLATINA_DATA_PATHS_V1\\n\\d+\\n/);
+  assert.ok(content.includes('wazaeffect/we.arc'));
+  assert.ok(content.includes('battle/skill/waza_seq.narc'));
+
+  const truncated = path.join(root, 'truncated.csv');
+  fs.writeFileSync(truncated, 'Source File,Target File\\nres/a.bin,/data/a.bin\\n');
+  assert.throws(() => createExtractedPathManifest(truncated), /incompleto/);
+
+  const duplicate = path.join(root, 'duplicate.csv');
+  fs.writeFileSync(duplicate, 'Source File,Target File\\nres/a.bin,/data/a.bin\\nres/b.bin,/data/a.bin\\n');
+  assert.throws(() => createExtractedPathManifest(duplicate), /Destino duplicado/);
+
+  const unsafe = path.join(root, 'unsafe.csv');
+  const rows = ['Source File,Target File'];
+  for (let index = 0; index < 300; index += 1) {
+    rows.push('res/file-' + index + '.bin,/data/file-' + index + '.bin');
+  }
+  rows[1] = 'res/escape.bin,/data/../outside.bin';
+  fs.writeFileSync(unsafe, rows.join('\\n') + '\\n');
+  assert.throws(() => createExtractedPathManifest(unsafe), /Caminho inseguro/);
 });
