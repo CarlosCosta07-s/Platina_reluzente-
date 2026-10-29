@@ -28,10 +28,6 @@ public class PlatinaGamePlugin extends Plugin {
             "header.bin",
             "firmware.bin",
             "build-version.txt",
-            "arm9.bin",
-            "arm7.bin",
-            "arm9ovt.bin",
-            "arm7ovt.bin",
             "wazaeffect/we.arc",
             "battle/skill/waza_seq.narc"
     };
