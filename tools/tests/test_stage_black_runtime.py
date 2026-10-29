@@ -8,6 +8,7 @@ from scripts.stage_black_runtime import (
     parse_ldd_dependencies,
     parse_objdump_imports,
     stage_black_runtime,
+    _windows_dependencies,
 )
 
 
@@ -40,6 +41,46 @@ class BlackRuntimeStagingTests(unittest.TestCase):
             ),
             ["SDL3.dll", "KERNEL32.dll"],
         )
+
+
+    def test_windows_dependency_closure_is_case_insensitive_across_dlls(self):
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "build"
+            source.mkdir()
+            executable = source / "eidos.exe"
+            executable.write_bytes(b"fake executable")
+            sdl = source / "SDL3.dll"
+            sdl.write_bytes(b"fake SDL")
+            dependency_dir = root / "toolchain" / "bin"
+            dependency_dir.mkdir()
+            helper = dependency_dir / "Helper.dll"
+            helper.write_bytes(b"fake helper")
+
+            def fake_objdump(args, **kwargs):
+                image_name = Path(args[-1]).name.casefold()
+                if image_name == "eidos.exe":
+                    output = "  DLL Name: SDL3.dll\\n  DLL Name: Helper.dll\\n"
+                elif image_name == "sdl3.dll":
+                    output = "  DLL Name: HELPER.DLL\\n"
+                elif image_name == "helper.dll":
+                    output = "  DLL Name: KERNEL32.dll\\n"
+                else:
+                    raise AssertionError("Unexpected dependency inspected: " + image_name)
+                return SimpleNamespace(returncode=0, stdout=output, stderr="")
+
+            with patch("scripts.stage_black_runtime.shutil.which", return_value="objdump"), patch(
+                "scripts.stage_black_runtime.subprocess.run", side_effect=fake_objdump
+            ), patch(
+                "scripts.stage_black_runtime._is_windows_system_dll", return_value=True
+            ):
+                dependencies = _windows_dependencies(executable, source, [dependency_dir])
+
+            self.assertEqual(set(dependencies), {"SDL3.dll", "Helper.dll"})
+            self.assertEqual(dependencies["SDL3.dll"], sdl.resolve())
+            self.assertEqual(dependencies["Helper.dll"], helper.resolve())
 
     def test_linux_staging_copies_only_native_runtime_and_resolved_non_system_libraries(self):
         with tempfile.TemporaryDirectory() as tmp:
