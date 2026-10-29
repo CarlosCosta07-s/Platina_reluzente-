@@ -5,10 +5,12 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/rom-storage.cjs && node --check electron/native-process.cjs && node --check web/app.js",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/runtime.cjs && node --check electron/rom-storage.cjs && node --check electron/native-process.cjs && node --check scripts/stage-native-runtime.cjs && node --check web/app.js",
     "test": "npm run check && node --test tests/*.test.cjs && npm run build:web",
-    "build:windows": "npm run build:web && electron-builder --win portable --x64",
-    "build:linux": "npm run build:web && electron-builder --linux AppImage tar.gz --x64",
+    "stage:runtime:windows": "node scripts/stage-native-runtime.cjs windows",
+    "stage:runtime:linux": "node scripts/stage-native-runtime.cjs linux",
+    "build:windows": "npm run stage:runtime:windows && npm run build:web && electron-builder --win portable --x64",
+    "build:linux": "npm run stage:runtime:linux && npm run build:web && electron-builder --linux AppImage tar.gz --x64",
     "build:web": "node scripts/build-web.cjs"
   },
   "devDependencies": {
