@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { stageNativeRuntime, createExtractedPathManifest } = require('../scripts/stage-native-runtime.cjs');
+const { stageNativeRuntime, createExtractedPathManifest, loadExtractedPathManifest } = require('../scripts/stage-native-runtime.cjs');
 
 function createFilesysCsv(root, entries = 340) {
   const file = path.join(root, 'platinum.us', 'filesys.csv');
@@ -182,6 +182,27 @@ test('does not replace a previous runtime when the portable executable is missin
     /Executável nativo portátil Linux ausente/
   );
   assert.equal(fs.readFileSync(path.join(destinationRoot, 'preserve.txt'), 'utf8'), 'previous destination');
+});
+
+
+test('loads the path-only manifest in isolated package jobs without an upstream checkout', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-data-paths-artifact-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const csvPath = createFilesysCsv(root, 340);
+  const generated = createExtractedPathManifest(csvPath);
+  const manifestPath = path.join(root, 'platinum-data-paths.txt');
+  fs.writeFileSync(manifestPath, generated);
+
+  assert.equal(loadExtractedPathManifest(manifestPath), generated);
+
+  const lines = generated.trimEnd().split('\n');
+  const altered = lines.slice();
+  altered[2] = '../outside.bin';
+  fs.writeFileSync(manifestPath, altered.join('\n') + '\n');
+  assert.throws(() => loadExtractedPathManifest(manifestPath), /Caminho inseguro/);
+
+  fs.writeFileSync(manifestPath, generated.replace(/^PLATINA_DATA_PATHS_V1\n\d+/, 'PLATINA_DATA_PATHS_V1\n299'));
+  assert.throws(() => loadExtractedPathManifest(manifestPath), /incompleto/);
 });
 
 test('extracted path manifest rejects truncated, duplicated and traversing paths', (t) => {
