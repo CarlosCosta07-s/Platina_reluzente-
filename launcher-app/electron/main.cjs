@@ -2,8 +2,8 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, validateNdsHeader } = require('./runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
@@ -25,9 +25,10 @@ function metadataPath() {
   return path.join(app.getPath('userData'), 'rom-import.json');
 }
 async function readImportedRom() {
+  const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
   try {
+    await recoverDesktopRom({ destinationPath: filePath, metadataPath: metadataPath() });
     const metadata = JSON.parse(await fs.promises.readFile(metadataPath(), 'utf8'));
-    const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
     const stat = await fs.promises.stat(filePath);
     if (!stat.isFile() || stat.size !== metadata.size) return null;
     return { ...metadata, filePath };
@@ -35,16 +36,6 @@ async function readImportedRom() {
     return null;
   }
 }
-function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
-    const stream = fs.createReadStream(filePath);
-    stream.on('data', (chunk) => hash.update(chunk));
-    stream.once('error', reject);
-    stream.once('end', () => resolve(hash.digest('hex')));
-  });
-}
-
 ipcMain.handle('platina:platform', () => process.platform);
 ipcMain.handle('platina:runtime-status', async () => {
   const exe = findBundledExecutable(runtimeRoot(), process.platform);
@@ -80,15 +71,17 @@ ipcMain.handle('platina:import-rom', async () => {
   }
 
   const romDir = path.join(app.getPath('userData'), 'roms');
-  await fs.promises.mkdir(romDir, { recursive: true });
   const destination = path.join(romDir, 'current.nds');
-  await fs.promises.copyFile(source, destination);
-  const metadata = {
-    name: path.basename(source), size: stat.size,
-    sha256: await sha256File(destination), storedName: 'current.nds',
-    importedAt: new Date().toISOString()
-  };
-  await fs.promises.writeFile(metadataPath(), JSON.stringify(metadata, null, 2), 'utf8');
+  const metadata = await commitDesktopRom({
+    sourcePath: source,
+    destinationPath: destination,
+    metadataPath: metadataPath(),
+    metadata: {
+      name: path.basename(source),
+      size: stat.size,
+      importedAt: new Date().toISOString()
+    }
+  });
   return { canceled: false, ok: true, name: metadata.name, size: metadata.size, sha256: metadata.sha256 };
 });
 
