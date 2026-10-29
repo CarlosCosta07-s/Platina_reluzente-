@@ -110,20 +110,27 @@
             <div class="black-art-index">PROJECT 02</div>
           </div>
           <div class="black-project-copy">
-            <div class="eyebrow"><span class="eyebrow-line"></span> PROJETO EM FASE INICIAL</div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> PORTE NATIVO PARALELO</div>
             <h2 id="black-project-title">Pokémon Black Version</h2>
-            <p>Um segundo porte nativo para Windows e Linux será desenvolvido em paralelo ao de Platinum. A direção técnica é compilar código C reconstruído para o computador, sem emulador de Nintendo DS nem interpretador de instruções ARM.</p>
+            <p>Este projeto usa a base nativa Eidos/Aletheia para Windows e Linux. O launcher não inclui o executável Black: selecione um build Eidos compilado localmente e importe uma cópia legalmente obtida e compatível da sua ROM. Não é um emulador de Nintendo DS.</p>
             <div class="tag-row">
-              <span class="tag">C NATIVO</span>
+              <span class="tag">C RECONSTRUÍDO</span>
               <span class="tag">WINDOWS / LINUX</span>
-              <span class="tag">BASE EM AUDITORIA</span>
+              <span class="tag">RUNTIME LOCAL</span>
             </div>
             <div class="black-project-status" role="status">
-              <span class="compat-symbol pending" aria-hidden="true">…</span>
-              <div><strong>Em desenvolvimento</strong><span>Runtime Black ainda não integrado ao launcher.</span></div>
+              <span class="compat-symbol pending" id="black-status-symbol" aria-hidden="true">…</span>
+              <div><strong id="black-status-title">Runtime local necessário</strong><span id="black-status-copy">Selecione a pasta build64/host de um build Eidos local para habilitar este projeto.</span></div>
             </div>
-            <p class="black-project-note">Esta entrada é informativa. Importação de ROM e inicialização estão indisponíveis até existir um runtime próprio, validado e separado de Platinum.</p>
+            <div class="black-project-actions">
+              <button class="small-button" id="black-runtime-button" type="button">Selecionar runtime Eidos local</button>
+              <button class="small-button" id="black-rom-button" type="button">Importar ROM Black</button>
+              <button class="small-button" id="black-launch-button" type="button" disabled>Iniciar Pokémon Black</button>
+            </div>
+            <p class="black-launch-status" id="black-launch-status" role="status">Os executáveis Black não são distribuídos pelo launcher; use apenas um runtime local compatível.</p>
+            <p class="black-project-note">A ROM, a extração, a configuração e os saves do Black são armazenados separadamente de Platinum. A abertura da janela confirma somente o início do processo, não que a tela de título foi alcançada.</p>
             <a class="project-doc-link" href="https://github.com/CarlosCosta07-s/Platina_reluzente-/blob/main/docs/POKEMON_BLACK_PORT.md" target="_blank" rel="noreferrer">Ver plano técnico do porte ↗</a>
+            <a class="project-doc-link" href="https://github.com/CarlosCosta07-s/Platina_reluzente-/blob/main/docs/POKEMON_BLACK_RUNTIME_CONTRACT.md" target="_blank" rel="noreferrer">Ver contrato do runtime local ↗</a>
           </div>
         </article>
       </section>

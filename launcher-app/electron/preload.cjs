@@ -5,5 +5,9 @@ contextBridge.exposeInMainWorld('platina', Object.freeze({
   getRuntimeStatus: () => ipcRenderer.invoke('platina:runtime-status'),
   getImportedRom: () => ipcRenderer.invoke('platina:get-imported-rom'),
   importRom: () => ipcRenderer.invoke('platina:import-rom'),
-  launchGame: () => ipcRenderer.invoke('platina:launch-game')
+  launchGame: () => ipcRenderer.invoke('platina:launch-game'),
+  getBlackStatus: () => ipcRenderer.invoke('platina:black-status'),
+  selectBlackRuntime: () => ipcRenderer.invoke('platina:select-black-runtime'),
+  importBlackRom: () => ipcRenderer.invoke('platina:import-black-rom'),
+  launchBlackGame: () => ipcRenderer.invoke('platina:launch-black-game')
 }));

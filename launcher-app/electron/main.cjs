@@ -5,6 +5,7 @@ const path = require('node:path');
 const { launchNativeProcess } = require('./native-process.cjs');
 const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader } = require('./runtime.cjs');
+const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
 // Native runtime and generated assets are pinned to this exact retail image.
@@ -57,6 +58,47 @@ async function readImportedRom() {
     throw error;
   }
 }
+async function readImportedBlackRom() {
+  const paths = blackPaths({ platform: process.platform, env: process.env });
+  const recoveryResult = await recoverDesktopRom({
+    destinationPath: paths.romPath,
+    metadataPath: paths.romMetadataPath
+  });
+  if (recoveryResult === false) return null;
+
+  try {
+    const [metadataText, stat] = await Promise.all([
+      fs.promises.readFile(paths.romMetadataPath, 'utf8'),
+      fs.promises.lstat(paths.romPath)
+    ]);
+    if (stat.isSymbolicLink() || !stat.isFile()) return null;
+    const metadata = JSON.parse(metadataText);
+    if (!isBlackImportedMetadataValid(metadata, stat.size)) return null;
+    return { ...metadata, filePath: paths.romPath };
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return null;
+    throw error;
+  }
+}
+
+async function readBlackRuntimeSelection() {
+  const paths = blackPaths({ platform: process.platform, env: process.env });
+  try {
+    const stat = await fs.promises.lstat(paths.runtimeSelectionPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      return { runtime: null, error: 'O arquivo de configuração do runtime Black não é um arquivo regular.' };
+    }
+    const saved = JSON.parse(await fs.promises.readFile(paths.runtimeSelectionPath, 'utf8'));
+    const runtime = await inspectBlackRuntime(saved.directory, process.platform);
+    return { runtime, error: '' };
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+      return { runtime: null, error: '' };
+    }
+    return { runtime: null, error: 'O runtime Eidos salvo não está disponível: ' + error.message };
+  }
+}
+
 ipcMain.handle('platina:platform', () => process.platform);
 ipcMain.handle('platina:runtime-status', async () => {
   const root = runtimeRoot();
@@ -145,6 +187,135 @@ ipcMain.handle('platina:import-rom', async () => {
     expectedSha1: ORIGINAL_ROM_SHA1
   });
   return { canceled: false, ok: true, name: metadata.name, size: metadata.size, sha256: metadata.sha256 };
+});
+
+ipcMain.handle('platina:black-status', async () => {
+  const [rom, selectedRuntime] = await Promise.all([
+    readImportedBlackRom(),
+    readBlackRuntimeSelection()
+  ]);
+  return {
+    runtimeAvailable: Boolean(selectedRuntime.runtime),
+    runtimeDirectory: selectedRuntime.runtime ? selectedRuntime.runtime.directory : '',
+    executableName: selectedRuntime.runtime ? selectedRuntime.runtime.executableName : '',
+    romImported: Boolean(rom),
+    romName: rom ? rom.name : '',
+    romSize: rom ? rom.size : 0,
+    error: selectedRuntime.error || '',
+    platform: process.platform
+  };
+});
+
+ipcMain.handle('platina:select-black-runtime', async () => {
+  const selection = await dialog.showOpenDialog({
+    title: 'Selecionar pasta do build local Eidos (Pokémon Black)',
+    properties: ['openDirectory']
+  });
+  if (selection.canceled || selection.filePaths.length === 0) return { canceled: true };
+
+  const directory = selection.filePaths[0];
+  try {
+    const runtime = await inspectBlackRuntime(directory, process.platform);
+    const paths = blackPaths({ platform: process.platform, env: process.env });
+    await ensureBlackDirectories(paths);
+    await fs.promises.writeFile(paths.runtimeSelectionPath, JSON.stringify({
+      directory: runtime.directory,
+      executableName: runtime.executableName,
+      selectedAt: new Date().toISOString()
+    }, null, 2), { encoding: 'utf8', mode: 0o600 });
+    return {
+      canceled: false,
+      ok: true,
+      executableName: runtime.executableName,
+      runtimeDirectory: runtime.directory
+    };
+  } catch (error) {
+    return { canceled: false, ok: false, message: error.message };
+  }
+});
+
+ipcMain.handle('platina:import-black-rom', async () => {
+  const selection = await dialog.showOpenDialog({
+    title: 'Importar ROM local de Pokémon Black',
+    properties: ['openFile'],
+    filters: [{ name: 'ROM de Nintendo DS (.nds)', extensions: ['nds'] }]
+  });
+  if (selection.canceled || selection.filePaths.length === 0) return { canceled: true };
+
+  const source = selection.filePaths[0];
+  try {
+    const inspected = await inspectBlackRom(source);
+    const paths = blackPaths({ platform: process.platform, env: process.env });
+    await ensureBlackDirectories(paths);
+    const metadata = await commitDesktopRom({
+      sourcePath: source,
+      destinationPath: paths.romPath,
+      metadataPath: paths.romMetadataPath,
+      metadata: {
+        name: path.basename(source),
+        size: inspected.size,
+        importedAt: new Date().toISOString()
+      },
+      expectedSha1: BLACK_ROM_SHA1
+    });
+    return {
+      canceled: false,
+      ok: true,
+      name: metadata.name,
+      size: metadata.size,
+      sha1: metadata.sha1,
+      sha256: metadata.sha256
+    };
+  } catch (error) {
+    return { canceled: false, ok: false, message: error.message };
+  }
+});
+
+ipcMain.handle('platina:launch-black-game', async () => {
+  const paths = blackPaths({ platform: process.platform, env: process.env });
+  let rom;
+  try {
+    rom = await readImportedBlackRom();
+  } catch (error) {
+    return { ok: false, message: 'Não foi possível verificar a ROM importada de Pokémon Black: ' + error.message };
+  }
+  if (!rom) {
+    return { ok: false, message: 'Importe uma ROM compatível de Pokémon Black antes de iniciar.' };
+  }
+
+  const selectedRuntime = await readBlackRuntimeSelection();
+  if (!selectedRuntime.runtime) {
+    return {
+      ok: false,
+      message: selectedRuntime.error || 'Selecione primeiro uma pasta de build Eidos local, compilada a partir das revisões documentadas.'
+    };
+  }
+
+  try {
+    await ensureBlackDirectories(paths);
+    const spec = createBlackLaunchSpec({
+      runtime: selectedRuntime.runtime,
+      paths,
+      romPath: rom.filePath,
+      romSha256: rom.sha256,
+      platform: process.platform,
+      env: process.env
+    });
+    const result = await launchNativeProcess({
+      ...spec,
+      platform: process.platform,
+      romSha256: rom.sha256
+    });
+    if (result.ok) {
+      return {
+        ...result,
+        message: 'O processo nativo de Pokémon Black foi iniciado. Isso ainda não confirma a tela de título; consulte o log se a janela não aparecer: ' + result.logPath
+      };
+    }
+    return result;
+  } catch (error) {
+    return { ok: false, message: 'Falha ao preparar a inicialização de Pokémon Black: ' + error.message, logPath: paths.logPath };
+  }
 });
 
 ipcMain.handle('platina:launch-game', async () => {

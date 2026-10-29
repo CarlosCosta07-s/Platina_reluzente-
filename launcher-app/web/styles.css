@@ -117,6 +117,12 @@ h1 { font-size: clamp(29px, 3.2vw, 43px); line-height: 1.08; letter-spacing: -.9
 .black-project-copy .black-project-note { color: #77879c; font-size: 10px; margin-top: 12px; }
 .project-doc-link { display: inline-block; color: #b5d8ff; text-decoration: none; font-size: 11px; font-weight: 750; margin-top: 11px; }
 .project-doc-link:hover { text-decoration: underline; }
+.black-project-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.black-project-actions .small-button { grid-column: auto; justify-self: auto; white-space: normal; min-height: 34px; }
+.black-project-actions .small-button:disabled { opacity: .55; cursor: not-allowed; }
+.black-project-actions #black-launch-button:not(:disabled) { border-color: #557da7; background: #20364d; color: #eef6ff; }
+.black-project-status .compat-symbol.good { background: #18372f; color: #8ee0bf; }
+.black-launch-status { color: #91a3ba; font-size: 10px; line-height: 1.6; margin: 10px 0 0; overflow-wrap: anywhere; }
 .bottom-section { margin-top: 29px; }
 .compat-grid { border: 1px solid #283448; border-radius: 12px; background: #111722; padding: 0 17px; }
 .compat-row { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 15px 0; border-bottom: 1px solid #222d3f; }
