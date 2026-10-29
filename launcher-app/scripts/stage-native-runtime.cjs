@@ -68,7 +68,7 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
   }
 
   visit(sourceRoot);
-  files.sort((a, b) => a.relativePath.localeCompare(b.relativePath, 'en'));
+  files.sort((a, b) => a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0);
 
   const names = new Set(files.map((file) => file.relativePath));
   if (!names.has(expectedExecutable)) {
@@ -93,8 +93,26 @@ function inspectRuntimeTree(sourceRoot, expectedExecutable, platform) {
 
 function hashFile(filePath) {
   const hash = crypto.createHash('sha256');
-  hash.update(fs.readFileSync(filePath));
+  const descriptor = fs.openSync(filePath, 'r');
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    let bytesRead;
+    while ((bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
   return hash.digest('hex');
+}
+
+function lstatIfPresent(filePath) {
+  try {
+    return fs.lstatSync(filePath);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return null;
+    throw error;
+  }
 }
 
 function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
@@ -113,11 +131,10 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
       || source.startsWith(destination + path.sep)) {
     throw new Error('A origem e o destino do runtime não podem estar contidos um no outro.');
   }
-  if (fs.existsSync(destination)) {
-    const destinationStat = fs.lstatSync(destination);
-    if (destinationStat.isSymbolicLink() || !destinationStat.isDirectory()) {
-      throw new Error('Destino do runtime não é uma pasta segura: ' + destination);
-    }
+  const existingDestinationStat = lstatIfPresent(destination);
+  if (existingDestinationStat
+      && (existingDestinationStat.isSymbolicLink() || !existingDestinationStat.isDirectory())) {
+    throw new Error('Destino do runtime não é uma pasta segura: ' + destination);
   }
 
   const target = TARGETS[platform];
@@ -166,19 +183,23 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
     }
 
     let movedDestination = false;
-    if (fs.existsSync(destination)) {
+    if (lstatIfPresent(destination)) {
       fs.renameSync(destination, backup);
       movedDestination = true;
     }
     try {
       fs.renameSync(staging, destination);
     } catch (error) {
-      if (movedDestination && fs.existsSync(backup) && !fs.existsSync(destination)) {
+      if (movedDestination && lstatIfPresent(backup) && !lstatIfPresent(destination)) {
         fs.renameSync(backup, destination);
       }
       throw error;
     }
-    if (movedDestination) fs.rmSync(backup, { recursive: true, force: true });
+    if (movedDestination) {
+      // Installation already succeeded. A stale backup cleanup error should
+      // not make a valid newly staged runtime look like a failed build.
+      try { fs.rmSync(backup, { recursive: true, force: true }); } catch {}
+    }
     return {
       platform,
       files: files.length,
@@ -187,9 +208,9 @@ function stageNativeRuntime({ sourceRoot, destinationRoot, platform }) {
       destination
     };
   } catch (error) {
-    fs.rmSync(staging, { recursive: true, force: true });
-    if (fs.existsSync(backup) && !fs.existsSync(destination)) {
-      fs.renameSync(backup, destination);
+    try { fs.rmSync(staging, { recursive: true, force: true }); } catch {}
+    if (lstatIfPresent(backup) && !lstatIfPresent(destination)) {
+      try { fs.renameSync(backup, destination); } catch {}
     }
     throw error;
   }
