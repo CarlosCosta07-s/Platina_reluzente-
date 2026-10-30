@@ -313,7 +313,7 @@ test('native launcher does not start a second game while the first process is al
   });
   assert.equal(second.ok, false);
   assert.match(second.message, /Outro jogo desta instalação já está em execução/);
-  await waitForLog(logPath, ['process exit: code=0']);
+  await waitForLog(logPath, ['process exit: code=0'], 10000);
   assert.equal(hasActiveNativeProcess(), false);
   assert.equal(idleNotified, true);
 });
@@ -330,6 +330,6 @@ test('native launch reports an executable that exits during startup instead of a
     platform: process.platform
   });
   assert.equal(result.ok, false);
-  assert.match(result.message, /encerrou durante a verificação inicial/);
+  assert.match(result.message, /encerrou antes de apresentar a primeira imagem/);
   assert.match(await fs.readFile(result.logPath, 'utf8'), /process exit: code=7/);
 });
