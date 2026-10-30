@@ -23,6 +23,7 @@ QUICK_MODULES = (
     "test_prepare_native_runtime.py",
     "test_pin_native_dependencies.py",
     "test_verify_native_package.py",
+    "test_smoke_test_native_startup.py",
 )
 
 

@@ -48,7 +48,7 @@ status=0
   SMOKE_TEST_LOGFILE="$app_log" SMOKE_TEST_DURATION="$duration" SMOKE_TEST_BINARY="$binary" \
     SDL_AUDIODRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1 \
     xvfb-run -a timeout --signal=TERM --kill-after=3s "$((duration + 20))s" \
-    bash -c '
+    bash -s <<'PLATINA_SMOKE_TEST'
       set -Eeuo pipefail
       logfile="${SMOKE_TEST_LOGFILE:?SMOKE_TEST_LOGFILE is required}"
       active_seconds="${SMOKE_TEST_DURATION:?SMOKE_TEST_DURATION is required}"
@@ -93,7 +93,7 @@ status=0
       fi
       # Only known fatal video/renderer failures fail this pre-ROM gate.
       # SDL audio and joystick warnings are optional and must not fail the test.
-      fatal_pattern='SDL video/timer initialization failed|SDL window creation failed|SDL GL context creation failed|OpenGL function loader initialization failed|Native renderer initialization failed|ERROR COMPILING _source SHADER'
+      fatal_pattern="SDL video/timer initialization failed|SDL window creation failed|SDL GL context creation failed|OpenGL function loader initialization failed|Native renderer initialization failed|ERROR COMPILING _source SHADER"
       if grep -Eiq "$fatal_pattern" "$logfile"; then
         echo "Falha fatal de SDL/OpenGL detectada no log de inicialização:" >&2
         grep -Ein "$fatal_pattern" "$logfile" >&2 || true
@@ -107,7 +107,7 @@ status=0
       fi
       echo "PASS: janela criada, processo ativo e nenhum erro fatal conhecido de SDL/OpenGL foi registrado."
       echo "Isso confirma apenas a inicialização pré-ROM; não comprova carregamento ou gameplay."
-    '
+PLATINA_SMOKE_TEST
 ) >"$logfile" 2>&1 || status=$?
 
 if [[ -s "$logfile" ]]; then
