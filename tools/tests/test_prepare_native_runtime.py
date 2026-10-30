@@ -27,6 +27,8 @@ from scripts.prepare_native_runtime import (
     SHADER_LOG_LENGTH_QUERY_ORIGINAL,
     SHADER_LOG_LENGTH_QUERY_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
+    PLATINA_WINDOW_DECLARATION_PATCHED,
+    PLATINA_FIRST_FRAME_HANDOFF_PATCHED,
     SDL_VIEWPORT_PATCHED,
     INPUT_RELEASE_HELPER_PATCHED,
     MOUSE_DOWN_DECLARATION_ORIGINAL,
@@ -299,6 +301,7 @@ UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 
 static bool sFastForward = false;
 static u8 isMouseDown = 0;
+static SDL_Window *window;
 
 void *SIM_RenderInit(void *arg) {
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
@@ -329,6 +332,12 @@ void SIM_Render(void) {
         int keyRead = Event.key.keysym.sym;
         (void)keyRead;
       }
+    }
+
+    SDL_GL_SwapWindow(window);
+
+    if(sChangeInternalResAfterRender) {
+      // Fixture-only body for the post-render boundary.
     }
 }
 
@@ -521,6 +530,11 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("#else\n  return CARDi_ExecuteOldTypeTask", CARD_IDENTIFY_BACKUP_PATCHED)
             self.assertIn(SDL_INIT_PATCHED, content)
             self.assertIn(SDL_WINDOW_CONTEXT_PATCHED, content)
+            self.assertIn("SDL_WINDOW_HIDDEN", SDL_WINDOW_CONTEXT_PATCHED)
+            self.assertIn(PLATINA_WINDOW_DECLARATION_PATCHED, content)
+            self.assertIn(PLATINA_FIRST_FRAME_HANDOFF_PATCHED, content)
+            self.assertIn("[Platina-Progress] renderer-ready", content)
+            self.assertIn("[Platina-Progress] native-boot-start", content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
             self.assertIn('if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0)', content)
             self.assertIn(GL_LOADER_PATCHED, content)
