@@ -514,7 +514,7 @@ ipcMain.handle('platina:launch-game', async () => {
         sendLaunchProgress(
           'O runtime não apresentou novos frames há '
           + Math.ceil(silentForMs / 1000)
-          + ' segundos. O processo continua ativo; o launcher foi reaberto para diagnóstico. Consulte o log antes de encerrar o jogo.'
+          + ' segundos. O launcher ainda não recebeu o encerramento do processo e não o finalizará automaticamente; a interface foi reaberta para diagnóstico. Consulte o log antes de encerrar o jogo.'
         );
       },
       onRecovered: () => {
