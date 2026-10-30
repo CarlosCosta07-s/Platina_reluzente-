@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-// A short but meaningful grace period catches native processes that start
-// successfully and then exit before the game has finished early initialization.
-const STARTUP_CONFIRMATION_MS = 3000;
+// The launcher waits for a real SDL first-frame marker before hiding itself.
+const WINDOW_READY_TIMEOUT_MS = 60 * 1000;
+const STARTUP_OUTPUT_TAIL_CHARS = 8192;
 let activeLaunch = null;
 const idleCallbacks = new Set();
 
@@ -100,9 +100,21 @@ function launchNativeProcess({
   env = process.env,
   logPath,
   platform = process.platform,
-  romSha256 = 'unavailable'
+  romSha256 = 'unavailable',
+  onProgress = () => {},
+  onWindowReady = () => {},
+  startupTimeoutMs = WINDOW_READY_TIMEOUT_MS
 }) {
   const absoluteLogPath = typeof logPath === 'string' ? path.resolve(logPath) : '';
+  if (typeof onProgress !== 'function' || typeof onWindowReady !== 'function'
+      || !Number.isFinite(startupTimeoutMs) || startupTimeoutMs < 1) {
+    return Promise.resolve({
+      ok: false,
+      message: 'Parâmetros inválidos para acompanhar a primeira imagem do processo nativo.',
+      ...(absoluteLogPath ? { logPath: absoluteLogPath } : {})
+    });
+  }
+
   try {
     validateLaunchRequest({ executable, args, cwd, env, logPath: absoluteLogPath, platform });
   } catch (error) {
@@ -164,13 +176,29 @@ function launchNativeProcess({
     let descriptorOpen = true;
     let settled = false;
     let startupTimer = null;
-    const token = { child: null, pid: null, startedAt: Date.now() };
+    let diagnosticTail = '';
+    const pendingOutput = { stdout: '', stderr: '' };
+    const token = {
+      child: null,
+      pid: null,
+      startedAt: Date.now(),
+      windowReady: false
+    };
     activeLaunch = token;
 
     const closeLogDescriptor = () => {
       if (!descriptorOpen) return;
       descriptorOpen = false;
       try { fs.closeSync(logDescriptor); } catch {}
+    };
+
+    const writeLogChunk = (chunk) => {
+      if (!descriptorOpen) return;
+      try {
+        fs.writeSync(logDescriptor, chunk);
+      } catch (error) {
+        appendSafeDiagnostic(absoluteLogPath, 'startup log write failed: ' + error.message);
+      }
     };
 
     const releaseLaunch = () => {
@@ -194,12 +222,63 @@ function launchNativeProcess({
       resolve({ ...result, logPath: absoluteLogPath });
     };
 
+    const diagnosticSummary = () => diagnosticTail
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !/^\[Platina-Progress\]/.test(line))
+      .slice(-3)
+      .join(' | ');
+
+    const processLine = (line) => {
+      const match = /^\[Platina-Progress\]\s+([a-z][a-z0-9_-]*)\b/i.exec(line.trim());
+      if (!match) return;
+      const stage = match[1].toLowerCase();
+      try { onProgress(stage); } catch (error) {
+        appendLog(absoluteLogPath, 'startup progress callback failed: ' + error.message);
+      }
+      if (stage !== 'window-ready' || token.windowReady) return;
+
+      token.windowReady = true;
+      clearStartupTimer();
+      appendLog(absoluteLogPath, 'first game frame presented; native window is now visible');
+      try {
+        onWindowReady({ pid: token.pid, elapsedMs: Date.now() - token.startedAt });
+      } catch (error) {
+        appendLog(absoluteLogPath, 'window-ready callback failed: ' + error.message);
+      }
+      finish({
+        ok: true,
+        pid: token.pid,
+        windowReady: true,
+        message: 'O runtime apresentou a primeira imagem do jogo. A janela nativa está pronta.'
+      });
+    };
+
+    const handleOutput = (streamName, chunk) => {
+      const output = chunk.toString('utf8');
+      writeLogChunk(output);
+      diagnosticTail = (diagnosticTail + output).slice(-STARTUP_OUTPUT_TAIL_CHARS);
+      const combined = pendingOutput[streamName] + output;
+      const lines = combined.split(/\r?\n/);
+      pendingOutput[streamName] = lines.pop() || '';
+      for (const line of lines) processLine(line);
+    };
+
+    const flushPendingOutput = () => {
+      for (const streamName of ['stdout', 'stderr']) {
+        if (pendingOutput[streamName]) {
+          processLine(pendingOutput[streamName]);
+          pendingOutput[streamName] = '';
+        }
+      }
+    };
+
     let child;
     try {
       child = spawn(executable, args, {
         cwd,
         detached: true,
-        stdio: ['ignore', logDescriptor, logDescriptor],
+        stdio: ['ignore', 'pipe', 'pipe'],
         shell: false,
         windowsHide: false,
         env
@@ -217,6 +296,9 @@ function launchNativeProcess({
       return;
     }
 
+    child.stdout.on('data', (chunk) => handleOutput('stdout', chunk));
+    child.stderr.on('data', (chunk) => handleOutput('stderr', chunk));
+
     child.once('error', (error) => {
       closeLogDescriptor();
       releaseLaunch();
@@ -228,16 +310,21 @@ function launchNativeProcess({
       });
     });
 
-    child.once('exit', (code, signal) => {
+    child.once('close', (code, signal) => {
+      flushPendingOutput();
       clearStartupTimer();
       closeLogDescriptor();
       appendLog(absoluteLogPath, 'process exit: code=' + code + ' signal=' + (signal || 'none'));
       releaseLaunch();
       if (!settled) {
+        const diagnostic = diagnosticSummary();
         finish({
           ok: false,
-          message: 'O processo nativo encerrou durante a verificação inicial (código '
-            + code + ', sinal ' + (signal || 'nenhum') + '). Consulte o log: ' + absoluteLogPath
+          pid: token.pid,
+          message: 'O processo nativo encerrou antes de apresentar a primeira imagem (código '
+            + code + ', sinal ' + (signal || 'nenhum') + ').'
+            + (diagnostic ? ' Último diagnóstico: ' + diagnostic + '.' : '')
+            + ' Consulte o log: ' + absoluteLogPath
         });
       }
     });
@@ -245,24 +332,36 @@ function launchNativeProcess({
     child.once('spawn', () => {
       token.pid = child.pid || null;
       appendLog(absoluteLogPath, 'spawn succeeded; PID=' + child.pid);
-      closeLogDescriptor();
+      if (settled || token.windowReady) return;
 
-      // Catch immediate loader/runtime failures rather than displaying a
-      // successful launch for a process that dies as soon as it starts.
       startupTimer = setTimeout(() => {
-        if (settled) return;
-        child.unref();
+        if (settled || token.windowReady) return;
+        const diagnostic = diagnosticSummary();
+        appendLog(
+          absoluteLogPath,
+          'first-frame timeout after ' + startupTimeoutMs + ' ms; requesting process termination'
+        );
         finish({
-          ok: true,
-          pid: child.pid,
-          message: 'O processo nativo permaneceu ativo por 3 segundos, mas a janela do jogo não foi confirmada. Se nada aparecer, abra o log de inicialização: '
-            + absoluteLogPath
+          ok: false,
+          pid: child.pid || null,
+          startupTimedOut: true,
+          message: 'O runtime não apresentou a primeira imagem em '
+            + Math.ceil(startupTimeoutMs / 1000)
+            + ' segundos. Para evitar uma janela preta aparentemente congelada, a inicialização foi interrompida e o launcher permaneceu disponível.'
+            + (diagnostic ? ' Último diagnóstico: ' + diagnostic + '.' : '')
+            + ' Consulte o log: ' + absoluteLogPath
         });
-      }, STARTUP_CONFIRMATION_MS);
+        try {
+          if (!child.kill()) {
+            appendLog(absoluteLogPath, 'process termination request was not accepted');
+          }
+        } catch (error) {
+          appendLog(absoluteLogPath, 'process termination request failed: ' + error.message);
+        }
+      }, startupTimeoutMs);
     });
   });
 }
-
 
 const PREPARE_TIMEOUT_MS = 20 * 60 * 1000;
 let preparing = false;
