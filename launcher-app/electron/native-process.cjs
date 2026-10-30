@@ -186,6 +186,8 @@ function launchNativeProcess({
     let heartbeatTimer = null;
     let lastHeartbeatAt = 0;
     let heartbeatStalled = false;
+    let lastProgressStage = 'process-started';
+    let lastHeartbeatFrame = null;
     let diagnosticTail = '';
     const pendingOutput = { stdout: '', stderr: '' };
     const token = {
@@ -246,13 +248,16 @@ function launchNativeProcess({
         heartbeatStalled = true;
         appendLog(
           absoluteLogPath,
-          'renderer heartbeat missing for ' + silentForMs + ' ms; no process-exit event has been received yet'
+          'renderer heartbeat missing for ' + silentForMs + ' ms; no process-exit event has been received yet; last_stage='
+            + lastProgressStage + ' last_frame=' + (lastHeartbeatFrame === null ? 'unknown' : lastHeartbeatFrame)
         );
         try {
           onStall({
             pid: token.pid,
             silentForMs,
-            lastHeartbeatAt: new Date(lastHeartbeatAt).toISOString()
+            lastHeartbeatAt: new Date(lastHeartbeatAt).toISOString(),
+            lastProgressStage,
+            lastHeartbeatFrame
           });
         } catch (error) {
           appendLog(absoluteLogPath, 'heartbeat stall callback failed: ' + error.message);
@@ -278,11 +283,17 @@ function launchNativeProcess({
       const match = /^\[Platina-Progress\]\s+([a-z][a-z0-9_-]*)\b/i.exec(line.trim());
       if (!match) return;
       const stage = match[1].toLowerCase();
+      lastProgressStage = stage;
       try { onProgress(stage); } catch (error) {
         appendLog(absoluteLogPath, 'startup progress callback failed: ' + error.message);
       }
 
       if (stage === 'heartbeat' && token.windowReady) {
+        const frameMatch = /\bframe=(\d+)\b/.exec(line);
+        if (frameMatch) {
+          const frameNumber = Number(frameMatch[1]);
+          if (Number.isSafeInteger(frameNumber)) lastHeartbeatFrame = frameNumber;
+        }
         lastHeartbeatAt = Date.now();
         if (heartbeatStalled) {
           heartbeatStalled = false;
@@ -391,7 +402,8 @@ function launchNativeProcess({
           ok: false,
           pid: token.pid,
           message: 'O processo nativo encerrou antes de apresentar a primeira imagem (código '
-            + code + ', sinal ' + (signal || 'nenhum') + ').'
+            + code + ', sinal ' + (signal || 'nenhum') + '). Última etapa confirmada: '
+            + lastProgressStage + '.'
             + (diagnostic ? ' Último diagnóstico: ' + diagnostic + '.' : '')
             + ' Consulte o log: ' + absoluteLogPath
         });
@@ -416,7 +428,8 @@ function launchNativeProcess({
           startupTimedOut: true,
           message: 'O runtime não apresentou a primeira imagem em '
             + Math.ceil(startupTimeoutMs / 1000)
-            + ' segundos. Para evitar uma janela preta aparentemente congelada, o launcher solicitou o encerramento do processo e permaneceu disponível.'
+            + ' segundos. Última etapa confirmada: ' + lastProgressStage + '.'
+            + ' Para evitar uma janela preta aparentemente congelada, o launcher solicitou o encerramento do processo e permaneceu disponível.'
             + (diagnostic ? ' Último diagnóstico: ' + diagnostic + '.' : '')
             + ' Consulte o log: ' + absoluteLogPath
         });
