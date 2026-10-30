@@ -482,7 +482,12 @@ ipcMain.handle('platina:launch-game', async () => {
     if (!prepared.ok) return { ok: false, message: prepared.message, logPath };
     // Phase 2: keep SDL hidden until the native runtime presents a complete frame.
     const restoreLauncher = () => {
-      for (const window of BrowserWindow.getAllWindows()) {
+      let windows = BrowserWindow.getAllWindows();
+      if (windows.length === 0) {
+        createWindow();
+        windows = BrowserWindow.getAllWindows();
+      }
+      for (const window of windows) {
         if (window.isDestroyed()) continue;
         window.restore();
         window.setFullScreen(true);
@@ -503,6 +508,19 @@ ipcMain.handle('platina:launch-game', async () => {
         for (const window of BrowserWindow.getAllWindows()) {
           if (!window.isDestroyed()) window.minimize();
         }
+      },
+      onStall: ({ silentForMs }) => {
+        restoreLauncher();
+        sendLaunchProgress(
+          'O runtime não apresentou novos frames há '
+          + Math.ceil(silentForMs / 1000)
+          + ' segundos. O processo continua ativo; o launcher foi reaberto para diagnóstico. Consulte o log antes de encerrar o jogo.'
+        );
+      },
+      onRecovered: () => {
+        sendLaunchProgress(
+          'O ciclo de renderização voltou a apresentar frames. O launcher permaneceu aberto; volte à janela do jogo quando estiver pronto.'
+        );
       }
     });
     if (launched.ok || hasActiveNativeProcess()) {
