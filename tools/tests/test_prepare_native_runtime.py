@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.localization_manifest import TARGET_FILES
+from tools.localization_manifest import PTBR_RESOURCE_SHA256
 
 from scripts.prepare_native_runtime import (
     CONFIG_ALARM_SECOND_PATCHED,
@@ -412,8 +412,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(FS_LOCALIZATION_OPEN_PATCHED, fs_content)
             self.assertEqual(fs_content.count(FS_LOCALIZATION_HELPERS_PATCHED), 1)
             self.assertEqual(fs_content.count(FS_LOCALIZATION_OPEN_PATCHED), 1)
-            for resource in TARGET_FILES:
-                self.assertIn('"' + resource.as_posix() + '"', FS_LOCALIZATION_HELPERS_PATCHED)
+            for resource_path in PTBR_RESOURCE_SHA256:
+                self.assertIn('"' + resource_path + '"', FS_LOCALIZATION_HELPERS_PATCHED)
             self.assertIn('getenv("PLATINA_LANGUAGE")', FS_LOCALIZATION_OPEN_PATCHED)
             self.assertIn('getenv("PLATINA_LOCALIZATION_DIR")', FS_LOCALIZATION_OPEN_PATCHED)
             self.assertIn("Required PT-BR resource is missing or unreadable", FS_LOCALIZATION_OPEN_PATCHED)
