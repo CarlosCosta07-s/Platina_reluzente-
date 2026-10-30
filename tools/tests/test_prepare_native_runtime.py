@@ -507,6 +507,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(ROM_PREFLIGHT_ENTRY_PATCHED, content)
             self.assertIn(ROM_PREFLIGHT_INCLUDE_PATCHED, content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM_SHA256")', content)
+            self.assertIn('getenv("PLATINA_RUNTIME_BUILD_ID")', content)
             self.assertIn("platina-rom-extraction.manifest", content)
             self.assertIn("Reusing local game data after per-file CRC32 verification.", content)
             self.assertLess(
@@ -688,6 +689,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("PLATINA_DATA_PATHS_V1", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("platinum-data-paths.txt", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("verifyExtractionCache", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("writeExtractionCache(expectedDataPaths, romSha256, runtimeBuildId)", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("--platina-prepared", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("bool verifyFullCrc", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("if (verifyFullCrc)", ROM_PREFLIGHT_ENTRY_PATCHED)
@@ -695,6 +697,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("Prepared game data changed after launcher verification", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("inspectFileCrc32", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("platina-rom-extraction.manifest", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("PLATINA_EXTRACTION_CACHE_V2", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("runtimeBuildId", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("required extracted data is missing or invalid", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("collectOverlayPaths", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("bool verifyContents", ROM_PREFLIGHT_ENTRY_PATCHED)
@@ -1035,11 +1039,11 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("std::filesystem::current_path(stagingRoot, changeError)", patch)
         self.assertIn("SIM_NDSExtract(absoluteRomPath.string())", patch)
         self.assertIn("collectOverlayPaths(stagedDataPaths, true, true", patch)
-        self.assertIn("verifyExtractionCache(stagedDataPaths, romSha256, true)", patch)
+        self.assertIn("verifyExtractionCache(stagedDataPaths, romSha256, runtimeBuildId, true)", patch)
         self.assertIn("std::filesystem::current_path(runtimeRoot, restoreError)", patch)
         self.assertNotIn("clearInvalidExtraction", patch)
 
-        stage_verified = patch.index("verifyExtractionCache(stagedDataPaths, romSha256, true)")
+        stage_verified = patch.index("verifyExtractionCache(stagedDataPaths, romSha256, runtimeBuildId, true)")
         marker_removed = patch.index(
             'removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest")',
             stage_verified,
