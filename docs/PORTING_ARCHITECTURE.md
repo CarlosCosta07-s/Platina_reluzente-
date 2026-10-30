@@ -26,15 +26,20 @@ A versão fixada do porte desktop contém arquivos Meson `.wrap` que apontam par
 
 A compilação no GitHub Actions prepara o código upstream como um checkout Git independente, porque um gerador de cabeçalho do upstream consulta os hashes Git da árvore principal e da libntr. Essa preparação evita depender de caminhos internos da metadata de um submódulo aninhado.
 
-## Fluxo de execução planejado
+## Fluxo atual de importação, preparação e boot
 
-1. O código C/C++ é compilado pelo toolchain do sistema-alvo.
-2. As funções de compatibilidade fornecem ao jogo as operações de sistema e renderização esperadas.
-3. A camada gráfica traduz as chamadas do jogo para a API gráfica do host.
-4. Os dados do jogo são fornecidos localmente pelo usuário; o repositório não distribui ROMs nem arquivos extraídos.
-5. Testes automatizados verificam compilação e comportamento de subsistemas. Testes de jogo exigem uma cópia local e são separados da CI sem dados proprietários.
+O fluxo adota o princípio do Gen1Recomp de não bloquear o loop gráfico com a preparação inicial dos dados, mas mantém a execução do jogo em C/C++ nativo.
 
-A camada de compatibilidade implementa comportamento de APIs do DS; isso não é o mesmo que emular a CPU do DS. O critério do projeto é que a lógica compilada rode como código nativo, sem um interpretador ou máquina virtual de instruções do DS.
+1. **Importação da ROM:** o launcher verifica tamanho, cabeçalho e SHA-1 integral da revisão suportada. A cópia privada é gravada com SHA-256 e metadados; a troca de ROM/metadados usa arquivos temporários, backup e recuperação de uma transação interrompida.
+2. **Preparação do runtime:** o pacote nativo é validado por manifesto SHA-256, copiado para uma pasta gravável do usuário em staging e revalidado antes da promoção. O payload também é verificado contra links simbólicos e código executável não listado.
+3. **Extração pré-boot:** o launcher executa o mesmo binário com `--platina-prepare`, sem criar a janela do jogo. O runtime extrai os dados da ROM para uma pasta privada de staging e reporta progresso ao launcher.
+4. **Contrato do cache V2:** os caminhos esperados vêm de um manifesto de caminhos versionado. Cada arquivo extraído e overlay é validado; o manifesto de conclusão liga os dados ao SHA-256 da ROM e ao build ID SHA-256 do payload nativo (executável e bibliotecas). Os tamanhos e CRC-32 também são registrados. Só depois da validação completa os arquivos e o manifesto são publicados. Mudança da ROM, runtime ou arquivos obrigatórios exige nova preparação.
+5. **Boot nativo:** somente após a preparação bem-sucedida o launcher executa o runtime com `--platina-prepared`. O runtime verifica novamente que os dados não mudaram desde a preparação. A janela SDL fica oculta até o primeiro frame completo do jogo chegar ao ponto de apresentação.
+6. **Diagnóstico:** logs persistentes, marcadores de etapa, primeira imagem e heartbeat de frames distinguem preparação incompleta, boot que não apresenta imagem e interrupção de renderização. Um heartbeat perdido restaura o launcher sem matar automaticamente o processo, protegendo possíveis gravações de save.
+
+A extração fornece recursos locais ao runtime reconstruído; não executa uma máquina virtual de instruções ARM e não emula a CPU do Nintendo DS. O código do jogo compilado pelo toolchain do host continua sendo o código executado durante a partida. O launcher não empacota ROMs nem arquivos extraídos.
+
+A inspiração do fluxo de importação e cache é o [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp), mas ele próprio é uma recriação Lua/LÖVE e não uma recompilação nativa equivalente. O que se reutiliza são os princípios de ROM validada, preparação separada, cache privado versionado, contrato de prontidão e testes sem dados protegidos — não o motor, o renderer ou a implementação Lua.
 
 ## Alvos suportados: Windows e Linux
 
