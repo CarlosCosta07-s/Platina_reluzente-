@@ -12,14 +12,14 @@ test('runtime resolves under Electron resources when packaged', () => {
 });
 
 test('Platinum launch contract passes the verified ROM and Linux AppImage extraction flag', () => {
-  const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' };
+  const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main', buildId: 'a'.repeat(64) };
   const rom = { filePath: '/tmp/private-rom/current.nds', sha256: 'a'.repeat(64) };
   const spec = createPlatinumLaunchSpec({
     runtime,
     rom,
     logPath: '/tmp/platinum-logs/native-startup.log',
     platform: 'linux',
-    env: { PATH: '/usr/bin', DISPLAY: ':7' }
+    env: { PATH: '/usr/bin', DISPLAY: ':7', PLATINA_RUNTIME_BUILD_ID: '0'.repeat(64) }
   });
 
   assert.equal(spec.executable, runtime.executable);
@@ -27,6 +27,7 @@ test('Platinum launch contract passes the verified ROM and Linux AppImage extrac
   assert.equal(spec.cwd, runtime.root);
   assert.equal(spec.env.PLATINA_IMPORTED_ROM, rom.filePath);
   assert.equal(spec.env.PLATINA_IMPORTED_ROM_SHA256, rom.sha256);
+  assert.equal(spec.env.PLATINA_RUNTIME_BUILD_ID, runtime.buildId);
   assert.equal(spec.env.PLATINA_LANGUAGE, 'en');
   assert.equal(spec.env.PLATINA_LOCALIZATION_DIR, undefined);
   assert.equal(spec.env.PATH, '/usr/bin');
@@ -54,7 +55,7 @@ test('prepared Platinum launch carries the verified-cache handoff without mutati
 
 test('Platinum nested AppImage launch removes parent mount paths and forces extract-and-run', () => {
   const spec = createPlatinumLaunchSpec({
-    runtime: { root: '/tmp/game-runtime', executable: '/tmp/game-runtime/main' },
+    runtime: { root: '/tmp/game-runtime', executable: '/tmp/game-runtime/main', buildId: 'c'.repeat(64) },
     rom: { filePath: '/tmp/private-rom/current.nds', sha256: 'c'.repeat(64) },
     logPath: '/tmp/platinum-logs/native-startup.log',
     platform: 'linux',
@@ -76,6 +77,7 @@ test('Platinum nested AppImage launch removes parent mount paths and forces extr
   assert.equal(spec.env.OWD, undefined);
   assert.equal(spec.env.ARGV0, undefined);
   assert.equal(spec.env.APPIMAGE_EXTRACT_AND_RUN, '1');
+  assert.equal(spec.env.PLATINA_RUNTIME_BUILD_ID, 'c'.repeat(64));
   assert.equal(spec.env.LD_LIBRARY_PATH, '/opt/custom/lib:/usr/lib');
   assert.equal(spec.env.LD_PRELOAD, '/usr/lib/libsafe-hook.so');
   assert.equal(spec.env.LD_AUDIT, '/usr/lib/libsafe-audit.so');
@@ -84,7 +86,7 @@ test('Platinum nested AppImage launch removes parent mount paths and forces extr
 
 test('Platinum launch contract omits Linux-only arguments on Windows', () => {
   const spec = createPlatinumLaunchSpec({
-    runtime: { root: 'C:\\Platina\\runtime', executable: 'C:\\Platina\\runtime\\main.exe' },
+    runtime: { root: 'C:\\Platina\\runtime', executable: 'C:\\Platina\\runtime\\main.exe', buildId: 'b'.repeat(64) },
     rom: { filePath: 'C:\\Users\\tester\\roms\\current.nds', sha256: 'b'.repeat(64) },
     logPath: 'C:\\Users\\tester\\logs\\native-startup.log',
     platform: 'win32',
@@ -97,7 +99,7 @@ test('Platinum launch contract omits Linux-only arguments on Windows', () => {
   assert.equal(spec.platform, 'win32');
 });
 
-test('Platinum launch contract rejects missing or malformed ROM identity', () => {
+test('Platinum launch contract rejects missing or malformed ROM identity and runtime build identity', () => {
   const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' };
   const logPath = '/tmp/platinum-logs/native-startup.log';
   assert.throws(() => createPlatinumLaunchSpec({
@@ -109,6 +111,11 @@ test('Platinum launch contract rejects missing or malformed ROM identity', () =>
   assert.throws(() => createPlatinumLaunchSpec({
     runtime, rom: { filePath: 'relative.nds', sha256: 'a'.repeat(64) }, logPath, platform: 'linux', env: {}
   }), /ROM verificada/);
+  assert.throws(() => createPlatinumLaunchSpec({
+    runtime: { ...runtime, buildId: 'invalid' },
+    rom: { filePath: '/tmp/rom.nds', sha256: 'a'.repeat(64) },
+    logPath, platform: 'linux', env: {}
+  }), /runtime.*preparado/i);
 });
 
 test('runtime finds the included Windows/Linux executable names', () => {
@@ -497,7 +504,7 @@ test('runtime integrity check refuses a tampered native executable even when the
 
 test('Platinum PT-BR launch receives only the explicitly validated localization directory', () => {
   const spec = createPlatinumLaunchSpec({
-    runtime: { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' },
+    runtime: { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main', buildId: 'd'.repeat(64) },
     rom: { filePath: '/tmp/private-rom/current.nds', sha256: 'd'.repeat(64) },
     logPath: '/tmp/platinum-logs/native-startup.log',
     platform: 'linux',
@@ -515,7 +522,7 @@ test('Platinum PT-BR launch receives only the explicitly validated localization 
 
 test('Platinum launch rejects an unsupported locale or PT-BR without an absolute package path', () => {
   const common = {
-    runtime: { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' },
+    runtime: { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main', buildId: 'e'.repeat(64) },
     rom: { filePath: '/tmp/private-rom/current.nds', sha256: 'e'.repeat(64) },
     logPath: '/tmp/platinum-logs/native-startup.log',
     platform: 'linux'
