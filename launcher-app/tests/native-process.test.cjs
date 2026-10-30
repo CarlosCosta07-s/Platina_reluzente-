@@ -140,7 +140,7 @@ test('native heartbeat watchdog detects a render stall and reports recovery with
 
   const result = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "process.stderr.write('[Platina-Progress] window-ready\\\\n[Platina-Progress] heartbeat frame=1\\\\n'); setTimeout(() => process.stderr.write('[Platina-Progress] heartbeat frame=2\\\\n'), 450); setTimeout(() => process.exit(0), 850);"],
+    args: ['-e', "process.stderr.write('[Platina-Progress] window-ready\\n[Platina-Progress] heartbeat frame=1\\n'); setTimeout(() => process.stderr.write('[Platina-Progress] heartbeat frame=2\\n'), 450); setTimeout(() => process.exit(0), 850);"],
     cwd: root,
     env: process.env,
     logPath,
@@ -180,7 +180,7 @@ test('steady native heartbeats do not trigger the renderer-stall callback', asyn
 
   const result = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "process.stderr.write('[Platina-Progress] window-ready\\\\n[Platina-Progress] heartbeat frame=1\\\\n'); let frame=1; const timer=setInterval(() => process.stderr.write('[Platina-Progress] heartbeat frame='+(++frame)+'\\\\n'), 35); setTimeout(() => { clearInterval(timer); process.exit(0); }, 250);"],
+    args: ['-e', "process.stderr.write('[Platina-Progress] window-ready\\n[Platina-Progress] heartbeat frame=1\\n'); let frame=1; const timer=setInterval(() => process.stderr.write('[Platina-Progress] heartbeat frame='+(++frame)+'\\n'), 35); setTimeout(() => { clearInterval(timer); process.exit(0); }, 250);"],
     cwd: root,
     env: process.env,
     logPath,
