@@ -28,9 +28,10 @@ function findBundledExecutable(runtimeRoot, platform = process.platform) {
   }
   return null;
 }
+// firmware.bin is optional local NVRAM backing, not a ROM-extracted asset.
+// The simulator handles a missing file as erased flash on first launch.
 const REQUIRED_RUNTIME_FILES = [
   'header.bin',
-  'firmware.bin',
   'wazaeffect/we.arc',
   'battle/skill/waza_seq.narc'
 ];

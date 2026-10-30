@@ -120,11 +120,10 @@ test('runtime finds the included Windows/Linux executable names', () => {
     assert.equal(findBundledExecutable(directory, 'win32'), path.join(directory, 'main.exe'));
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
-test('runtime data status rejects missing or empty required game assets', () => {
+test('runtime data status requires extracted assets but not optional NVRAM backing', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-data-'));
   const required = [
     'header.bin',
-    'firmware.bin',
     'wazaeffect/we.arc',
     'battle/skill/waza_seq.narc'
   ];
@@ -134,6 +133,9 @@ test('runtime data status rejects missing or empty required game assets', () => 
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.writeFileSync(destination, 'fixture');
     }
+    // No firmware.bin is present: first-run NVRAM is initialized by the
+    // simulator fallback and must not block the extracted-data status.
+    assert.equal(fs.existsSync(path.join(directory, 'firmware.bin')), false);
     assert.equal(hasRequiredRuntimeData(directory), true);
 
     fs.unlinkSync(path.join(directory, 'battle/skill/waza_seq.narc'));
@@ -171,7 +173,6 @@ test('runtime rejects symlinked executables and required game assets', (t) => {
 
     const required = [
       'header.bin',
-      'firmware.bin',
       'wazaeffect/we.arc',
       'battle/skill/waza_seq.narc'
     ];
