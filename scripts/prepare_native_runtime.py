@@ -887,6 +887,36 @@ FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLAT
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
         #endif
 
+NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL = r'''	unsigned ndsFileSize = fs::file_size(ndsInputPath);
+
+	if (!fs::exists(ndsInputPath) || !fs::is_regular_file(ndsInputPath)) {
+		std::cout << DERROR << "NDS input file " << ndsInputPath.string() << " is not a valid file" << std::endl;
+		return -1;
+	}
+
+	if (ndsFileSize > oneGB) {
+		std::cout << DERROR << "NDS input file " << ndsInputPath.string() << " is larger than 1GB" << std::endl;
+		return -1;
+	}'''
+NDS_EXTRACTOR_INPUT_CHECK_PATCHED = r'''	std::error_code inputError;
+	const auto inputStatus = fs::status(ndsInputPath, inputError);
+	if (inputError || !fs::is_regular_file(inputStatus)) {
+		std::cout << DERROR << "NDS input file " << ndsInputPath.string() << " is not a valid regular file" << std::endl;
+		return -1;
+	}
+
+	const auto ndsFileSizeValue = fs::file_size(ndsInputPath, inputError);
+	if (inputError) {
+		std::cout << DERROR << "Could not read NDS input file size for " << ndsInputPath.string()
+		          << ": " << inputError.message() << std::endl;
+		return -1;
+	}
+	if (ndsFileSizeValue > oneGB) {
+		std::cout << DERROR << "NDS input file " << ndsInputPath.string() << " is larger than 1GB" << std::endl;
+		return -1;
+	}
+	const unsigned ndsFileSize = static_cast<unsigned>(ndsFileSizeValue);'''
+
         SIM_ShowRomExtractionDialog();
 
         // Manual desktop launches may still use the legacy extraction flow.
@@ -1496,6 +1526,38 @@ def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool
     return extractor_path, current, current != original
 
 
+def _prepare_nds_extractor(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Validate the input image before querying its size; avoid filesystem exceptions."""
+    extractor_path = (
+        Path(source_root).expanduser().resolve()
+        / "subprojects" / "libntr" / "libraries" / "sim" / "src"
+        / "fireflower" / "nds-extract.cpp"
+    )
+    if not extractor_path.is_file():
+        raise RuntimePreparationError(f"NDS extractor source missing: {extractor_path}")
+
+    original = extractor_path.read_text(encoding="utf-8")
+    if NDS_EXTRACTOR_INPUT_CHECK_PATCHED in original:
+        if original.count(NDS_EXTRACTOR_INPUT_CHECK_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate safe NDS input preflight patch detected.")
+        if NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL in original:
+            raise RuntimePreparationError("Both original and patched NDS input preflight blocks exist.")
+        return extractor_path, original, False
+
+    if original.count(NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL) != 1:
+        raise RuntimePreparationError(
+            "Expected exactly one known NDS extractor input preflight; refusing uncertain patch."
+        )
+    updated = original.replace(
+        NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL,
+        NDS_EXTRACTOR_INPUT_CHECK_PATCHED,
+        1,
+    )
+    if updated.count(NDS_EXTRACTOR_INPUT_CHECK_PATCHED) != 1:
+        raise RuntimePreparationError("Safe NDS input preflight was not installed exactly once.")
+    return extractor_path, updated, updated != original
+
+
 def _prepare_sim_audio(source_root: str | Path) -> tuple[Path, str, bool]:
     """Keep the game audio callback alive by falling back to SDL's silent driver."""
     source_path = (
@@ -1639,13 +1701,14 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     config_updated, config_changed = _prepare_sim_config(config_path)
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
     extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
+    nds_extractor_path, nds_extractor_updated, nds_extractor_changed = _prepare_nds_extractor(source_root)
     backup_path, backup_updated, backup_changed = _prepare_backup_save_path(source_root)
     card_path, card_updated, card_changed = _prepare_card_backup_identification(source_root)
     audio_path, audio_updated, audio_changed = _prepare_sim_audio(source_root)
     nvram_path, nvram_updated, nvram_changed = _prepare_nvram_file_backing(source_root)
 
     changed = (
-        current != original or config_changed or fs_changed or extractor_changed
+        current != original or config_changed or fs_changed or extractor_changed or nds_extractor_changed
         or backup_changed or card_changed or audio_changed or nvram_changed
     )
     if current != original:
@@ -1656,6 +1719,8 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         fs_path.write_text(fs_updated, encoding="utf-8")
     if extractor_changed:
         extractor_path.write_text(extractor_updated, encoding="utf-8")
+    if nds_extractor_changed:
+        nds_extractor_path.write_text(nds_extractor_updated, encoding="utf-8")
     if backup_changed:
         backup_path.write_text(backup_updated, encoding="utf-8")
     if card_changed:
