@@ -78,9 +78,9 @@ function validateLaunchRequest({ executable, args, cwd, env, logPath, platform }
     fs.accessSync(executable, fs.constants.X_OK);
   }
 
-  const cwdStat = fs.statSync(cwd);
-  if (!cwdStat.isDirectory()) {
-    throw new Error('A pasta de trabalho do jogo não existe ou não é um diretório.');
+  const cwdStat = fs.lstatSync(cwd);
+  if (cwdStat.isSymbolicLink() || !cwdStat.isDirectory()) {
+    throw new Error('A pasta de trabalho do jogo deve ser um diretório real, sem link simbólico.');
   }
 
   try {
