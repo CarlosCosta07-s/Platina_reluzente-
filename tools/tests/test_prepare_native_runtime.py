@@ -15,6 +15,8 @@ from scripts.prepare_native_runtime import (
     CARD_IDENTIFY_BACKUP_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
+    METROSKREW_DOWNLOAD_ORIGINAL,
+    METROSKREW_DOWNLOAD_PATCHED,
     FS_LOCALIZATION_HELPERS_PATCHED,
     FS_LOCALIZATION_OPEN_ORIGINAL,
     FS_LOCALIZATION_OPEN_PATCHED,
@@ -204,6 +206,51 @@ UPSTREAM_CARD_BACKUP_SOURCE = (
     + "\n#endif\n}\n"
 )
 
+UPSTREAM_METROSKREW_SCRIPT = r'''#!/usr/bin/env bash
+
+# Usage: Run this script from the project root and provide the following environment variables:
+#   - SKREW_SYS - controls the distribution downloaded; either \`windows\`, \`linux\`, or \`wine\`
+#   - SKREW_VER - the release version of the metroskrew archive to be downloaded
+#   - SKREW_DIR - the subproject directory in which metroskrew shall be stored
+
+set -euxo pipefail
+
+case "$SKREW_SYS" in
+windows)
+    SKREW_EXT=".7z"
+    EXTRACTOR="p7zip -d"
+    ;;
+
+linux | wine)
+    SKREW_EXT=".tar.xz"
+    EXTRACTOR="tar xf"
+    ;;
+
+*)
+    echo "Unrecognized platform $SKREW_SYS"
+    exit 1
+    ;;
+esac
+
+TMP="/tmp"
+
+SKREW="metroskrew"
+SKREW_GH="https://github.com/mid-kid/$SKREW"
+SKREW_ARC="metroskrew-$SKREW_SYS$SKREW_EXT"
+SKREW_URL="$SKREW_GH/releases/download/$SKREW_VER/$SKREW_ARC"
+SKREW_TMP="$TMP/$SKREW"
+
+rm -rf "$SKREW_DIR"
+
+# We extract the archive to \`/tmp\` to ensure that Windows does not muddle with permissions.
+pushd "$TMP" >/dev/null
+wget --quiet --show-progress -O "$SKREW_ARC" "$SKREW_URL"
+$EXTRACTOR "$SKREW_ARC"
+popd >/dev/null
+
+mv "$SKREW_TMP" "$SKREW_DIR"
+'''
+
 UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
 #ifdef SDK_PORT
 #include <string.h>
@@ -374,6 +421,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         nvram_source.write_text(UPSTREAM_NVRAM_INSTRUCTION, encoding="utf-8")
         audio_source = root / "subprojects/libntr/libraries/sim/src/sim_audio.cpp"
         audio_source.write_text(UPSTREAM_SIM_AUDIO, encoding="utf-8")
+        metroskrew_helper = root / "tools/devtools/get_metroskrew.sh"
+        metroskrew_helper.parent.mkdir(parents=True, exist_ok=True)
+        metroskrew_helper.write_text(UPSTREAM_METROSKREW_SCRIPT, encoding="utf-8")
         return source
 
     def test_uses_imported_rom_header_and_hardens_desktop_runtime(self):
@@ -417,6 +467,13 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('getenv("PLATINA_LANGUAGE")', FS_LOCALIZATION_OPEN_PATCHED)
             self.assertIn('getenv("PLATINA_LOCALIZATION_DIR")', FS_LOCALIZATION_OPEN_PATCHED)
             self.assertIn("Required PT-BR resource is missing or unreadable", FS_LOCALIZATION_OPEN_PATCHED)
+            metroskrew_helper = root / "tools/devtools/get_metroskrew.sh"
+            metroskrew_content = metroskrew_helper.read_text(encoding="utf-8")
+            self.assertIn(METROSKREW_DOWNLOAD_PATCHED, metroskrew_content)
+            self.assertNotIn(METROSKREW_DOWNLOAD_ORIGINAL, metroskrew_content)
+            self.assertIn("--tries=5", METROSKREW_DOWNLOAD_PATCHED)
+            self.assertIn("curl --fail --location", METROSKREW_DOWNLOAD_PATCHED)
+            self.assertIn("download_archive=\"$SKREW_ARC.part\"", METROSKREW_DOWNLOAD_PATCHED)
             self.assertNotIn("sLauncherManagedRomExtractionAttempted", fs_content)
             managed_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[0]
             self.assertNotIn("SIM_ShowRomExtractionDialog();", managed_fallback)
@@ -645,6 +702,31 @@ class NativeRuntimePreparationTests(unittest.TestCase):
                 extractor_source.read_text(encoding="utf-8"),
                 "unknown ROM extractor implementation\\n",
             )
+
+    def test_unknown_metroskrew_download_helper_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            original_fs = fs_source.read_text(encoding="utf-8")
+            helper = root / "tools/devtools/get_metroskrew.sh"
+            changed_helper = UPSTREAM_METROSKREW_SCRIPT.replace(
+                METROSKREW_DOWNLOAD_ORIGINAL,
+                'wget --quiet --show-progress -O "$SKREW_ARC" "$UNRECOGNIZED_URL"',
+                1,
+            )
+            helper.write_text(changed_helper, encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimePreparationError, "pinned metroskrew download command"):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), original_fs)
+            self.assertEqual(helper.read_text(encoding="utf-8"), changed_helper)
 
     def test_unknown_fs_localization_open_path_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:

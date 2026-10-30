@@ -1134,6 +1134,33 @@ FS_LOCALIZATION_OPEN_PATCHED = r'''	p_file->pcFilePtr = NULL;
 		p_file->pcFilePtr = fopen(path, "rb");
 	}'''
 
+METROSKREW_DOWNLOAD_ORIGINAL = "wget --quiet --show-progress -O \"$SKREW_ARC\" \"$SKREW_URL\""
+METROSKREW_DOWNLOAD_PATCHED = r'''# Use bounded retries and a second HTTP client for transient GitHub release failures.
+# Download to a temporary name so a partial response is never treated as an archive.
+download_archive="$SKREW_ARC.part"
+rm -f -- "$download_archive"
+if ! wget --quiet --show-progress --tries=5 --retry-connrefused --waitretry=2 --timeout=30 \
+    -O "$download_archive" "$SKREW_URL"; then
+    echo "metroskrew: wget failed; retrying the pinned release with curl." >&2
+    rm -f -- "$download_archive"
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "metroskrew: neither the wget nor curl download completed." >&2
+        exit 1
+    fi
+    if ! curl --fail --location --silent --show-error --retry 5 --retry-all-errors \
+        --retry-delay 2 --connect-timeout 30 --output "$download_archive" "$SKREW_URL"; then
+        rm -f -- "$download_archive"
+        echo "metroskrew: failed to download the pinned release after retries." >&2
+        exit 1
+    fi
+fi
+if [[ ! -s "$download_archive" ]]; then
+    rm -f -- "$download_archive"
+    echo "metroskrew: downloaded archive is empty." >&2
+    exit 1
+fi
+mv -f -- "$download_archive" "$SKREW_ARC"'''
+
 SHADER_LOG_LENGTH_QUERY_ORIGINAL = "glGetShaderiv(g2FragmentShader, GL_INFO_LOG_LENGTH, &logSize);"
 SHADER_LOG_LENGTH_QUERY_PATCHED = "glGetShaderiv(_id, GL_INFO_LOG_LENGTH, &logSize);"
 
@@ -1764,6 +1791,34 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
 
     return fs_path, current, current != original
 
+def _prepare_metroskrew_downloader(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Retry the pinned metroskrew release download and fail clearly on network errors."""
+    helper_path = (
+        Path(source_root).expanduser().resolve()
+        / "tools" / "devtools" / "get_metroskrew.sh"
+    )
+    if not helper_path.is_file():
+        raise RuntimePreparationError(f"Metroskrew download helper missing: {helper_path}")
+
+    original = helper_path.read_text(encoding="utf-8")
+    current = original
+    if METROSKREW_DOWNLOAD_PATCHED in current:
+        if current.count(METROSKREW_DOWNLOAD_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate metroskrew download retry patch detected.")
+        if METROSKREW_DOWNLOAD_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and retry-enabled metroskrew download commands exist.")
+    else:
+        if current.count(METROSKREW_DOWNLOAD_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one pinned metroskrew download command; refusing an uncertain patch."
+            )
+        current = current.replace(METROSKREW_DOWNLOAD_ORIGINAL, METROSKREW_DOWNLOAD_PATCHED, 1)
+
+    if "SKREW_URL" not in current or "metroskrew-$SKREW_SYS$SKREW_EXT" not in current:
+        raise RuntimePreparationError("Metroskrew release identity or platform selection changed unexpectedly.")
+    return helper_path, current, current != original
+
+
 def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool]:
     """Use the launcher-imported ROM automatically when runtime data is missing."""
     extractor_path = (
@@ -2004,10 +2059,11 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     card_path, card_updated, card_changed = _prepare_card_backup_identification(source_root)
     audio_path, audio_updated, audio_changed = _prepare_sim_audio(source_root)
     nvram_path, nvram_updated, nvram_changed = _prepare_nvram_file_backing(source_root)
+    metroskrew_path, metroskrew_updated, metroskrew_changed = _prepare_metroskrew_downloader(source_root)
 
     changed = (
         current != original or config_changed or fs_changed or extractor_changed or nds_extractor_changed
-        or backup_changed or card_changed or audio_changed or nvram_changed
+        or backup_changed or card_changed or audio_changed or nvram_changed or metroskrew_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
@@ -2027,6 +2083,8 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
         audio_path.write_text(audio_updated, encoding="utf-8")
     if nvram_changed:
         nvram_path.write_text(nvram_updated, encoding="utf-8")
+    if metroskrew_changed:
+        metroskrew_path.write_text(metroskrew_updated, encoding="utf-8")
     return changed
 
 
