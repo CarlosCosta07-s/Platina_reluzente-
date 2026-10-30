@@ -2106,7 +2106,9 @@ def _prepare_nvram_file_backing(source_root: str | Path) -> tuple[Path, str, boo
 
 def _prepare_project_sim_config(source_root: str | Path) -> tuple[Path, str, bool]:
     """Harden the project-specific INI callback and configuration persistence."""
-    source_path = Path(source_root).expanduser().resolve() / "src" / "port" / "sim_config_prj.c"
+    source_path = (
+        Path(source_root).expanduser().resolve() / "src" / "port" / "sim_config_prj.c"
+    )
     if not source_path.is_file():
         raise RuntimePreparationError(f"Project simulator config source missing: {source_path}")
 
@@ -2251,7 +2253,9 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     # Validate every source file before writing any of them.
     config_path = path.parent / "config" / "sim_config.c"
     config_updated, config_changed = _prepare_sim_config(config_path)
-    project_config_path, project_config_updated, project_config_changed = _prepare_project_sim_config(source_root)
+    project_config_path, project_config_updated, project_config_changed = (
+        _prepare_project_sim_config(source_root)
+    )
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
     extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
     nds_extractor_path, nds_extractor_updated, nds_extractor_changed = _prepare_nds_extractor(source_root)
@@ -2262,8 +2266,17 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     metroskrew_path, metroskrew_updated, metroskrew_changed = _prepare_metroskrew_downloader(source_root)
 
     changed = (
-        current != original or config_changed or project_config_changed or fs_changed or extractor_changed or nds_extractor_changed
-        or backup_changed or card_changed or audio_changed or nvram_changed or metroskrew_changed
+        current != original
+        or config_changed
+        or project_config_changed
+        or fs_changed
+        or extractor_changed
+        or nds_extractor_changed
+        or backup_changed
+        or card_changed
+        or audio_changed
+        or nvram_changed
+        or metroskrew_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
