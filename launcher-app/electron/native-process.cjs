@@ -347,7 +347,7 @@ function launchNativeProcess({
           startupTimedOut: true,
           message: 'O runtime não apresentou a primeira imagem em '
             + Math.ceil(startupTimeoutMs / 1000)
-            + ' segundos. Para evitar uma janela preta aparentemente congelada, a inicialização foi interrompida e o launcher permaneceu disponível.'
+            + ' segundos. Para evitar uma janela preta aparentemente congelada, o launcher solicitou o encerramento do processo e permaneceu disponível.'
             + (diagnostic ? ' Último diagnóstico: ' + diagnostic + '.' : '')
             + ' Consulte o log: ' + absoluteLogPath
         });
