@@ -14,6 +14,10 @@ from scripts.prepare_native_runtime import (
     CARD_IDENTIFY_BACKUP_ORIGINAL,
     CARD_IDENTIFY_BACKUP_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
+    PROJECT_SIM_CONFIG_HANDLER_PATCHED,
+    PROJECT_SIM_CONFIG_PARSE_PATCHED,
+    PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED,
+    PROJECT_SIM_CONFIG_CLOSE_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
     METROSKREW_DOWNLOAD_ORIGINAL,
     METROSKREW_DOWNLOAD_PATCHED,
@@ -103,6 +107,37 @@ void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
 {
     FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");
     fprintf(configFile, "test=%d\n", aConfig->internalResolutionScale);
+    fclose(configFile);
+}'''
+
+
+UPSTREAM_PROJECT_SIM_CONFIG = r'''#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <simulator/config/ini.h>
+
+#define SIM_CONFIG_PRJ_FILE_PATH "./sim_config_prj.ini"
+
+static int IniHandler(void* user, const char* section, const char* name,
+                   const char* value)
+{
+    #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
+    SIM_Config_prj_type * config = (SIM_Config_prj_type *)user;
+
+    if(MATCH("Cheats", "RunFromTrainerBattles")) {
+        config->runFromTrainerBattles = StringToBool(value);
+    }
+}
+
+BOOL SIM_Config_prj_LoadConfigFile(SIM_Config_prj_type * aConfig)
+{
+    return (ini_parse(SIM_CONFIG_PRJ_FILE_PATH, IniHandler, aConfig) >= 0);
+}
+
+void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
+{
+    FILE * configFile = fopen(SIM_CONFIG_PRJ_FILE_PATH, "w");
+    fprintf(configFile, "WalkThroughWalls=%s\\n", BoolToString(aConfig->walkThroughWalls));
     fclose(configFile);
 }'''
 
@@ -415,6 +450,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         config = source_dir / "config" / "sim_config.c"
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(UPSTREAM_SIM_CONFIG, encoding="utf-8")
+        project_config = root / "src" / "port" / "sim_config_prj.c"
+        project_config.parent.mkdir(parents=True, exist_ok=True)
+        project_config.write_text(UPSTREAM_PROJECT_SIM_CONFIG, encoding="utf-8")
         fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
         fs_source.parent.mkdir(parents=True, exist_ok=True)
         fs_source.write_text(UPSTREAM_FS_FILE, encoding="utf-8")
@@ -710,6 +748,43 @@ class NativeRuntimePreparationTests(unittest.TestCase):
 
             self.assertFalse(prepare_native_runtime(root))
             self.assertEqual(config.read_text(encoding="utf-8"), once)
+
+
+    def test_project_sim_config_patches_are_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            project_config = root / "src" / "port" / "sim_config_prj.c"
+
+            self.assertTrue(prepare_native_runtime(root))
+            once = project_config.read_text(encoding="utf-8")
+            self.assertEqual(once.count(PROJECT_SIM_CONFIG_HANDLER_PATCHED), 1)
+            self.assertEqual(once.count(PROJECT_SIM_CONFIG_PARSE_PATCHED), 1)
+            self.assertEqual(once.count(PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED), 1)
+            self.assertEqual(once.count(PROJECT_SIM_CONFIG_CLOSE_PATCHED), 1)
+
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(project_config.read_text(encoding="utf-8"), once)
+
+    def test_unknown_project_sim_config_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            project_config = root / "src" / "port" / "sim_config_prj.c"
+            project_config.write_text("unknown project simulator config\\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(
+                project_config.read_text(encoding="utf-8"),
+                "unknown project simulator config\\n",
+            )
 
     def test_unknown_sim_rom_extractor_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:
