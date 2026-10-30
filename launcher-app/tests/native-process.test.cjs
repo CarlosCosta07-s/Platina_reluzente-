@@ -127,6 +127,74 @@ test('native launch times out without a first-frame marker and stops the hidden 
   assert.match(log, /process exit:/);
 });
 
+test('native heartbeat watchdog detects a render stall and reports recovery without killing the process', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-heartbeat-recovery-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const logPath = path.join(root, 'heartbeat-recovery.log');
+  let resolveStall;
+  let resolveRecovery;
+  const stalled = new Promise((resolve) => { resolveStall = resolve; });
+  const recovered = new Promise((resolve) => { resolveRecovery = resolve; });
+  let processWasActiveAtStall = false;
+  let processWasActiveAtRecovery = false;
+
+  const result = await launchNativeProcess({
+    executable: process.execPath,
+    args: ['-e', "process.stderr.write('[Platina-Progress] window-ready\\\\n[Platina-Progress] heartbeat frame=1\\\\n'); setTimeout(() => process.stderr.write('[Platina-Progress] heartbeat frame=2\\\\n'), 450); setTimeout(() => process.exit(0), 850);"],
+    cwd: root,
+    env: process.env,
+    logPath,
+    platform: process.platform,
+    heartbeatTimeoutMs: 150,
+    onStall: (details) => {
+      processWasActiveAtStall = hasActiveNativeProcess();
+      resolveStall(details);
+    },
+    onRecovered: (details) => {
+      processWasActiveAtRecovery = hasActiveNativeProcess();
+      resolveRecovery(details);
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.windowReady, true);
+  const stallDetails = await stalled;
+  const recoveryDetails = await recovered;
+  assert.equal(processWasActiveAtStall, true);
+  assert.equal(processWasActiveAtRecovery, true);
+  assert.ok(stallDetails.silentForMs >= 150);
+  assert.ok(recoveryDetails.resumedAt);
+  await waitForLog(logPath, [
+    'renderer heartbeat missing',
+    'renderer heartbeat resumed',
+    'process exit: code=0'
+  ]);
+  assert.equal(hasActiveNativeProcess(), false);
+});
+
+test('steady native heartbeats do not trigger the renderer-stall callback', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-heartbeat-steady-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const logPath = path.join(root, 'heartbeat-steady.log');
+  let stalled = false;
+
+  const result = await launchNativeProcess({
+    executable: process.execPath,
+    args: ['-e', "process.stderr.write('[Platina-Progress] window-ready\\\\n[Platina-Progress] heartbeat frame=1\\\\n'); let frame=1; const timer=setInterval(() => process.stderr.write('[Platina-Progress] heartbeat frame='+(++frame)+'\\\\n'), 35); setTimeout(() => { clearInterval(timer); process.exit(0); }, 250);"],
+    cwd: root,
+    env: process.env,
+    logPath,
+    platform: process.platform,
+    heartbeatTimeoutMs: 100,
+    onStall: () => { stalled = true; }
+  });
+
+  assert.equal(result.ok, true);
+  await waitForLog(logPath, ['process exit: code=0']);
+  assert.equal(stalled, false);
+  assert.equal(hasActiveNativeProcess(), false);
+});
+
 test('native process startup failure is returned and recorded in the log', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-log-error-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
