@@ -379,7 +379,12 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             extractor_content = (root / "subprojects/libntr/libraries/sim/src/sim_RomExtractor.cpp").read_text(encoding="utf-8")
             self.assertIn(SIM_ROM_EXTRACTOR_PATCHED, extractor_content)
             self.assertIn('std::getenv("PLATINA_IMPORTED_ROM")', extractor_content)
-            self.assertIn("SIM_NDSExtract(std::string(managedRomPath))", extractor_content)
+            managed_extractor_guard = SIM_ROM_EXTRACTOR_PATCHED.split("bool fileSelected", 1)[0]
+            self.assertIn("Refusing synchronous extraction from an imported ROM", managed_extractor_guard)
+            self.assertNotIn("SIM_NDSExtract(", managed_extractor_guard)
+            manual_extractor_flow = SIM_ROM_EXTRACTOR_PATCHED.split("bool fileSelected", 1)[1]
+            self.assertIn("SIM_NDSExtract(fileName);", manual_extractor_flow)
+            self.assertIn("SIM_Render(nullptr);", manual_extractor_flow)
             self.assertNotIn(SIM_ROM_EXTRACTOR_ORIGINAL, extractor_content)
             backup_content = (root / "subprojects/libntr/include/nitro/card/backup.h").read_text(encoding="utf-8")
             self.assertIn(BACKUP_SAVE_PATH_INCLUDE_PATCHED, backup_content)
