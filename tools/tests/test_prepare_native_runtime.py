@@ -5,6 +5,10 @@ from pathlib import Path
 from tools.localization_manifest import PTBR_RESOURCE_SHA256
 
 from scripts.prepare_native_runtime import (
+    BACKUP_READ_BODY_ORIGINAL,
+    BACKUP_SAVE_PATH_INCLUDE_ORIGINAL,
+    BACKUP_WRITE_BODY_ORIGINAL,
+    BACKUP_WRITE_VERIFY_BODY_ORIGINAL,
     CONFIG_ALARM_SECOND_PATCHED,
     BACKUP_FILE_IO_HELPERS_PATCHED,
     BACKUP_READ_BODY_PATCHED,
@@ -57,6 +61,36 @@ from scripts.prepare_native_runtime import (
     SIM_ROM_EXTRACTOR_PATCHED,
     prepare_native_runtime,
 )
+
+UPSTREAM_BACKUP_HEADER = (
+    "#ifndef NITRO_CARD_BACKUP_H\\n#define NITRO_CARD_BACKUP_H\\n"
+    + BACKUP_SAVE_PATH_INCLUDE_ORIGINAL
+    + "\\n\\n  SDK_INLINE BOOL CARDi_ReadBackup(u32 src, u32 len, void *dst, CARD_CALLBACK callback, void *arg)\\n{\\n"
+    + BACKUP_READ_BODY_ORIGINAL
+    + "\\n  }\\n\\n  SDK_INLINE BOOL CARDi_WriteBackup(u32 dst, const void *src, u32 len, CARD_CALLBACK callback, void *arg)\\n{\\n"
+    + BACKUP_WRITE_BODY_ORIGINAL
+    + "\\n  }\\n\\n  SDK_INLINE BOOL CARDi_WriteAndVerifyBackup(u32 dst, const void *src, u32 len, CARD_CALLBACK callback, void *arg)\\n{\\n"
+    + BACKUP_WRITE_VERIFY_BODY_ORIGINAL
+    + "\\n  }\\n#endif\\n"
+)
+
+UPSTREAM_CARD_BACKUP_SOURCE = (
+    "static BOOL CARDi_IdentifyBackupType(CARD_BACKUP_TYPE type)\\n{\\n"
+    + CARD_IDENTIFY_BACKUP_ORIGINAL
+    + "\\n}\\n"
+)
+
+UPSTREAM_METROSKREW_SCRIPT = (
+    "#!/usr/bin/env bash\\n"
+    "set -euo pipefail\\n"
+    "SKREW_SYS=linux\\n"
+    "SKREW_EXT=.tar.gz\\n"
+    "SKREW_URL=\\\"https://example.invalid/metroskrew-release.tar.gz\\\"\\n"
+    "SKREW_ARC=\\\"metroskrew-$SKREW_SYS$SKREW_EXT\\\"\\n"
+    + METROSKREW_DOWNLOAD_ORIGINAL
+    + "\\n"
+)
+
 
 UPSTREAM_SIM_AUDIO = r'''#include <stdio.h>
 #include <SDL2/SDL.h>
