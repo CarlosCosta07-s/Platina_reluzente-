@@ -91,11 +91,21 @@ status=0
         echo "Executável encerrou antes do fim da janela de teste." >&2
         exit 1
       fi
+      # Only known fatal video/renderer failures fail this pre-ROM gate.
+      # SDL audio and joystick warnings are optional and must not fail the test.
+      fatal_pattern='SDL video/timer initialization failed|SDL window creation failed|SDL GL context creation failed|OpenGL function loader initialization failed|Native renderer initialization failed|ERROR COMPILING _source SHADER'
+      if grep -Eiq "$fatal_pattern" "$logfile"; then
+        echo "Falha fatal de SDL/OpenGL detectada no log de inicialização:" >&2
+        grep -Ein "$fatal_pattern" "$logfile" >&2 || true
+        cat "$logfile" >&2
+        exit 1
+      fi
+
       if [[ -s "$logfile" ]]; then
         echo "Saída do executável:"
         cat "$logfile"
       fi
-      echo "PASS: janela criada e processo permaneceu ativo."
+      echo "PASS: janela criada, processo ativo e nenhum erro fatal conhecido de SDL/OpenGL foi registrado."
       echo "Isso confirma apenas a inicialização pré-ROM; não comprova carregamento ou gameplay."
     '
 ) >"$logfile" 2>&1 || status=$?
