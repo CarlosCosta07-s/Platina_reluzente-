@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { launchNativeProcess, hasActiveNativeProcess, onNativeProcessIdle } = require('../electron/native-process.cjs');
+const { launchNativeProcess, runNativePrepare, hasActiveNativeProcess, onNativeProcessIdle } = require('../electron/native-process.cjs');
 
 async function waitForLog(logPath, expectedFragments, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
@@ -21,6 +21,30 @@ async function waitForLog(logPath, expectedFragments, timeoutMs = 5000) {
   }
   assert.fail('Expected log fragments were not captured. Last log content:\n' + lastContent);
 }
+
+test('native preparation includes the last stderr diagnostic when it fails', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-prepare-diagnostic-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const logPath = path.join(root, 'logs', 'native-prepare.log');
+
+  const result = await runNativePrepare({
+    executable: process.execPath,
+    args: ['-e', "process.stderr.write('[Platina] test diagnostic: overlay 9 unavailable\\n'); process.exit(4);"],
+    cwd: root,
+    env: process.env,
+    logPath,
+    platform: process.platform,
+    timeoutMs: 5000
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 4);
+  assert.match(result.message, /Detalhe: \\[Platina\\] test diagnostic: overlay 9 unavailable/);
+  assert.match(result.message, /Consulte o log completo:/);
+  const log = await fs.readFile(logPath, 'utf8');
+  assert.match(log, /test diagnostic: overlay 9 unavailable/);
+  assert.match(log, /prepare exit: code=4/);
+});
 
 test('native process startup writes stdout and stderr to a persistent local log', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-log-'));
