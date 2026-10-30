@@ -1,8 +1,8 @@
 name: Native desktop build and localization checks
 
 concurrency:
-  group: native-desktop-v7-${{ github.ref }}
-  # Native builds can take a long time; let the active run finish and keep only the latest pending revision.
+  group: native-desktop-v8-${{ github.ref }}
+  # Superseded commits must not occupy native build runners or block current validation.
   cancel-in-progress: true
 
 on:
