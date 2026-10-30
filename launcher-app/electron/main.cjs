@@ -3,11 +3,12 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { launchNativeProcess, runNativePrepare, hasActiveNativeProcess, onNativeProcessIdle } = require('./native-process.cjs');
-const { commitDesktopRom, recoverDesktopRom } = require('./rom-storage.cjs');
+const { commitDesktopRom, recoverDesktopRom, sha1File } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec, createPreparedPlatinumLaunchSpec } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
 
 const MAX_ROM_BYTES = 512 * 1024 * 1024;
+const PLATINUM_USA_REV1_SIZE_BYTES = 134217728;
 // Native runtime and generated assets are pinned to this exact retail image.
 // Header fields alone do not prove that the imported ROM is the expected revision.
 const ORIGINAL_ROM_SHA1 = '0862ec35b24de5c7e2dcb88c9eea0873110d755c';
@@ -162,6 +163,14 @@ ipcMain.handle('platina:import-rom', async () => {
   if (!stat.isFile() || path.extname(source).toLowerCase() !== '.nds') {
     return { canceled: false, ok: false, message: 'Selecione um arquivo .nds.' };
   }
+  if (stat.size !== PLATINUM_USA_REV1_SIZE_BYTES) {
+    return {
+      canceled: false,
+      ok: false,
+      message: 'Tamanho incorreto para Pokémon Platinum USA Rev. 1: recebido '
+        + stat.size + ' bytes; esperado ' + PLATINUM_USA_REV1_SIZE_BYTES + ' bytes (128 MiB).'
+    };
+  }
   if (stat.size < 0x200 || stat.size > MAX_ROM_BYTES) {
     return { canceled: false, ok: false, message: 'Tamanho inválido para uma ROM Nintendo DS. Limite: 512 MiB.' };
   }
@@ -187,10 +196,13 @@ ipcMain.handle('platina:import-rom', async () => {
     return { canceled: false, ok: false, message: 'Não foi possível ler o cabeçalho completo da ROM selecionada.' };
   }
   if (header.subarray(0x0c, 0x10).toString('ascii') === 'CPUE' && header[0x1e] === 0) {
+    const foundSha1 = await sha1File(source);
     return {
       canceled: false,
       ok: false,
-      message: 'A ROM selecionada é Pokémon Platinum USA Rev. 0. Este build nativo foi preparado para USA Rev. 1; use uma cópia original Rev. 1 ou aguarde uma implementação específica e validada para Rev. 0.'
+      message: 'A ROM selecionada é Pokémon Platinum USA Rev. 0. Este runtime aceita exclusivamente USA Rev. 1. '
+        + 'SHA-1 encontrado: ' + foundSha1 + '. SHA-1 esperado (USA Rev. 1): '
+        + ORIGINAL_ROM_SHA1 + '. Nenhum arquivo foi instalado.'
     };
   }
   if (!validateNdsHeader(header, stat.size)) {
