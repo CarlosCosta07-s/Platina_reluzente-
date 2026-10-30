@@ -17,6 +17,8 @@ from scripts.prepare_native_runtime import (
     FS_OPEN_FALLBACK_ORIGINAL,
     GL_LOADER_PATCHED,
     SDL_INIT_PATCHED,
+    SHADER_LOG_LENGTH_QUERY_ORIGINAL,
+    SHADER_LOG_LENGTH_QUERY_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
     SDL_VIEWPORT_PATCHED,
     INPUT_RELEASE_HELPER_PATCHED,
@@ -226,6 +228,18 @@ BOOL FS_OpenFile (FSFile *p_file, const char *path)
 
 UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
+
+#define CompileShaderCommon(_id, _source)                                      \
+  glShaderSource(_id, 1, &_source, NULL);                                      \
+  glCompileShader(_id);                                                        \
+  glGetShaderiv(_id, GL_COMPILE_STATUS, &status);                              \
+  if (status != GL_TRUE) {                                                     \
+    glGetShaderiv(g2FragmentShader, GL_INFO_LOG_LENGTH, &logSize);             \
+    errorBuf = static_cast<GLchar *>(malloc(logSize * sizeof(GLchar)));        \
+    glGetShaderInfoLog(_id, logSize, &logSize, (GLchar *)errorBuf);            \
+    printf("ERROR COMPILING _source SHADER:\\n%s\\n", errorBuf);             \
+    free(errorBuf);                                                            \
+  }
 
 static bool sFastForward = false;
 static u8 isMouseDown = 0;
@@ -457,7 +471,43 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("SDL_WINDOW_ALLOW_HIGHDPI", content)
             self.assertIn("SDL_JOYDEVICEREMOVED", content)
             self.assertIn("SDL_WINDOWEVENT_FOCUS_LOST", content)
+            self.assertIn(SHADER_LOG_LENGTH_QUERY_PATCHED, content)
+            self.assertNotIn(SHADER_LOG_LENGTH_QUERY_ORIGINAL, content)
             self.assertFalse(prepare_native_runtime(root))
+
+    def test_shader_compilation_log_uses_the_shader_being_compiled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertIn(SHADER_LOG_LENGTH_QUERY_PATCHED, content)
+            self.assertNotIn(SHADER_LOG_LENGTH_QUERY_ORIGINAL, content)
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(source.read_text(encoding="utf-8"), content)
+
+    def test_unknown_shader_log_query_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            changed_source = source.read_text(encoding="utf-8").replace(
+                SHADER_LOG_LENGTH_QUERY_ORIGINAL,
+                "glGetShaderiv(unrecognizedShader, GL_INFO_LOG_LENGTH, &logSize);",
+                1,
+            )
+            source.write_text(changed_source, encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            original_fs = fs_source.read_text(encoding="utf-8")
+
+            with self.assertRaises(RuntimePreparationError):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), changed_source)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), original_fs)
 
     def test_nds_extractor_checks_file_type_and_size_errors_before_reading_size(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -887,6 +887,9 @@ FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLAT
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
         #endif
 
+SHADER_LOG_LENGTH_QUERY_ORIGINAL = "glGetShaderiv(g2FragmentShader, GL_INFO_LOG_LENGTH, &logSize);"
+SHADER_LOG_LENGTH_QUERY_PATCHED = "glGetShaderiv(_id, GL_INFO_LOG_LENGTH, &logSize);"
+
 NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL = r'''	unsigned ndsFileSize = fs::file_size(ndsInputPath);
 
 	if (!fs::exists(ndsInputPath) || !fs::is_regular_file(ndsInputPath)) {
@@ -1526,6 +1529,27 @@ def _prepare_sim_rom_extractor(source_root: str | Path) -> tuple[Path, str, bool
     return extractor_path, current, current != original
 
 
+def _prepare_shader_log_query(source: str) -> tuple[str, bool]:
+    """Query the info-log length for the shader currently being compiled."""
+    current = source
+    if SHADER_LOG_LENGTH_QUERY_PATCHED in current:
+        if current.count(SHADER_LOG_LENGTH_QUERY_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate shader info-log query patch detected.")
+        if SHADER_LOG_LENGTH_QUERY_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and patched shader info-log queries exist.")
+    else:
+        if current.count(SHADER_LOG_LENGTH_QUERY_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one recognized shader info-log query; refusing an uncertain patch."
+            )
+        current = current.replace(
+            SHADER_LOG_LENGTH_QUERY_ORIGINAL,
+            SHADER_LOG_LENGTH_QUERY_PATCHED,
+            1,
+        )
+    return current, current != source
+
+
 def _prepare_nds_extractor(source_root: str | Path) -> tuple[Path, str, bool]:
     """Validate the input image before querying its size; avoid filesystem exceptions."""
     extractor_path = (
@@ -1693,6 +1717,7 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
             "Expected exactly one recognized upstream or desktop-patched ROM-header loader; refusing an uncertain patch."
         )
 
+    current, _ = _prepare_shader_log_query(current)
     current, _ = _prepare_renderer_startup(current)
     current, _ = _prepare_rom_preflight(current)
 
