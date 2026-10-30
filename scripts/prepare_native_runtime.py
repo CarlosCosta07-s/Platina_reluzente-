@@ -901,6 +901,25 @@ SDL_WINDOW_CONTEXT_ORIGINAL = r'''  window = SDL_CreateWindow(
       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
       SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
   context = SDL_GL_CreateContext(window);'''
+SDL_WINDOW_CONTEXT_PATCHED_LEGACY = r'''  window = SDL_CreateWindow(
+      windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
+      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+          SDL_WINDOW_ALLOW_HIGHDPI);
+  if (window == NULL) {
+    fprintf(stderr, "SDL window creation failed: %s\n", SDL_GetError());
+    return NULL;
+  }
+  context = SDL_GL_CreateContext(window);
+  if (context == NULL) {
+    fprintf(stderr, "SDL GL context creation failed: %s\n", SDL_GetError());
+    SDL_DestroyWindow(window);
+    window = NULL;
+    return NULL;
+  }
+  if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0) {
+    fprintf(stderr, "SDL swap interval unavailable: %s\n", SDL_GetError());
+  }'''
+
 SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
       SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
@@ -921,6 +940,8 @@ SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
   }'''
 
 PLATINA_WINDOW_DECLARATION_ORIGINAL = "static SDL_Window *window;"
+PLATINA_WINDOW_DECLARATION_PATCHED_LEGACY = r'''static SDL_Window *window;
+static bool sPlatinaFirstFramePresented = false;'''
 PLATINA_WINDOW_DECLARATION_PATCHED = r'''static SDL_Window *window;
 static bool sPlatinaFirstFramePresented = false;
 static struct timespec sPlatinaLastHeartbeat = {};
@@ -931,6 +952,18 @@ PLATINA_FIRST_FRAME_HANDOFF_ORIGINAL = (
     "    SDL_GL_SwapWindow(window);\n\n"
     "    if(sChangeInternalResAfterRender) {"
 )
+PLATINA_FIRST_FRAME_HANDOFF_PATCHED_LEGACY = r'''    SDL_GL_SwapWindow(window);
+
+    // Reveal the native window only after a complete game frame reaches swap.
+    if (!sPlatinaFirstFramePresented) {
+      SDL_ShowWindow(window);
+      sPlatinaFirstFramePresented = true;
+      fprintf(stderr, "[Platina-Progress] window-ready\n");
+      fflush(stderr);
+    }
+
+    if(sChangeInternalResAfterRender) {''';
+
 PLATINA_FIRST_FRAME_HANDOFF_PATCHED = r'''    SDL_GL_SwapWindow(window);
 
     // Reveal the native window only after a complete game frame reaches swap.
@@ -1587,6 +1620,17 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
         )
     elif standalone_old_count > 1:
         raise RuntimePreparationError("Duplicate upstream mouse-state declarations detected.")
+    legacy_blocks = (
+        (SDL_WINDOW_CONTEXT_PATCHED_LEGACY, SDL_WINDOW_CONTEXT_PATCHED, "hidden SDL startup window"),
+        (PLATINA_WINDOW_DECLARATION_PATCHED_LEGACY, PLATINA_WINDOW_DECLARATION_PATCHED, "heartbeat state"),
+        (PLATINA_FIRST_FRAME_HANDOFF_PATCHED_LEGACY, PLATINA_FIRST_FRAME_HANDOFF_PATCHED, "heartbeat frame handoff"),
+    )
+    for legacy, current_patch, label in legacy_blocks:
+        if legacy in current:
+            if current.count(legacy) != 1 or current_patch in current:
+                raise RuntimePreparationError(f"Ambiguous previous {label} patch; refusing an uncertain upgrade.")
+            current = current.replace(legacy, current_patch, 1)
+
     blocks = (
         (
             PLATINA_WINDOW_DECLARATION_ORIGINAL,
