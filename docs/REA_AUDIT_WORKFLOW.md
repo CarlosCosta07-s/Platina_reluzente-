@@ -55,19 +55,23 @@ npx -y rea-agents@latest function "/caminho/absoluto/para/pokeplatinum" NitroMai
 
 Use o caminho do executável host produzido pelo build local. Não use o ZIP de uma ROM como alvo de análise.
 
-## Achado preliminar para validação
+## Achado estático e correção adicionada
 
-No commit upstream fixado, `src/port/sim_config_prj.c` declara `IniHandler` com retorno `int`, mas o corpo termina sem um `return` explícito. O cabeçalho do parser INI em `libntr` define que o callback deve retornar valor não zero em caso de sucesso e zero em caso de erro. O comportamento atual do callback, portanto, não é definido pelo contrato C e precisa ser corrigido/testado.
+No commit upstream fixado, `src/port/sim_config_prj.c` declarava `IniHandler` com retorno `int`, mas o corpo terminava sem um `return` explícito. O cabeçalho do parser INI em `libntr` define que o callback deve retornar valor não zero em caso de sucesso e zero em caso de erro.
 
-No mesmo arquivo, `SIM_Config_prj_SaveConfigFile` usa o resultado de `fopen` sem verificar se é nulo antes de chamar `fprintf`. Um diretório de trabalho sem permissão de escrita pode fazer a rotina falhar de forma abrupta.
+O mesmo arquivo aceitava qualquer resultado não negativo de `ini_parse` como sucesso, embora o parser use zero para sucesso, um número de linha positivo para erro de sintaxe e -1 para falha ao abrir o arquivo. Além disso, `SIM_Config_prj_SaveConfigFile` usava o ponteiro de `fopen` sem testar se era nulo.
 
-Esses pontos são **achados de revisão estática preliminar**, não bugs confirmados por execução ou pelo REA. Antes de corrigir, a investigação deve:
-1. confirmar no binário a função e a chamada ao parser;
-2. verificar o fluxo de retorno do parser quando o handler retorna zero/não zero;
-3. reproduzir a configuração ausente, inválida e o diretório sem permissão;
-4. implementar a correção no preparador de runtime, sem editar silenciosamente o checkout externo;
-5. acrescentar teste de regressão e compilar Windows x64 e Linux x86-64.
+O preparador `scripts/prepare_native_runtime.py` agora aplica, ao checkout externo fixado e somente quando os marcadores conhecidos correspondem:
 
+1. retorno explícito de sucesso do callback INI;
+2. aceitação apenas do retorno zero do parser;
+3. restauração dos valores padrão quando a leitura/parsing falha, descartando configurações parcialmente aplicadas;
+4. verificação de `fopen` antes de gravar e diagnóstico de falha em `fclose`.
+
+A suíte `tools/tests/test_prepare_native_runtime.py` ganhou testes de idempotência e de recusa de uma versão upstream desconhecida antes de escrever qualquer arquivo. **Os testes foram adicionados, mas ainda não há resultado confirmado de execução para esta revisão.** A mudança também ainda não foi confirmada por inspeção de binário no REA nem por reprodução em runtime.
+
+Este é um achado de revisão estática de fonte e uma correção preventiva; não deve ser descrito como bug comprovado pelo REA. A próxima validação é executar a suíte Python e compilar Windows x64/Linux x86-64, depois analisar no REA as funções correspondentes e reproduzir falhas de configuração com dados sintéticos.
+ 
 ## Critério para aceitar uma conclusão do REA
 
 Nenhuma alteração deve se basear apenas no pseudocódigo. Para cada achado, guardar localmente:
