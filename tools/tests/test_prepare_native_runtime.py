@@ -286,6 +286,7 @@ BOOL FS_OpenFile (FSFile *p_file, const char *path)
 
 UPSTREAM_HEADER = r'''#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
+#include <time.h>
 
 #define CompileShaderCommon(_id, _source)                                      \
   glShaderSource(_id, 1, &_source, NULL);                                      \
@@ -533,6 +534,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("SDL_WINDOW_HIDDEN", SDL_WINDOW_CONTEXT_PATCHED)
             self.assertIn(PLATINA_WINDOW_DECLARATION_PATCHED, content)
             self.assertIn(PLATINA_FIRST_FRAME_HANDOFF_PATCHED, content)
+            self.assertIn("sPlatinaPresentedFrameCount", content)
+            self.assertIn("[Platina-Progress] heartbeat frame=%llu", content)
+            self.assertIn("heartbeatElapsedNs >= 5000000000LL", content)
             self.assertIn("[Platina-Progress] renderer-ready", content)
             self.assertIn("[Platina-Progress] native-boot-start", content)
             self.assertIn('SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);\n  // Apply VSync only after SDL_GL_CreateContext succeeds.', content)
