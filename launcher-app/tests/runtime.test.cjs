@@ -208,19 +208,22 @@ test('runtime rejects symlinked executables and required game assets', (t) => {
 });
 
 
-function writeRuntimeManifest(directory, platform = 'linux') {
+function writeRuntimeManifest(directory, platform = 'linux', extraFiles = []) {
   const executableName = platform === 'win32' ? 'main.exe' : 'main';
-  const executablePath = path.join(directory, executableName);
-  const stat = fs.statSync(executablePath);
-  const sha256 = crypto.createHash('sha256').update(fs.readFileSync(executablePath)).digest('hex');
   const manifestHash = crypto.createHash('sha256');
-  manifestHash.update(executableName + '\0' + sha256 + '\n');
+  const files = [executableName, ...extraFiles].sort().map((relativePath) => {
+    const filePath = path.join(directory, ...relativePath.split('/'));
+    const stat = fs.statSync(filePath);
+    const sha256 = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+    manifestHash.update(relativePath + '\0' + sha256 + '\n');
+    return { path: relativePath, size: stat.size, sha256 };
+  });
   const buildId = manifestHash.digest('hex');
   fs.writeFileSync(path.join(directory, 'launcher-runtime-manifest.json'), JSON.stringify({
     schemaVersion: 1,
     platform: platform === 'win32' ? 'windows' : platform,
     buildId,
-    files: [{ path: executableName, size: stat.size, sha256 }]
+    files
   }, null, 2) + '\n');
   fs.writeFileSync(path.join(directory, 'launcher-runtime-version.txt'), buildId + '\n');
   return buildId;
@@ -275,6 +278,47 @@ test('prepares a writable runtime, preserves local game data and refreshes bundl
     assert.equal(fs.existsSync(destination + '.staging'), false);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('runtime upgrades remove obsolete native dependencies but preserve saves and extracted data', async () => {
+  for (const platform of ['linux', 'win32']) {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-upgrade-dependency-'));
+    const source = path.join(temp, 'bundled-runtime');
+    const destination = path.join(temp, 'user-data', 'runtime');
+    const oldDependency = platform === 'win32' ? 'lib/old-version.dll' : 'lib/old-version.so';
+    const newDependency = platform === 'win32' ? 'lib/new-version.dll' : 'lib/new-version.so';
+
+    try {
+      makeRuntimeFixture(source, platform, 'build-with-old-dependency');
+      fs.mkdirSync(path.dirname(path.join(source, oldDependency)), { recursive: true });
+      fs.writeFileSync(path.join(source, oldDependency), 'old native dependency');
+      writeRuntimeManifest(source, platform, [oldDependency]);
+      await prepareWritableRuntime(source, destination, platform);
+
+      fs.writeFileSync(path.join(destination, 'save.bin'), 'player progress');
+      fs.writeFileSync(path.join(destination, 'sim_config.ini'), 'player settings');
+      fs.mkdirSync(path.join(destination, 'fielddata'), { recursive: true });
+      fs.writeFileSync(path.join(destination, 'fielddata', 'local-cache.dat'), 'extracted local data');
+
+      fs.rmSync(path.join(source, oldDependency));
+      fs.mkdirSync(path.dirname(path.join(source, newDependency)), { recursive: true });
+      fs.writeFileSync(path.join(source, newDependency), 'new native dependency');
+      const newBuildId = writeRuntimeManifest(source, platform, [newDependency]);
+
+      const refreshed = await prepareWritableRuntime(source, destination, platform);
+      assert.equal(refreshed.reused, false);
+      assert.equal(refreshed.buildId, newBuildId);
+      assert.equal(fs.existsSync(path.join(destination, oldDependency)), false);
+      assert.equal(fs.readFileSync(path.join(destination, newDependency), 'utf8'), 'new native dependency');
+      assert.equal(fs.readFileSync(path.join(destination, 'save.bin'), 'utf8'), 'player progress');
+      assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'player settings');
+      assert.equal(fs.readFileSync(path.join(destination, 'fielddata', 'local-cache.dat'), 'utf8'),
+        'extracted local data');
+      assert.equal(await verifyRuntimeManifest(destination, platform), true);
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
   }
 });
 
