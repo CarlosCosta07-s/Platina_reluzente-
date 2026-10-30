@@ -1680,8 +1680,17 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
         (PLATINA_FIRST_FRAME_HANDOFF_PATCHED_LEGACY, PLATINA_FIRST_FRAME_HANDOFF_PATCHED, "heartbeat frame handoff"),
     )
     for legacy, current_patch, label in legacy_blocks:
+        # The current patch may deliberately extend the legacy block, so test
+        # for the complete current form before searching for the legacy prefix.
+        if current_patch in current:
+            if current.count(current_patch) != 1:
+                raise RuntimePreparationError(f"Duplicate current {label} patch detected.")
+            remainder = current.replace(current_patch, "", 1)
+            if legacy in remainder:
+                raise RuntimePreparationError(f"Ambiguous previous {label} patch; refusing an uncertain upgrade.")
+            continue
         if legacy in current:
-            if current.count(legacy) != 1 or current_patch in current:
+            if current.count(legacy) != 1:
                 raise RuntimePreparationError(f"Ambiguous previous {label} patch; refusing an uncertain upgrade.")
             current = current.replace(legacy, current_patch, 1)
 
