@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import struct
 import sys
 import tempfile
