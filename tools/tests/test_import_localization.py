@@ -289,6 +289,45 @@ class LocalizationImportTests(unittest.TestCase):
                 _extract_synthetic(rom, destination, _file_ids, _data)
             self.assertFalse(destination.exists())
 
+    def test_rejects_fnt_table_offset_outside_rom_before_writing(self) -> None:
+        rom_data, _fat_offset, _file_ids, _ranges, _data = _synthetic_rom()
+        altered = bytearray(rom_data)
+        struct.pack_into("<II", altered, 0x40, len(altered) + 16, 8)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "fnt-outside-rom.nds"
+            destination = root / "out"
+            rom.write_bytes(altered)
+
+            with self.assertRaisesRegex(RomFormatError, "Região FNT fora dos limites"):
+                extract_localization(rom, destination)
+
+            self.assertFalse(destination.exists())
+
+    def test_rejects_truncated_narc_chunk_before_writing(self) -> None:
+        rom_data, _fat_offset, file_ids, ranges, file_data = _synthetic_rom()
+        target_path = TARGET_FILES[0].as_posix()
+        file_id = file_ids[target_path]
+        narc_start = ranges[file_id][0]
+        narc_size = len(file_data[file_id])
+        altered = bytearray(rom_data)
+
+        # The GMIF chunk begins after the 16-byte NARC header, 12-byte BTAF
+        # and 8-byte BTNF. Make its declared size run beyond the NARC boundary.
+        struct.pack_into("<I", altered, narc_start + 40, narc_size)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "truncated-narc.nds"
+            destination = root / "out"
+            rom.write_bytes(altered)
+
+            with self.assertRaisesRegex(RomFormatError, "Tamanho de bloco NARC inválido"):
+                _extract_synthetic(rom, destination, file_ids, file_data)
+
+            self.assertFalse(destination.exists())
+
     def test_invalid_fat_range_is_rejected(self) -> None:
         rom_data, fat_offset, file_ids, _ranges, _data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
