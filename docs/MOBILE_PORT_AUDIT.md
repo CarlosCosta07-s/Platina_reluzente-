@@ -7,9 +7,9 @@ Este documento registra a verificação inicial exigida antes de reativar Androi
 ## 1. Resultado executivo
 
 - **Passo 0:** encontrado um fixture de teste desatualizado em `tools/tests/test_prepare_native_runtime.py`. A fixture não correspondia ao arquivo upstream fixado `35067868f64f23d25d17ac3e536cfdd9a7f40523`. Foi atualizada em `af2970db602eac6998401e577f3fd90a29db7d0a`; o patcher de produção não foi afrouxado. A CI desse commit ainda estava pendente durante esta auditoria. Portanto, a correção está commitada, mas **a aprovação do Passo 0 ainda não está confirmada**.
-- **Windows/Linux:** a execução verde mais recente encontrada foi [run 41130771002](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41130771002). Na execução posterior [run 41140404682](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41140404682), os jobs avançaram por compilação nativa e verificação dos pacotes, mas os testes do launcher falharam ao esperar por fragmentos de log durante o teste de processo único. Isso não é evidência de falha do compilador C/C++.
-- **Android:** as falhas ARM64 antigas foram classificadas em duas causas distintas. A primeira foi uma verificação ELF de alinhamento de 16 KiB em `libc++_shared.so` do NDK 28.2, depois que `libmain.so` havia sido compilada. A troca para NDK 30 ultrapassou esse bloqueio, mas encontrou um erro C++ em `PPW_Allocator` ao instanciar `std::map` em `dwci_lobbydata.cpp:118`. Nenhum APK integrado foi validado.
-- **Renderizador:** o código sugere que um backend GLES 3.0 pode ser viável sem reescrever o renderer em Metal. Ainda não há protótipo de renderer executado nem comparação de pixels. A decisão fica **condicional** até a paridade sintética quadro a quadro.
+- **Windows/Linux:** a última execução totalmente verde foi [run 41130771002](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41130771002), no commit `abacbff`; Linux x86-64, Windows x64 e testes ROM-free passaram. A execução posterior [run 41140404682](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41140404682), no commit `cb009b5`, não terminou durante esta auditoria: Linux concluiu com sucesso, Windows ainda estava em execução e a suíte Python falhou com 9 erros e 2 falhas causados pela fixture de configuração desatualizada. A correção está em `af2970d`, mas a execução desse commit ([run 41141969625](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41141969625)) permanece pendente. Portanto, o `main` atual ainda não tem confirmação CI pós-correção.
+- **Android:** as falhas ARM64 antigas tiveram várias causas. Com NDK 28.2, `libmain.so` compilou, mas a validação ELF falhou porque o GNU_RELRO da `libc++_shared.so` não atendia ao alinhamento de 16 KiB. Com NDK 30, uma execução falhou na construção da chave `const int` de `std::map` dentro de `PPW_Allocator`; outra chegou a gerar `libmain.so` AArch64, mas o passo seguinte terminou com código 74, sem diagnóstico explícito. Uma execução de testes anterior também falhou porque a fixture não continha `asm/macros/aicmd.inc`. Nenhum APK integrado foi validado.
+- **Renderizador:** a superfície de API sugere que GLES 3.0 pode ser viável, mas a antiga prova de shaders GLES 3.2 é insuficiente. O shader G2 usa `bgTexture[currentBgDrawn]`, índice que depende dos resultados de textura por fragmento e não é dinamicamente uniforme. Isso viola a regra de indexação de arrays de samplers em ESSL. A seleção precisa usar índices constantes e passar por teste em driver real. Ainda não há protótipo de renderer executado nem comparação de pixels; a decisão fica **condicional**.
 - **iOS:** não existe alvo iOS ativo, build Xcode, framework ou teste em aparelho. A rota de menor custo a investigar é manter um contrato GLES 3.0 comum e testar ANGLE sobre Metal; backend Metal próprio é a alternativa de contingência, não a primeira escolha.
 
 ## 2. Passo 0 — fixtures, CI e causa Android
@@ -29,12 +29,16 @@ Correção aplicada: substituir a fixture pela versão exata de `src/port/sim_co
 2. **NDK 30.0.16248370:** a compilação foi mais longe, mas parou em `lib/ppwlobby/libraries/ilobby/src/dwci_lobbydata.cpp:118`, na expressão `unk_70[v0] = param0`. O erro de libc++ foi `static_cast from 'const int *' to 'void *' is not allowed`, durante a construção da chave `const int` do mapa.
    - A origem está no alocador customizado `PPW_Allocator` de `lib/ppwlobby/include/ilobby/dwci_lobbybase.h`: ele implementa apenas `construct(pointer, const T&)`, mas não o overload genérico necessário quando `allocator_traits` constrói o subobjeto `const int` da árvore de `std::map`.
    - [Execução histórica 40874776721](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40874776721).
+3. **NDK 30.0.16248370, tentativa posterior:** `libmain.so` foi gerada como ELF AArch64 (`[13854/13854]`), mas o passo pós-link terminou com código 74 antes de concluir as verificações de alinhamento, exportação de `SDL_main` e integração do APK. O log não tem mensagem suficiente para atribuir a causa; o passo precisa ser instrumentado.
+   - [Execução histórica 40875831924](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40875831924).
+4. **Fixture de teste Android anterior:** uma execução falhou porque a fixture não incluía `asm/macros/aicmd.inc`; isso é falha de teste ROM-free, não prova de defeito do renderer.
+   - [Execução histórica 40871605005](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40871605005).
 
 **Correção futura requerida:** preservar a alocação pelo heap DWC e acrescentar um caminho C++03 correto de construção para o tipo solicitado pelo container (incluindo o caso de chave const), com teste ROM-free e build ARM64. Não trocar para allocator padrão sem provar que isso preserva as regras de memória do projeto. Depois, verificar o alinhamento de 16 KiB de todos os ELF efetivamente empacotados, incluindo a libc++ fornecida pelo NDK.
 
 ### 2.3 O que o antigo teste gráfico Android realmente comprovou
 
-O workflow experimental [código experimental no commit 4877f94](https://github.com/CarlosCosta07-s/Platina_reluzente-/commit/4877f94479350cad2c69c6f81c5c3a8c1580c15e) (job histórico 123222636120) exportou quatro shaders GLES e passou `glslangValidator` nos dois shaders G2 e nos dois G3. Isso comprova apenas a tradução/compilação dos arquivos de shader naquele protótipo. Não comprova link dos programas com o renderer completo, chamadas de desenho, imagem apresentada, equivalência visual, APK ou execução em aparelho. O script experimental de preparação por strings Python não será reaproveitado como arquitetura final; alterações nativas devem ser arquivos `.patch`/ `.cpp` versionados.
+O workflow experimental [código experimental no commit 4877f94](https://github.com/CarlosCosta07-s/Platina_reluzente-/commit/4877f94479350cad2c69c6f81c5c3a8c1580c15e) (job histórico 123222636120) exportou quatro shaders GLES e passou `glslangValidator` nos dois shaders G2 e nos dois G3. Isso comprova apenas que o validador aceitou a sintaxe dos quatro arquivos. Não comprova link dos programas, chamadas de desenho, imagem apresentada, paridade visual, APK ou execução em aparelho. Há ainda uma falha semântica que o teste estático não verifica: `bgTexture[currentBgDrawn]` em `g2_fragment.glsl` usa índice dependente da amostragem de textura por fragmento. No ESSL 3.00, arrays de samplers só aceitam índices integrais constantes; no ESSL 3.20, os índices precisam ser dinamicamente uniformes. `currentBgDrawn` pode variar entre fragmentos e não satisfaz nenhuma das condições. A variante móvel deverá selecionar samplers com `switch`/ramificações de índices literais (`bgTexture[0]` a `[3]`) e incluir cena sintética com camada selecionada variando entre pixels adjacentes. O script experimental de preparação por strings Python não será reaproveitado como arquitetura final; alterações nativas devem ser arquivos `.patch`/ `.cpp` versionados.
 
 ## 3. Auditoria do renderer
 
@@ -55,7 +59,7 @@ Revisão upstream examinada: `cybervisi0n/libntr` em `1555d911ac80c0190ac1c321f9
 
 O contrato comum a testar deve ser **OpenGL ES 3.0 / GLSL ES 3.00**. Android usará GLES nativo. Para iOS, ANGLE sobre Metal é uma hipótese realista apenas com esse contrato: a matriz pública atual do ANGLE marca ES 3.0 sobre Metal como completo e Metal em iOS 12+ como suportado, enquanto ES 3.1/3.2 sobre Metal não aparece como completo. Isso evita iniciar dois renderers separados. Fonte: [ANGLE README](https://github.com/google/angle).
 
-GLSL ES 3.00 exige testar cuidadosamente os arrays de samplers, os índices derivados de uniforms e os bitwise operators que compõem a mistura G2. O compilador aceitar os quatro shaders não basta: os programas precisam linkar e renderizar os mesmos dados sintéticos.
+GLSL ES 3.00 exige arrays de samplers com índices constantes. O shader G2 deve eliminar a indexação não uniforme de `bgTexture[currentBgDrawn]`; migrar para ESSL 3.20 não resolve esse caso. Também precisam ser testados os bitwise operators, o link dos programas e a renderização dos mesmos dados sintéticos.
 
 ### 3.2 Tratamento de CLAMP_TO_BORDER
 
@@ -70,20 +74,20 @@ O protótipo deve aplicar um patch ao commit exato de libntr e renderizar cenas 
 - geometria 3D com textura, cor de vértice, alpha, fog e as quatro combinações repeat/mirror/clamp em S/T;
 - amostragem de coordenadas dentro, fora e exatamente nas bordas da textura.
 
-O mesmo caso de teste deve renderizar no desktop GL 4.2 e em GLES 3.0 (Mesa/llvmpipe no CI), ler os pixels e comparar cada quadro. Exigir igualdade exata quando os cálculos permitirem; qualquer tolerância numérica precisa ser documentada por canal e acompanhada de limite máximo de pixels divergentes. O resultado e as imagens geradas devem ser artefatos de teste sem ROM. Este teste é o gate A; só depois dele se configura o alvo Android completo e o alvo iOS/ANGLE.
+O mesmo caso deve renderizar no desktop GL 4.2 e em GLES 3.0 (Mesa/llvmpipe no CI), ler os pixels e comparar cada quadro. Deve incluir a cena em que `currentBgDrawn` difere entre pixels adjacentes, verificando a seleção de sampler sem índice dinâmico. Exigir igualdade exata quando os cálculos permitirem; qualquer tolerância numérica deve ser documentada por canal e acompanhada de limite máximo de pixels divergentes. O resultado e as imagens geradas devem ser artefatos de teste sem ROM. Este teste é o gate A; só depois dele se configura o alvo Android completo e o alvo iOS/ANGLE.
 
 ## 4. Arquitetura proposta por marco
 
 ### Marco 0 — estabilizar a base desktop e os testes
 
 - Confirmar `python3 scripts/test.py --quick` (a CI atual executa a suíte `--full`; a execução do commit `af2970d` ainda precisa terminar).
-- Corrigir as falhas restantes do launcher apenas com base nos logs completos. A falha observada foi timeout no teste que aguarda log do processo; não aumentar o timeout sem entender a ordem de eventos e os pontos de sincronização.
+- A falha mais recente da suíte Python antes de `af2970d` foi causada pela fixture upstream desatualizada (9 erros e 2 falhas), não por timeout/sincronização do launcher. O commit `af2970d` corrige a fixture; a aprovação ainda depende da CI desse commit. Depois disso, investigar separadamente qualquer falha real de launcher.
 - Manter Linux x86-64 e Windows x64 verdes, com os smoke tests ROM-free já existentes.
 - Nenhuma alteração mobile enquanto os testes comuns falharem.
 
 ### Marco A — renderer GLES 3.0 (gate de viabilidade)
 
-1. Criar um patch versionado para a revisão pinada de libntr, mais arquivos de shader ES 3.00 e pequenas rotinas C/C++ de compatibilidade.
+1. Criar um patch versionado para a revisão pinada de libntr, mais arquivos de shader ES 3.00 e pequenas rotinas C/C++ de compatibilidade. Não usar um patcher Python de substituições por strings como implementação final.
 2. Retirar dependência obrigatória de GLAD desktop no build mobile, pedir contexto ES 3.0, condicionar debug GL e emular clamp-to-border sem alteração silenciosa.
 3. Adicionar CI isolada para aplicar o patch, compilar/validar os quatro shaders e executar o comparador sintético GL 4.2 × GLES 3.0.
 4. Só considerar Android viável após o comparador passar. Só considerar iOS/ANGLE após a mesma suíte passar em ANGLE/Metal num runner macOS com Xcode. Se a diferença de pixels não puder ser corrigida sem reescrever o renderer, reavaliar custo de Metal nativo antes de prosseguir.
