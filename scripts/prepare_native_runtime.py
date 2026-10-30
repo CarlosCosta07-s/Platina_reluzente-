@@ -257,7 +257,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
         if (sizeError) {
           return fail("cannot read overlay file size: " + relativeName + ": " + sizeError.message());
         }
-        if (fileSize == 0) {
+        if (fileSize == 0 && (requireAll || verifyContents)) {
           return fail("overlay file is empty: " + relativeName);
         }
         if (verifyContents) {
@@ -381,20 +381,6 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     return true;
   };
 
-  const auto clearInvalidExtraction = [&](const std::vector<std::string> &paths) {
-    // Preflight every deletion first. A linked path anywhere in the list must
-    // not cause a half-cleared cache before we notice the unsafe entry.
-    if (!canRemoveRelativeFileWithoutSymlinks("platina-rom-extraction.manifest")) return false;
-    for (const std::string &relativeName : paths) {
-      if (!canRemoveRelativeFileWithoutSymlinks(relativeName)) return false;
-    }
-    if (!removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest")) return false;
-    for (const std::string &relativeName : paths) {
-      if (!removeRelativeFileWithoutSymlinks(relativeName)) return false;
-    }
-    return true;
-  };
-
   const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
                                          const std::string &romSha256,
                                          bool verifyFullCrc) {
@@ -456,7 +442,10 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       if (!isRegularFileWithoutSymlinks(relativePath)) return false;
       std::error_code sizeError;
       const std::uintmax_t actualSize = std::filesystem::file_size(relativePath, sizeError);
-      if (sizeError || actualSize != cachedSize) return false;
+      const bool emptyOverlay = actualSize == 0 &&
+          (paths[index].rfind("overlay9/", 0) == 0 ||
+           paths[index].rfind("overlay7/", 0) == 0);
+      if (sizeError || actualSize != cachedSize || emptyOverlay) return false;
       if (verifyFullCrc) {
         std::uint64_t verifiedSize = 0;
         std::uint32_t actualCrc = 0;
@@ -584,7 +573,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     }
     std::vector<std::string> expectedDataPaths = baseDataPaths;
     std::string overlayInspectionFailure;
-    if (!collectOverlayPaths(expectedDataPaths, false, !platinaPreparedByLauncher,
+    if (!collectOverlayPaths(expectedDataPaths, false, false,
                              &overlayInspectionFailure)) {
       fprintf(stderr, "[Platina] The local overlay directories failed validation: %s\n",
               overlayInspectionFailure.c_str());
@@ -601,47 +590,234 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
       fprintf(stdout, "[Platina-Progress] extracting\n");
       fprintf(stdout, "[Platina] Cache validation failed; rebuilding extracted data from the imported ROM.\n");
       fflush(stdout);
-      if (!clearInvalidExtraction(expectedDataPaths)) {
-        fprintf(stderr, "[Platina] Refusing to replace unsafe or non-regular extracted data paths.\n");
+      // Keep the current cache untouched until a complete replacement has
+      // been extracted and verified in a fresh directory.
+      const std::vector<std::string> previousDataPaths = expectedDataPaths;
+      std::error_code rootError;
+      const std::filesystem::path runtimeRoot = std::filesystem::current_path(rootError);
+      if (rootError) {
+        fprintf(stderr, "[Platina] Cannot resolve the runtime working directory: %s\n",
+                rootError.message().c_str());
         return 4;
       }
-      int extractionStatus = -1;
-      try {
-        extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
-      } catch (const std::exception &exception) {
-        fprintf(stderr, "[Platina] ROM extraction threw an exception: %s\n", exception.what());
-        return 3;
-      }
-      if (extractionStatus != 0) {
-        fprintf(stderr, "[Platina] ROM extraction failed with status %d.\n", extractionStatus);
-        return 3;
+      rootError.clear();
+      const std::filesystem::path absoluteRomPath =
+          std::filesystem::absolute(importedRom, rootError);
+      if (rootError) {
+        fprintf(stderr, "[Platina] Cannot resolve the imported ROM path: %s\n",
+                rootError.message().c_str());
+        return 2;
       }
 
-      expectedDataPaths = baseDataPaths;
-      std::string overlayExtractionFailure;
-      if (!collectOverlayPaths(expectedDataPaths, true, true, &overlayExtractionFailure)) {
-        fprintf(stderr, "[Platina] Extraction did not produce a valid ARM9 overlay set: %s\n",
-                overlayExtractionFailure.c_str());
+      const std::filesystem::path stagingRoot =
+          runtimeRoot / ".platina-extraction-staging";
+      std::error_code stagingError;
+      const auto stagingStatus =
+          std::filesystem::symlink_status(stagingRoot, stagingError);
+      if (stagingError &&
+          stagingError != std::errc::no_such_file_or_directory) {
+        fprintf(stderr, "[Platina] Cannot inspect the extraction staging directory: %s\n",
+                stagingError.message().c_str());
         return 4;
       }
-      std::string missingDataPath;
-      if (!validateExtractedData(expectedDataPaths, &missingDataPath)) {
-        fprintf(stderr, "[Platina] Extractor returned success, but required local data is missing/corrupted: %s\n",
-                missingDataPath.c_str());
-        return 4;
-      }
-      if (!writeExtractionCache(expectedDataPaths, romSha256)) {
-        fprintf(stderr, "[Platina] Warning: extracted data passed validation, but its integrity manifest could not be saved; the next launch will verify/extract again.\n");
-      } else {
-        // Re-read the just-written manifest to ensure it can be trusted on the
-        // next launch, before renderer startup begins.
-        if (!verifyExtractionCache(expectedDataPaths, romSha256, true)) {
-          fprintf(stderr, "[Platina] Integrity manifest self-check failed after extraction.\n");
+      if (!stagingError && std::filesystem::exists(stagingStatus)) {
+        if (std::filesystem::is_symlink(stagingStatus) ||
+            !std::filesystem::is_directory(stagingStatus)) {
+          fprintf(stderr, "[Platina] Refusing an unsafe extraction staging path.\n");
+          return 4;
+        }
+        std::filesystem::remove_all(stagingRoot, stagingError);
+        if (stagingError) {
+          fprintf(stderr, "[Platina] Cannot clear the previous extraction staging directory: %s\n",
+                  stagingError.message().c_str());
           return 4;
         }
       }
 
-      fprintf(stdout, "[Platina] Local game data extraction and integrity check completed.\n");
+      stagingError.clear();
+      const bool stagingCreated =
+          std::filesystem::create_directory(stagingRoot, stagingError);
+      if (stagingError || !stagingCreated) {
+        fprintf(stderr, "[Platina] Cannot create a clean extraction staging directory: %s\n",
+                stagingError ? stagingError.message().c_str() : "directory already exists");
+        return 4;
+      }
+      const auto discardStaging = [&]() {
+        std::error_code cleanupError;
+        std::filesystem::remove_all(stagingRoot, cleanupError);
+        if (cleanupError) {
+          fprintf(stderr, "[Platina] Warning: could not remove the temporary extraction directory: %s\n",
+                  cleanupError.message().c_str());
+        }
+      };
+
+      std::vector<std::string> stagedDataPaths;
+      std::string stagingFailure;
+      bool stagingReady = false;
+      try {
+        std::error_code changeError;
+        std::filesystem::current_path(stagingRoot, changeError);
+        if (changeError) {
+          stagingFailure = "cannot enter the clean staging directory: " +
+                           changeError.message();
+        } else {
+          try {
+            const int extractionStatus = SIM_NDSExtract(absoluteRomPath.string());
+            if (extractionStatus != 0) {
+              stagingFailure = "ROM extraction failed with status " +
+                               std::to_string(extractionStatus);
+            } else {
+              stagedDataPaths = baseDataPaths;
+              std::string overlayExtractionFailure;
+              if (!collectOverlayPaths(stagedDataPaths, true, true,
+                                       &overlayExtractionFailure)) {
+                stagingFailure = "extracted overlay validation failed: " +
+                                 overlayExtractionFailure;
+              } else {
+                std::string missingDataPath;
+                if (!validateExtractedData(stagedDataPaths, &missingDataPath)) {
+                  stagingFailure = "required extracted data is missing or invalid: " +
+                                   missingDataPath;
+                } else if (!writeExtractionCache(stagedDataPaths, romSha256)) {
+                  stagingFailure = "could not write the staging integrity manifest";
+                } else if (!verifyExtractionCache(stagedDataPaths, romSha256, true)) {
+                  stagingFailure = "staging integrity manifest self-check failed";
+                } else {
+                  stagingReady = true;
+                }
+              }
+            }
+          } catch (const std::exception &exception) {
+            stagingFailure = std::string("ROM extraction threw an exception: ") +
+                             exception.what();
+          } catch (...) {
+            stagingFailure = "ROM extraction failed with an unknown exception";
+          }
+        }
+      } catch (const std::exception &exception) {
+        stagingFailure = std::string("staging setup failed: ") + exception.what();
+      }
+
+      std::error_code restoreError;
+      std::filesystem::current_path(runtimeRoot, restoreError);
+      if (restoreError) {
+        stagingReady = false;
+        stagingFailure = "cannot restore the runtime working directory: " +
+                         restoreError.message();
+      }
+      if (!stagingReady) {
+        discardStaging();
+        fprintf(stderr, "[Platina] %s. The previous extracted data and cache marker were left untouched.\n",
+                stagingFailure.empty() ? "Staged extraction was not validated" :
+                                         stagingFailure.c_str());
+        return 4;
+      }
+
+      // Preflight all source and destination paths before invalidating the
+      // current marker. No runtime game data is changed before this point.
+      const std::filesystem::path stagingRelativeRoot(
+          ".platina-extraction-staging");
+      for (const std::string &relativeName : stagedDataPaths) {
+        const std::filesystem::path relativePath(relativeName);
+        if (!isRegularFileWithoutSymlinks(stagingRelativeRoot / relativePath) ||
+            !canRemoveRelativeFileWithoutSymlinks(relativeName)) {
+          discardStaging();
+          fprintf(stderr, "[Platina] Refusing unsafe staged or destination data path: %s\n",
+                  relativeName.c_str());
+          return 4;
+        }
+      }
+      for (const std::string &relativeName : previousDataPaths) {
+        const bool isOverlay =
+            relativeName.rfind("overlay9/", 0) == 0 ||
+            relativeName.rfind("overlay7/", 0) == 0;
+        const bool stillPresent =
+            std::find(stagedDataPaths.begin(), stagedDataPaths.end(),
+                      relativeName) != stagedDataPaths.end();
+        if (isOverlay && !stillPresent &&
+            !canRemoveRelativeFileWithoutSymlinks(relativeName)) {
+          discardStaging();
+          fprintf(stderr, "[Platina] Refusing to remove an unsafe stale overlay path: %s\n",
+                  relativeName.c_str());
+          return 4;
+        }
+      }
+      if (!canRemoveRelativeFileWithoutSymlinks("platina-rom-extraction.manifest") ||
+          !removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest")) {
+        discardStaging();
+        fprintf(stderr, "[Platina] Could not safely invalidate the old extraction marker.\n");
+        return 4;
+      }
+
+      // The old cache marker stays absent during publication. If any copy
+      // fails, the next preparation must rebuild instead of accepting a
+      // partially published set of files.
+      for (const std::string &relativeName : stagedDataPaths) {
+        const std::filesystem::path relativePath(relativeName);
+        const std::filesystem::path sourcePath = stagingRoot / relativePath;
+        const std::filesystem::path destinationPath = runtimeRoot / relativePath;
+        std::error_code copyError;
+        std::filesystem::create_directories(destinationPath.parent_path(), copyError);
+        if (copyError) {
+          discardStaging();
+          fprintf(stderr, "[Platina] Cannot create destination directory for %s: %s\n",
+                  relativeName.c_str(), copyError.message().c_str());
+          return 4;
+        }
+        const bool copied = std::filesystem::copy_file(
+            sourcePath, destinationPath,
+            std::filesystem::copy_options::overwrite_existing, copyError);
+        if (copyError || !copied) {
+          discardStaging();
+          fprintf(stderr, "[Platina] Could not publish staged data file %s: %s\n",
+                  relativeName.c_str(),
+                  copyError ? copyError.message().c_str() : "copy_file returned false");
+          return 4;
+        }
+      }
+
+      // Remove only old overlay files that are absent from the newly verified
+      // set. Saves, configuration, ROM files and the native executable are
+      // outside both manifests and are never moved or deleted.
+      for (const std::string &relativeName : previousDataPaths) {
+        const bool isOverlay =
+            relativeName.rfind("overlay9/", 0) == 0 ||
+            relativeName.rfind("overlay7/", 0) == 0;
+        const bool stillPresent =
+            std::find(stagedDataPaths.begin(), stagedDataPaths.end(),
+                      relativeName) != stagedDataPaths.end();
+        if (isOverlay && !stillPresent &&
+            !removeRelativeFileWithoutSymlinks(relativeName)) {
+          discardStaging();
+          fprintf(stderr, "[Platina] Could not remove a stale overlay file: %s\n",
+                  relativeName.c_str());
+          return 4;
+        }
+      }
+
+      expectedDataPaths = stagedDataPaths;
+      std::string publishedMissingPath;
+      if (!validateExtractedData(expectedDataPaths, &publishedMissingPath)) {
+        discardStaging();
+        fprintf(stderr, "[Platina] Published runtime data failed validation: %s\n",
+                publishedMissingPath.c_str());
+        return 4;
+      }
+      if (!writeExtractionCache(expectedDataPaths, romSha256)) {
+        (void)removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest");
+        discardStaging();
+        fprintf(stderr, "[Platina] Could not write the final runtime integrity manifest.\n");
+        return 4;
+      }
+      if (!verifyExtractionCache(expectedDataPaths, romSha256, true)) {
+        (void)removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest");
+        discardStaging();
+        fprintf(stderr, "[Platina] Final runtime integrity manifest self-check failed.\n");
+        return 4;
+      }
+
+      discardStaging();
+      fprintf(stdout, "[Platina] Staged game data was validated and published successfully.\n");
       fflush(stdout);
     } else if (platinaPreparedByLauncher) {
       fprintf(stdout, "[Platina] Reusing launcher-prepared game data after regular-file and size verification.\n");

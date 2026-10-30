@@ -545,7 +545,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("bool verifyContents", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("if (verifyContents)", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("!platinaPreparedByLauncher", ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn("collectOverlayPaths(expectedDataPaths, true, true", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("collectOverlayPaths(stagedDataPaths, true, true", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("Overlay validation failed: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('return fail("required " + prefix + " overlay directory is missing:', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("unexpected entry in ", ROM_PREFLIGHT_ENTRY_PATCHED)
@@ -787,4 +787,38 @@ class NativeRuntimePreparationTests(unittest.TestCase):
                 config.read_text(encoding="utf-8"),
                 "unknown upstream config implementation\n",
             )
+
+
+    def test_invalid_extraction_is_staged_and_validated_before_the_runtime_cache_is_replaced(self):
+        patch = ROM_PREFLIGHT_ENTRY_PATCHED
+        self.assertIn('runtimeRoot / ".platina-extraction-staging"', patch)
+        self.assertIn("std::filesystem::current_path(stagingRoot, changeError)", patch)
+        self.assertIn("SIM_NDSExtract(absoluteRomPath.string())", patch)
+        self.assertIn("collectOverlayPaths(stagedDataPaths, true, true", patch)
+        self.assertIn("verifyExtractionCache(stagedDataPaths, romSha256, true)", patch)
+        self.assertIn("std::filesystem::current_path(runtimeRoot, restoreError)", patch)
+        self.assertNotIn("clearInvalidExtraction", patch)
+
+        stage_verified = patch.index("verifyExtractionCache(stagedDataPaths, romSha256, true)")
+        marker_removed = patch.index(
+            'removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest")',
+            stage_verified,
+        )
+        published = patch.index("std::filesystem::copy_file(", marker_removed)
+        final_cache = patch.index(
+            "writeExtractionCache(expectedDataPaths, romSha256)",
+            published,
+        )
+        self.assertLess(stage_verified, marker_removed)
+        self.assertLess(marker_removed, published)
+        self.assertLess(published, final_cache)
+
+    def test_zero_byte_existing_overlay_is_rejected_by_cache_validation_so_it_can_be_rebuilt(self):
+        patch = ROM_PREFLIGHT_ENTRY_PATCHED
+        self.assertIn("if (fileSize == 0 && (requireAll || verifyContents))", patch)
+        self.assertIn("const bool emptyOverlay = actualSize == 0", patch)
+        self.assertIn("actualSize != cachedSize || emptyOverlay", patch)
+
+    def test_upstream_extractor_writes_to_the_current_working_directory(self):
+        self.assertIn("fs::path fsOutputPath = fs::current_path();", UPSTREAM_NDS_EXTRACTOR)
 
