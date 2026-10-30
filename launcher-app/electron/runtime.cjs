@@ -75,17 +75,11 @@ function hasRequiredRuntimeData(runtimeRoot) {
 const RUNTIME_VERSION_FILE = 'launcher-runtime-version.txt';
 const RUNTIME_MANIFEST_FILE = 'launcher-runtime-manifest.json';
 
-function sha256FileSync(filePath) {
+async function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
-  const descriptor = fs.openSync(filePath, 'r');
-  const buffer = Buffer.allocUnsafe(1024 * 1024);
-  try {
-    let bytesRead;
-    while ((bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null)) > 0) {
-      hash.update(buffer.subarray(0, bytesRead));
-    }
-  } finally {
-    fs.closeSync(descriptor);
+  const input = fs.createReadStream(filePath);
+  for await (const chunk of input) {
+    hash.update(chunk);
   }
   return hash.digest('hex');
 }
@@ -95,7 +89,7 @@ function sha256FileSync(filePath) {
  * Extracted game assets, saves and user settings are intentionally outside the
  * manifest; only the shipped native executable and libraries are fingerprinted.
  */
-function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
+async function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
   const expectedPlatform = platform === 'win32' ? 'windows' : platform;
   try {
     const root = path.resolve(runtimeRoot);
@@ -133,7 +127,7 @@ function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
       const filePath = path.join(root, ...entry.path.split('/'));
       const stat = fs.lstatSync(filePath);
       if (stat.isSymbolicLink() || !stat.isFile() || stat.size !== entry.size) return false;
-      const actualSha256 = sha256FileSync(filePath);
+      const actualSha256 = await sha256File(filePath);
       if (actualSha256 !== entry.sha256.toLowerCase()) return false;
       fingerprint.update(entry.path + '\0' + entry.sha256.toLowerCase() + '\n');
     }
@@ -214,11 +208,11 @@ function assertRuntimeTreeHasNoSymlinks(root) {
   visit(absoluteRoot);
 }
 
-function runtimeIsUsable(runtimeRoot, platform) {
+async function runtimeIsUsable(runtimeRoot, platform) {
   try {
     assertRuntimeTreeHasNoSymlinks(runtimeRoot);
-    return Boolean(findBundledExecutable(runtimeRoot, platform)
-      && verifyRuntimeManifest(runtimeRoot, platform));
+    const executable = findBundledExecutable(runtimeRoot, platform);
+    return Boolean(executable && await verifyRuntimeManifest(runtimeRoot, platform));
   } catch {
     return false;
   }
@@ -252,7 +246,7 @@ function copyRuntimeTreeContents(source, destination) {
  * current working directory, which may be read-only inside an AppImage or an
  * application installed under a protected system directory.
  */
-function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.platform) {
+async function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.platform) {
   const source = path.resolve(sourceRoot);
   const destination = path.resolve(destinationRoot);
   if (source === destination) {
@@ -264,7 +258,7 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
   if (!sourceExecutable) {
     throw new Error('The bundled runtime is missing its native executable.');
   }
-  if (!verifyRuntimeManifest(source, platform)) {
+  if (!await verifyRuntimeManifest(source, platform)) {
     throw new Error('The bundled runtime manifest is missing or failed integrity validation. Rebuild the launcher package.');
   }
   const sourceBuildId = runtimeBuildId(source, platform);
@@ -277,7 +271,7 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
   if (fs.existsSync(previous)) {
     if (!fs.existsSync(destination)) {
       fs.renameSync(previous, destination);
-    } else if (runtimeIsUsable(destination, platform)) {
+    } else if (await runtimeIsUsable(destination, platform)) {
       fs.rmSync(previous, { recursive: true, force: true });
     } else {
       fs.rmSync(destination, { recursive: true, force: true });
@@ -286,7 +280,7 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
   }
   if (fs.existsSync(staging)) fs.rmSync(staging, { recursive: true, force: true });
 
-  if (runtimeIsUsable(destination, platform)) {
+  if (await runtimeIsUsable(destination, platform)) {
     try {
       if (runtimeBuildId(destination, platform) === sourceBuildId) {
         return {
@@ -317,7 +311,7 @@ function prepareWritableRuntime(sourceRoot, destinationRoot, platform = process.
 
   assertRuntimeTreeHasNoSymlinks(staging);
   if (!findBundledExecutable(staging, platform)
-      || !verifyRuntimeManifest(staging, platform)
+      || !(await verifyRuntimeManifest(staging, platform))
       || runtimeBuildId(staging, platform) !== sourceBuildId) {
     fs.rmSync(staging, { recursive: true, force: true });
     throw new Error('The writable runtime copy failed its post-copy validation.');

@@ -235,13 +235,13 @@ function makeRuntimeFixture(directory, platform = 'linux', label = 'test-build')
   return writeRuntimeManifest(directory, platform);
 }
 
-test('prepares a writable runtime, preserves local game data and refreshes bundled files', () => {
+test('prepares a writable runtime, preserves local game data and refreshes bundled files', async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-writable-runtime-'));
   const source = path.join(temp, 'bundled-runtime');
   const destination = path.join(temp, 'user-data', 'runtime');
   try {
     const buildOneId = makeRuntimeFixture(source, 'linux', 'build-1');
-    const first = prepareWritableRuntime(source, destination, 'linux');
+    const first = await prepareWritableRuntime(source, destination, 'linux');
     assert.equal(first.root, destination);
     assert.equal(first.executable, path.join(destination, 'main'));
     assert.equal(first.buildId, buildOneId);
@@ -250,13 +250,13 @@ test('prepares a writable runtime, preserves local game data and refreshes bundl
 
     fs.writeFileSync(path.join(destination, 'sim_config.ini'), 'user settings');
     fs.writeFileSync(path.join(destination, 'save.bin'), 'local save');
-    const reused = prepareWritableRuntime(source, destination, 'linux');
+    const reused = await prepareWritableRuntime(source, destination, 'linux');
     assert.equal(reused.reused, true);
     assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user settings');
 
     fs.writeFileSync(path.join(source, 'main'), 'updated native executable');
     const buildTwoId = writeRuntimeManifest(source, 'linux');
-    const refreshed = prepareWritableRuntime(source, destination, 'linux');
+    const refreshed = await prepareWritableRuntime(source, destination, 'linux');
     assert.equal(refreshed.buildId, buildTwoId);
     assert.equal(refreshed.reused, false);
     assert.equal(fs.readFileSync(path.join(destination, 'main'), 'utf8'), 'updated native executable');
@@ -269,7 +269,7 @@ test('prepares a writable runtime, preserves local game data and refreshes bundl
   }
 });
 
-test('allows an executable-only runtime and preserves assets extracted from the imported ROM', (t) => {
+test('allows an executable-only runtime and preserves assets extracted from the imported ROM', async (t) => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-rom-extraction-'));
   const source = path.join(temp, 'bundled-runtime');
   const destination = path.join(temp, 'user-data', 'runtime');
@@ -280,10 +280,10 @@ test('allows an executable-only runtime and preserves assets extracted from the 
     writeRuntimeManifest(source, 'linux');
 
     assert.equal(hasRequiredRuntimeData(source), false);
-    assert.equal(verifyRuntimeManifest(source, 'linux'), true);
-    assert.equal(isRuntimeUsable(source, 'linux'), true);
+    assert.equal(await verifyRuntimeManifest(source, 'linux'), true);
+    assert.equal(await isRuntimeUsable(source, 'linux'), true);
 
-    const first = prepareWritableRuntime(source, destination, 'linux');
+    const first = await prepareWritableRuntime(source, destination, 'linux');
     assert.equal(first.executable, path.join(destination, 'main'));
     assert.equal(first.reused, false);
     assert.equal(hasRequiredRuntimeData(destination), false);
@@ -302,7 +302,7 @@ test('allows an executable-only runtime and preserves assets extracted from the 
     }
     assert.equal(hasRequiredRuntimeData(destination), true);
 
-    const reused = prepareWritableRuntime(source, destination, 'linux');
+    const reused = await prepareWritableRuntime(source, destination, 'linux');
     assert.equal(reused.reused, true);
     assert.equal(fs.readFileSync(path.join(destination, 'battle', 'skill', 'waza_seq.narc'), 'utf8'),
       'extracted-from-user-rom:battle/skill/waza_seq.narc');
@@ -311,7 +311,7 @@ test('allows an executable-only runtime and preserves assets extracted from the 
   }
 });
 
-test('writable runtime preparation rejects a linked bundled runtime tree', (t) => {
+test('writable runtime preparation rejects a linked bundled runtime tree', async (t) => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-writable-runtime-symlink-'));
   const source = path.join(temp, 'bundled-runtime');
   const outside = path.join(temp, 'outside');
@@ -328,14 +328,14 @@ test('writable runtime preparation rejects a linked bundled runtime tree', (t) =
       }
       throw error;
     }
-    assert.throws(() => prepareWritableRuntime(source, destination, 'linux'), /Symbolic links are not allowed/);
+    await assert.rejects(prepareWritableRuntime(source, destination, 'linux'), /Symbolic links are not allowed/);
     assert.equal(fs.existsSync(destination), false);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
 
-test('runtime status rejects an unsafe extra file before enabling launch', (t) => {
+test('runtime status rejects an unsafe extra file before enabling launch', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-extra-link-'));
   const outside = path.join(directory, 'outside.txt');
   const runtime = path.join(directory, 'runtime');
@@ -366,7 +366,7 @@ test('runtime status rejects an unsafe extra file before enabling launch', (t) =
 
     assert.equal(hasRequiredRuntimeData(runtime), true);
     assert.equal(findBundledExecutable(runtime, 'linux'), path.join(runtime, 'main'));
-    assert.equal(isRuntimeUsable(runtime, 'linux'), false);
+    assert.equal(await isRuntimeUsable(runtime, 'linux'), false);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -455,41 +455,38 @@ test('horizontal layout refuses a symlinked config file', (t) => {
 });
 
 
-test('runtime integrity check refuses a tampered native executable even when the old marker remains', () => {
+test('runtime integrity check refuses a tampered native executable even when the old marker remains', async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-manifest-tamper-'));
   const source = path.join(temp, 'bundled-runtime');
   const destination = path.join(temp, 'user-data', 'runtime');
   try {
     makeRuntimeFixture(source, 'linux', 'known-build');
-    const first = prepareWritableRuntime(source, destination, 'linux');
-    assert.equal(verifyRuntimeManifest(destination, 'linux'), true);
+    const first = await prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(await verifyRuntimeManifest(destination, 'linux'), true);
 
     fs.writeFileSync(path.join(destination, 'main'), 'altered executable with the same marker');
-    assert.equal(verifyRuntimeManifest(destination, 'linux'), false);
-    assert.equal(isRuntimeUsable(destination, 'linux'), false);
+    assert.equal(await verifyRuntimeManifest(destination, 'linux'), false);
+    assert.equal(await isRuntimeUsable(destination, 'linux'), false);
 
     // Startup preparation repairs only the app-managed native payload from
     // the trusted bundled copy and preserves local saves/config/extracted data.
     fs.writeFileSync(path.join(destination, 'save.bin'), 'user save');
     fs.writeFileSync(path.join(destination, 'sim_config.ini'), 'user config');
-    const repaired = prepareWritableRuntime(source, destination, 'linux');
+    const repaired = await prepareWritableRuntime(source, destination, 'linux');
     assert.equal(repaired.reused, false);
-    assert.equal(verifyRuntimeManifest(destination, 'linux'), true);
+    assert.equal(await verifyRuntimeManifest(destination, 'linux'), true);
     assert.equal(fs.readFileSync(path.join(destination, 'main'), 'utf8'), 'fake native executable:known-build');
     assert.equal(fs.readFileSync(path.join(destination, 'save.bin'), 'utf8'), 'user save');
     assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user config');
     assert.equal(first.buildId, repaired.buildId);
 
     fs.writeFileSync(path.join(destination, 'untrusted.so'), 'unmanifested native library');
-    assert.equal(verifyRuntimeManifest(destination, 'linux'), false);
-    assert.equal(isRuntimeUsable(destination, 'linux'), false);
-    assert.throws(
-      () => prepareWritableRuntime(source, destination, 'linux'),
-      /post-copy validation/
-    );
+    assert.equal(await verifyRuntimeManifest(destination, 'linux'), false);
+    assert.equal(await isRuntimeUsable(destination, 'linux'), false);
+    await assert.rejects(prepareWritableRuntime(source, destination, 'linux'), /post-copy validation/);
     assert.equal(fs.existsSync(path.join(destination, 'untrusted.so')), true);
     fs.unlinkSync(path.join(destination, 'untrusted.so'));
-    assert.equal(verifyRuntimeManifest(destination, 'linux'), true);
+    assert.equal(await verifyRuntimeManifest(destination, 'linux'), true);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

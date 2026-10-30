@@ -136,7 +136,7 @@ ipcMain.handle('platina:runtime-status', async () => {
     path.join(app.getPath('userData'), 'runtime')
   );
   const runtimeDataAvailable = packagedDataAvailable || writableDataAvailable;
-  const runtimeAvailable = isRuntimeUsable(root, process.platform);
+  const runtimeAvailable = await isRuntimeUsable(root, process.platform);
   return {
     available: runtimeAvailable,
     executableName: exe ? path.basename(exe) : '',
@@ -364,7 +364,7 @@ ipcMain.handle('platina:launch-game', async () => {
   }
   let writableRuntime;
   try {
-    writableRuntime = prepareWritableRuntime(
+    writableRuntime = await prepareWritableRuntime(
       root,
       path.join(app.getPath('userData'), 'runtime'),
       process.platform
