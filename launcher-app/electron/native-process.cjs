@@ -291,6 +291,7 @@ function runNativePrepare({ executable, args = [], cwd, env = process.env, logPa
   return new Promise((resolve) => {
     let settled = false;
     let pending = '';
+    let stderrTail = '';
     let timer = null;
     const done = (result) => {
       if (settled) return;
@@ -299,8 +300,9 @@ function runNativePrepare({ executable, args = [], cwd, env = process.env, logPa
       if (timer) clearTimeout(timer);
       resolve(result);
     };
-    const handleText = (text) => {
+    const handleText = (text, fromStderr = false) => {
       appendLog(absoluteLogPath, text);
+      if (fromStderr) stderrTail = (stderrTail + text).slice(-4096);
       pending += text;
       const lines = pending.split(/\r?\n/);
       pending = lines.pop();
@@ -318,7 +320,7 @@ function runNativePrepare({ executable, args = [], cwd, env = process.env, logPa
       return;
     }
     child.stdout.on('data', (chunk) => handleText(chunk.toString('utf8')));
-    child.stderr.on('data', (chunk) => handleText(chunk.toString('utf8')));
+    child.stderr.on('data', (chunk) => handleText(chunk.toString('utf8'), true));
     child.once('error', (error) => {
       appendLog(absoluteLogPath, 'prepare error: ' + error.message);
       done({ ok: false, code: null, message: 'Falha ao iniciar a preparação: ' + error.message });
@@ -328,10 +330,17 @@ function runNativePrepare({ executable, args = [], cwd, env = process.env, logPa
       if (code === 0) {
         done({ ok: true, code });
       } else {
+        const diagnosticLines = stderrTail
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line && !/^\[Platina-Progress\]/.test(line));
+        const diagnostic = diagnosticLines.slice(-3).join(' | ');
         done({
           ok: false,
           code,
-          message: 'A preparação dos dados do jogo falhou (código ' + code + '). Abra o log para ver o motivo exato: ' + absoluteLogPath
+          message: 'A preparação dos dados do jogo falhou (código ' + code + ').'
+            + (diagnostic ? ' Detalhe: ' + diagnostic : '')
+            + ' Consulte o log completo: ' + absoluteLogPath
         });
       }
     });
