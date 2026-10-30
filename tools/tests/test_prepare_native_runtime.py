@@ -112,193 +112,127 @@ void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
 }'''
 
 
-UPSTREAM_PROJECT_SIM_CONFIG = r'''#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+UPSTREAM_PROJECT_SIM_CONFIG = r'''#include <nitro.h>
 #include <simulator/config/ini.h>
 
+#include "port/sim_config_prj.h"
+
 #define SIM_CONFIG_PRJ_FILE_PATH "./sim_config_prj.ini"
+
+static int IniHandler(void* user, const char* section, const char* name,
+                   const char* value);
+static const char * BoolToString(BOOL arg);
+static BOOL StringToBool(const char * str);
+
+static SIM_Config_prj_type s_SIM_config_prj;
 
 static int IniHandler(void* user, const char* section, const char* name,
                    const char* value)
 {
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
+
     SIM_Config_prj_type * config = (SIM_Config_prj_type *)user;
+
+    // General section
+    if(MATCH("General", "60Fps")) {
+        config->enable60fps = StringToBool(value);
+    }
+    if(MATCH("General", "60FpsSpeedFix")) {
+        config->enable60fpsSpeedFix = StringToBool(value);
+    }
+    if(MATCH("General", "EnableAsserts")) {
+        config->enableAsserts = StringToBool(value);
+    }
+
+    // Cheats section
+    if(MATCH("Cheats", "WalkThroughWalls")) {
+        config->walkThroughWalls = StringToBool(value);
+    }
+
+    if(MATCH("Cheats", "DisableRandomEncounters")) {
+        config->disableRandomEncounters = StringToBool(value);
+    }
 
     if(MATCH("Cheats", "RunFromTrainerBattles")) {
         config->runFromTrainerBattles = StringToBool(value);
     }
 }
 
+static const char * BoolToString(BOOL arg)
+{
+    const char * ret = "false";
+    if(arg) {
+        ret = "true";
+    }
+
+    return ret;
+}
+
+static BOOL StringToBool(const char * str)
+{
+    BOOL ret = FALSE;
+
+    if(strcmp(str, "false") == 0) {
+        ret = FALSE;
+    } else if(strcmp(str, "true") == 0) {
+        ret = TRUE;
+    }
+    return ret;
+}
+
+// Initialize a SIM_Config_prj_type to default values
+void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
+{
+  aConfig->enable60fps = TRUE;
+  aConfig->enable60fpsSpeedFix = TRUE;
+  aConfig->enableAsserts = FALSE;
+  aConfig->breakDebuggerOnGfAssert = FALSE;
+
+  // Cheats section
+  aConfig->walkThroughWalls = FALSE;
+}
+
+// Loads the configuration file. If it does not exist, return false
 BOOL SIM_Config_prj_LoadConfigFile(SIM_Config_prj_type * aConfig)
 {
     return (ini_parse(SIM_CONFIG_PRJ_FILE_PATH, IniHandler, aConfig) >= 0);
 }
 
+// Save a SIM_Config_prj_type to the configuration file
 void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
 {
     FILE * configFile = fopen(SIM_CONFIG_PRJ_FILE_PATH, "w");
+    
+    fprintf(configFile, "[General]\n");
+    fprintf(configFile, "60Fps=%s\n", BoolToString(aConfig->enable60fps));
+    fprintf(configFile, "60FpsSpeedFix=%s\n", BoolToString(aConfig->enable60fpsSpeedFix));
+    fprintf(configFile, "EnableAsserts=%s\n", BoolToString(aConfig->enableAsserts));
+    fprintf(configFile, "BreakDebuggerOnAssert=%s\n", BoolToString(aConfig->breakDebuggerOnGfAssert));
+    fprintf(configFile, "\n");
+
+    fprintf(configFile, "[Cheats]\n");
     fprintf(configFile, "WalkThroughWalls=%s\n", BoolToString(aConfig->walkThroughWalls));
+    fprintf(configFile, "DisableRandomEncounters=%s\n", BoolToString(aConfig->disableRandomEncounters));
+    fprintf(configFile, "RunFromTrainerBattles=%s\n", BoolToString(aConfig->runFromTrainerBattles));
+
     fclose(configFile);
 }
 
-void SIM_Config_prj_init()
-{
-    SIM_Config_prj_LoadDefaults(&s_SIM_config_prj);
-    if(!SIM_Config_prj_LoadConfigFile(&s_SIM_config_prj)){
-        //Config file does not exist. Save config file with defaults
-        SIM_Config_prj_SaveConfigFile(&s_SIM_config_prj);
-    }
-}'''
-
-UPSTREAM_BACKUP_HEADER = r'''#ifndef NITRO_CARD_BACKUP_H_
-#define NITRO_CARD_BACKUP_H_
-#include <nitro/types.h>
-#ifdef SDK_PORT
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#endif
-#ifdef __cplusplus
-extern "C" {
-#endif
-void CARDi_RequestWriteSectorCommand(u32 src, u32 dst, u32 len, BOOL verify,
-                                     MIDmaCallback callback, void *arg, BOOL is_async);
-
-  SDK_INLINE BOOL CARDi_ReadBackup(u32 src, void *dst, u32 len,
-                                 MIDmaCallback callback, void *arg, BOOL is_async)
-{
-    #ifdef SDK_PORT
-    FILE * backupFilePtr;
-    backupFilePtr = fopen("save.bin", "rb");
-    if(!backupFilePtr) {
-      // File does not exist. Create the file
-      backupFilePtr = fopen("save.bin", "wb");
-
-      // Zero out the file with the len
-      u8 * buf = (u8*)malloc(len + src);
-      memset(buf, 0, len + src);
-      fwrite(buf, 1, len + src, backupFilePtr);
-      fclose(backupFilePtr);
-      free(buf);
-
-      // Reopen file
-      backupFilePtr = fopen("save.bin", "rb");
-    }
-    fseek(backupFilePtr, src, SEEK_SET);
-    fread(dst, 1, len, backupFilePtr);
-    fclose(backupFilePtr);
-    if( callback != NULL )
-    {
-      callback(arg);
-    }
-
-    return TRUE;
-    #else
-    return CARDi_RequestStreamCommand((u32)src, (u32)dst, len,
-                                      callback, arg, is_async,
-                                      CARD_REQ_READ_BACKUP, 1, CARD_REQUEST_MODE_RECV);
-    #endif
+void SIM_Config_prj_init() {
+  //Load default config
+  SIM_Config_prj_LoadDefaults(&s_SIM_config_prj);
+  
+  //Load configuration file
+  if(!SIM_Config_prj_LoadConfigFile(&s_SIM_config_prj)){
+    //Config file does not exist. Save config file with defaults
+    SIM_Config_prj_SaveConfigFile(&s_SIM_config_prj);
+  }
 }
 
-  SDK_INLINE BOOL CARDi_WriteBackup(u32 dst, const void *src, u32 len,
-                                  MIDmaCallback callback, void *arg, BOOL is_async)
+SIM_Config_prj_type * SIM_Config_prj_GetConfig()
 {
-    #ifdef SDK_PORT
-    FILE * backupFilePtr;
-    backupFilePtr = fopen("save.bin", "rb+");
-    fseek(backupFilePtr, dst, SEEK_SET);
-    fwrite(src, 1, len, backupFilePtr);
-    fclose(backupFilePtr);
-    if( callback != NULL )
-    {
-      callback(arg);
-    }
-    return TRUE;
-    #else
-    return CARDi_RequestStreamCommand((u32)src, (u32)dst, len, callback, arg, is_async,
-                                      CARD_REQ_WRITE_BACKUP, CARD_RETRY_COUNT_MAX,
-                                      CARD_REQUEST_MODE_SEND);
-    #endif
+  return &s_SIM_config_prj;
 }
-
-  SDK_INLINE BOOL CARDi_WriteAndVerifyBackup(u32 dst, const void *src, u32 len,
-                                           MIDmaCallback callback, void *arg, BOOL is_async)
-{
-    #ifdef SDK_PORT
-    FILE * backupFilePtr;
-    backupFilePtr = fopen("save.bin", "rb+");
-    fseek(backupFilePtr, dst, SEEK_SET);
-    fwrite(src, 1, len, backupFilePtr);
-    fclose(backupFilePtr);
-    if( callback != NULL )
-    {
-      callback(arg);
-    }
-    return CARD_RESULT_SUCCESS;
-    #else
-    return CARDi_RequestStreamCommand((u32)src, (u32)dst, len, callback, arg, is_async,
-                                      CARD_REQ_WRITE_BACKUP, CARD_RETRY_COUNT_MAX,
-                                      CARD_REQUEST_MODE_SEND_VERIFY);
-    #endif
-}
-#ifdef __cplusplus
-}
-#endif
-#endif'''
-
-UPSTREAM_CARD_BACKUP_SOURCE = (
-    "#include <nitro.h>\n"
-    "BOOL CARD_IdentifyBackup(CARDBackupType type)\n"
-    "{\n"
-    "#if SDK_VERSION_MAJOR == 5\n"
-    + CARD_IDENTIFY_BACKUP_ORIGINAL
-    + "\n#endif\n}\n"
-)
-
-UPSTREAM_METROSKREW_SCRIPT = r'''#!/usr/bin/env bash
-
-# Usage: Run this script from the project root and provide the following environment variables:
-#   - SKREW_SYS - controls the distribution downloaded; either \`windows\`, \`linux\`, or \`wine\`
-#   - SKREW_VER - the release version of the metroskrew archive to be downloaded
-#   - SKREW_DIR - the subproject directory in which metroskrew shall be stored
-
-set -euxo pipefail
-
-case "$SKREW_SYS" in
-windows)
-    SKREW_EXT=".7z"
-    EXTRACTOR="p7zip -d"
-    ;;
-
-linux | wine)
-    SKREW_EXT=".tar.xz"
-    EXTRACTOR="tar xf"
-    ;;
-
-*)
-    echo "Unrecognized platform $SKREW_SYS"
-    exit 1
-    ;;
-esac
-
-TMP="/tmp"
-
-SKREW="metroskrew"
-SKREW_GH="https://github.com/mid-kid/$SKREW"
-SKREW_ARC="metroskrew-$SKREW_SYS$SKREW_EXT"
-SKREW_URL="$SKREW_GH/releases/download/$SKREW_VER/$SKREW_ARC"
-SKREW_TMP="$TMP/$SKREW"
-
-rm -rf "$SKREW_DIR"
-
-# We extract the archive to \`/tmp\` to ensure that Windows does not muddle with permissions.
-pushd "$TMP" >/dev/null
-wget --quiet --show-progress -O "$SKREW_ARC" "$SKREW_URL"
-$EXTRACTOR "$SKREW_ARC"
-popd >/dev/null
-
-mv "$SKREW_TMP" "$SKREW_DIR"
 '''
 
 UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
