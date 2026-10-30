@@ -195,6 +195,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   // exists, without rejecting a legitimate empty ARM7 overlay directory.
   const auto collectOverlayPaths = [&](std::vector<std::string> &paths,
                                        bool requireAll,
+                                       bool verifyContents,
                                        std::string *failureReason) {
     const auto fail = [&](const std::string &reason) {
       if (failureReason != NULL) *failureReason = reason;
@@ -247,13 +248,25 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
           return fail("unexpected entry in " + directoryName + ": " + name);
         }
         const std::string relativeName = directoryName + "/" + name;
-        std::uint64_t fileSize = 0;
-        std::uint32_t crc32 = 0;
-        if (!inspectFileCrc32(relativeName, fileSize, crc32)) {
-          return fail("could not read or verify overlay file: " + relativeName);
+        const std::filesystem::path relativePath(relativeName);
+        if (!isRegularFileWithoutSymlinks(relativePath)) {
+          return fail("overlay is not a safe regular file: " + relativeName);
+        }
+        std::error_code sizeError;
+        const std::uintmax_t fileSize = std::filesystem::file_size(relativePath, sizeError);
+        if (sizeError) {
+          return fail("cannot read overlay file size: " + relativeName + ": " + sizeError.message());
         }
         if (fileSize == 0) {
           return fail("overlay file is empty: " + relativeName);
+        }
+        if (verifyContents) {
+          std::uint64_t verifiedSize = 0;
+          std::uint32_t verifiedCrc = 0;
+          if (!inspectFileCrc32(relativeName, verifiedSize, verifiedCrc) ||
+              verifiedSize != fileSize) {
+            return fail("could not fully read or verify overlay file: " + relativeName);
+          }
         }
         paths.push_back(relativeName);
         ++count;
@@ -571,7 +584,8 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     }
     std::vector<std::string> expectedDataPaths = baseDataPaths;
     std::string overlayInspectionFailure;
-    if (!collectOverlayPaths(expectedDataPaths, false, &overlayInspectionFailure)) {
+    if (!collectOverlayPaths(expectedDataPaths, false, !platinaPreparedByLauncher,
+                             &overlayInspectionFailure)) {
       fprintf(stderr, "[Platina] The local overlay directories failed validation: %s\n",
               overlayInspectionFailure.c_str());
       return 4;
@@ -605,7 +619,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
 
       expectedDataPaths = baseDataPaths;
       std::string overlayExtractionFailure;
-      if (!collectOverlayPaths(expectedDataPaths, true, &overlayExtractionFailure)) {
+      if (!collectOverlayPaths(expectedDataPaths, true, true, &overlayExtractionFailure)) {
         fprintf(stderr, "[Platina] Extraction did not produce a valid ARM9 overlay set: %s\n",
                 overlayExtractionFailure.c_str());
         return 4;
