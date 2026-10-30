@@ -6,6 +6,8 @@ const { spawn } = require('node:child_process');
 
 // The launcher waits for a real SDL first-frame marker before hiding itself.
 const WINDOW_READY_TIMEOUT_MS = 60 * 1000;
+// The runtime emits a heartbeat every five seconds; allow three intervals.
+const HEARTBEAT_TIMEOUT_MS = 15 * 1000;
 const STARTUP_OUTPUT_TAIL_CHARS = 8192;
 let activeLaunch = null;
 const idleCallbacks = new Set();
@@ -103,11 +105,16 @@ function launchNativeProcess({
   romSha256 = 'unavailable',
   onProgress = () => {},
   onWindowReady = () => {},
-  startupTimeoutMs = WINDOW_READY_TIMEOUT_MS
+  onStall = () => {},
+  onRecovered = () => {},
+  startupTimeoutMs = WINDOW_READY_TIMEOUT_MS,
+  heartbeatTimeoutMs = HEARTBEAT_TIMEOUT_MS
 }) {
   const absoluteLogPath = typeof logPath === 'string' ? path.resolve(logPath) : '';
   if (typeof onProgress !== 'function' || typeof onWindowReady !== 'function'
-      || !Number.isFinite(startupTimeoutMs) || startupTimeoutMs < 1) {
+      || typeof onStall !== 'function' || typeof onRecovered !== 'function'
+      || !Number.isFinite(startupTimeoutMs) || startupTimeoutMs < 1
+      || !Number.isFinite(heartbeatTimeoutMs) || heartbeatTimeoutMs < 1) {
     return Promise.resolve({
       ok: false,
       message: 'Parâmetros inválidos para acompanhar a primeira imagem do processo nativo.',
@@ -176,6 +183,9 @@ function launchNativeProcess({
     let descriptorOpen = true;
     let settled = false;
     let startupTimer = null;
+    let heartbeatTimer = null;
+    let lastHeartbeatAt = 0;
+    let heartbeatStalled = false;
     let diagnosticTail = '';
     const pendingOutput = { stdout: '', stderr: '' };
     const token = {
@@ -215,6 +225,41 @@ function launchNativeProcess({
       }
     };
 
+    const clearHeartbeatTimer = () => {
+      if (heartbeatTimer !== null) {
+        clearTimeout(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    };
+
+    const scheduleHeartbeatWatchdog = () => {
+      clearHeartbeatTimer();
+      if (!token.windowReady || !lastHeartbeatAt || heartbeatStalled) return;
+      heartbeatTimer = setTimeout(() => {
+        heartbeatTimer = null;
+        if (!token.windowReady || heartbeatStalled) return;
+        const silentForMs = Date.now() - lastHeartbeatAt;
+        if (silentForMs < heartbeatTimeoutMs) {
+          scheduleHeartbeatWatchdog();
+          return;
+        }
+        heartbeatStalled = true;
+        appendLog(
+          absoluteLogPath,
+          'renderer heartbeat missing for ' + silentForMs + ' ms; native process remains active'
+        );
+        try {
+          onStall({
+            pid: token.pid,
+            silentForMs,
+            lastHeartbeatAt: new Date(lastHeartbeatAt).toISOString()
+          });
+        } catch (error) {
+          appendLog(absoluteLogPath, 'heartbeat stall callback failed: ' + error.message);
+        }
+      }, heartbeatTimeoutMs);
+    };
+
     const finish = (result) => {
       if (settled) return;
       settled = true;
@@ -236,9 +281,30 @@ function launchNativeProcess({
       try { onProgress(stage); } catch (error) {
         appendLog(absoluteLogPath, 'startup progress callback failed: ' + error.message);
       }
+
+      if (stage === 'heartbeat' && token.windowReady) {
+        lastHeartbeatAt = Date.now();
+        if (heartbeatStalled) {
+          heartbeatStalled = false;
+          appendLog(absoluteLogPath, 'renderer heartbeat resumed; completed game frames are being presented again');
+          try {
+            onRecovered({
+              pid: token.pid,
+              resumedAt: new Date(lastHeartbeatAt).toISOString()
+            });
+          } catch (error) {
+            appendLog(absoluteLogPath, 'heartbeat recovery callback failed: ' + error.message);
+          }
+        }
+        scheduleHeartbeatWatchdog();
+        return;
+      }
+
       if (stage !== 'window-ready' || token.windowReady) return;
 
       token.windowReady = true;
+      lastHeartbeatAt = Date.now();
+      scheduleHeartbeatWatchdog();
       clearStartupTimer();
       appendLog(absoluteLogPath, 'first game frame presented; native window is now visible');
       try {
@@ -300,6 +366,8 @@ function launchNativeProcess({
     child.stderr.on('data', (chunk) => handleOutput('stderr', chunk));
 
     child.once('error', (error) => {
+      clearStartupTimer();
+      clearHeartbeatTimer();
       closeLogDescriptor();
       releaseLaunch();
       appendLog(absoluteLogPath, 'spawn error: ' + (error.stack || error.message));
@@ -313,6 +381,7 @@ function launchNativeProcess({
     child.once('close', (code, signal) => {
       flushPendingOutput();
       clearStartupTimer();
+      clearHeartbeatTimer();
       closeLogDescriptor();
       appendLog(absoluteLogPath, 'process exit: code=' + code + ' signal=' + (signal || 'none'));
       releaseLaunch();
