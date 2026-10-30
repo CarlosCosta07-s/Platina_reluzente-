@@ -100,7 +100,7 @@ test('Platinum launch contract omits Linux-only arguments on Windows', () => {
 });
 
 test('Platinum launch contract rejects missing or malformed ROM identity and runtime build identity', () => {
-  const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' };
+  const runtime = { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main', buildId: 'a'.repeat(64) };
   const logPath = '/tmp/platinum-logs/native-startup.log';
   assert.throws(() => createPlatinumLaunchSpec({
     runtime, rom: { filePath: '/tmp/rom.nds', sha256: 'invalid' }, logPath, platform: 'linux', env: {}
