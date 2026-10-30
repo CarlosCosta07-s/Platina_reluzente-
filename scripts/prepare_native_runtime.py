@@ -1443,13 +1443,16 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
         "static BOOL sLauncherManagedRomExtractionAttempted = FALSE;"
     )
     patched_include = "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>"
-    if patched_include in current:
-        if current.count(patched_include) != 1:
-            raise RuntimePreparationError("Duplicate standard-library include block in fs_file.c.")
-    elif legacy_include in current:
+    # The patched include block is a prefix of the legacy block. Check and
+    # remove the full legacy block first, otherwise its obsolete state variable
+    # survives an upgrade while the shorter prefix appears to be present.
+    if legacy_include in current:
         if current.count(legacy_include) != 1:
             raise RuntimePreparationError("Duplicate legacy extraction-state declaration in fs_file.c.")
         current = current.replace(legacy_include, patched_include, 1)
+    elif patched_include in current:
+        if current.count(patched_include) != 1:
+            raise RuntimePreparationError("Duplicate standard-library include block in fs_file.c.")
     else:
         if current.count(original_include) != 1:
             raise RuntimePreparationError("Expected exactly one SDK_PORT include block in fs_file.c.")
