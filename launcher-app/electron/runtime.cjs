@@ -75,6 +75,19 @@ function hasRequiredRuntimeData(runtimeRoot) {
 const RUNTIME_VERSION_FILE = 'launcher-runtime-version.txt';
 const RUNTIME_MANIFEST_FILE = 'launcher-runtime-manifest.json';
 
+const NATIVE_CODE_EXTENSIONS = Object.freeze({
+  win32: new Set(['.exe', '.dll', '.com', '.bat', '.cmd', '.ocx', '.node', '.pyd']),
+  other: new Set(['.so', '.dylib', '.node', '.pyd'])
+});
+
+function isNativeCodeFile(filePath, stat, platform) {
+  const extensions = platform === 'win32'
+    ? NATIVE_CODE_EXTENSIONS.win32
+    : NATIVE_CODE_EXTENSIONS.other;
+  const hasExecutableMode = platform !== 'win32' && (stat.mode & 0o111) !== 0;
+  return extensions.has(path.extname(filePath).toLowerCase()) || hasExecutableMode;
+}
+
 async function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   const input = fs.createReadStream(filePath);
@@ -139,9 +152,6 @@ async function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
     // User-writable runtime folders also contain extracted assets and saves.
     // They must not be allowed to introduce unmanifested executable code or
     // dynamic libraries that could be picked up by the native loader.
-    const nativeExtensions = platform === 'win32'
-      ? new Set(['.exe', '.dll', '.com', '.bat', '.cmd', '.ocx', '.node', '.pyd'])
-      : new Set(['.so', '.dylib', '.node', '.pyd']);
     function inspectUnmanifestedCode(directory) {
       for (const child of fs.readdirSync(directory, { withFileTypes: true })) {
         const childPath = path.join(directory, child.name);
@@ -153,9 +163,7 @@ async function verifyRuntimeManifest(runtimeRoot, platform = process.platform) {
         }
         if (!stat.isFile()) return false;
         const relative = path.relative(root, childPath).split(path.sep).join('/');
-        const extension = path.extname(child.name).toLowerCase();
-        const hasExecutableMode = platform !== 'win32' && (stat.mode & 0o111) !== 0;
-        if ((nativeExtensions.has(extension) || hasExecutableMode) && !seen.has(relative)) return false;
+        if (isNativeCodeFile(child.name, stat, platform) && !seen.has(relative)) return false;
       }
       return true;
     }
@@ -218,19 +226,30 @@ async function runtimeIsUsable(runtimeRoot, platform) {
   }
 }
 
-function copyRuntimeTreeContents(source, destination) {
+function copyRuntimeTreeContents(source, destination, options = {}, relativeDirectory = '') {
+  const { platform = process.platform, allowedNativeFiles = null } = options;
   fs.mkdirSync(destination, { recursive: true });
   for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
+    const relativePath = relativeDirectory
+      ? relativeDirectory + '/' + entry.name
+      : entry.name;
     const stat = fs.lstatSync(from);
     if (stat.isSymbolicLink()) {
       throw new Error('Symbolic links are not allowed in the runtime tree: ' + from);
     }
     if (stat.isDirectory()) {
-      copyRuntimeTreeContents(from, to);
+      copyRuntimeTreeContents(from, to, options, relativePath);
       fs.utimesSync(to, stat.atime, stat.mtime);
     } else if (stat.isFile()) {
+      // A runtime refresh preserves game data and saves, but carries forward
+      // native code only when the new, verified bundle still ships that path.
+      if (allowedNativeFiles instanceof Set
+          && isNativeCodeFile(entry.name, stat, platform)
+          && !allowedNativeFiles.has(relativePath)) {
+        continue;
+      }
       fs.copyFileSync(from, to);
       fs.chmodSync(to, stat.mode & 0o777);
       fs.utimesSync(to, stat.atime, stat.mtime);
@@ -262,6 +281,10 @@ async function prepareWritableRuntime(sourceRoot, destinationRoot, platform = pr
     throw new Error('The bundled runtime manifest is missing or failed integrity validation. Rebuild the launcher package.');
   }
   const sourceBuildId = runtimeBuildId(source, platform);
+  const sourceManifest = JSON.parse(
+    fs.readFileSync(path.join(source, RUNTIME_MANIFEST_FILE), 'utf8')
+  );
+  const bundledNativeFiles = new Set(sourceManifest.files.map((entry) => entry.path));
   const parent = path.dirname(destination);
   const staging = destination + '.staging';
   const previous = destination + '.previous';
@@ -299,7 +322,10 @@ async function prepareWritableRuntime(sourceRoot, destinationRoot, platform = pr
   // save files survive runtime upgrades; then overlay the exact bundled files.
   if (fs.existsSync(destination)) {
     assertRuntimeTreeHasNoSymlinks(destination);
-    copyRuntimeTreeContents(destination, staging);
+    copyRuntimeTreeContents(destination, staging, {
+      platform,
+      allowedNativeFiles: bundledNativeFiles
+    });
   } else {
     fs.mkdirSync(staging, { recursive: true });
   }
