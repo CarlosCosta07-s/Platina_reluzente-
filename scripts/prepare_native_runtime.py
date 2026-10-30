@@ -64,6 +64,10 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     if (std::strcmp(argv[argIndex], "--platina-prepare") == 0) platinaPrepareOnly = true;
     if (std::strcmp(argv[argIndex], "--platina-prepared") == 0) platinaPreparedByLauncher = true;
   }
+  if (!platinaPrepareOnly) {
+    fprintf(stderr, "[Platina-Progress] native-boot-start\n");
+    fflush(stderr);
+  }
   // The native runtime package contains a path-only manifest derived from the
   // pinned filesys.csv. No ROM or extracted game contents are packaged.
   const auto isRegularFileWithoutSymlinks = [](const std::filesystem::path &relativePath) {
@@ -899,7 +903,7 @@ SDL_WINDOW_CONTEXT_ORIGINAL = r'''  window = SDL_CreateWindow(
   context = SDL_GL_CreateContext(window);'''
 SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
-      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+      SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
           SDL_WINDOW_ALLOW_HIGHDPI);
   if (window == NULL) {
     fprintf(stderr, "SDL window creation failed: %s\n", SDL_GetError());
@@ -915,6 +919,28 @@ SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
   if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0) {
     fprintf(stderr, "SDL swap interval unavailable: %s\n", SDL_GetError());
   }'''
+
+PLATINA_WINDOW_DECLARATION_ORIGINAL = "static SDL_Window *window;"
+PLATINA_WINDOW_DECLARATION_PATCHED = r'''static SDL_Window *window;
+static bool sPlatinaFirstFramePresented = false;'''
+
+# This exact context occurs in SIM_Render, not the setup swap in SIM_RenderInit.
+PLATINA_FIRST_FRAME_HANDOFF_ORIGINAL = (
+    "    SDL_GL_SwapWindow(window);\n\n"
+    "    if(sChangeInternalResAfterRender) {"
+)
+PLATINA_FIRST_FRAME_HANDOFF_PATCHED = r'''    SDL_GL_SwapWindow(window);
+
+    // Reveal the native window only after a complete game frame reaches swap.
+    if (!sPlatinaFirstFramePresented) {
+      SDL_ShowWindow(window);
+      sPlatinaFirstFramePresented = true;
+      fprintf(stderr, "[Platina-Progress] window-ready\n");
+      fflush(stderr);
+    }
+
+    if(sChangeInternalResAfterRender) {'''
+
 
 GL_LOADER_ORIGINAL = "  gladLoadGLLoader(SDL_GL_GetProcAddress);"
 GL_LOADER_PATCHED = r'''  if (!gladLoadGLLoader(SDL_GL_GetProcAddress)) {
@@ -932,7 +958,9 @@ MAIN_RENDER_HANDOFF_PATCHED = r'''  SIM_RenderInit(NULL);
     fprintf(stderr, "Native renderer initialization failed; aborting startup.\n");
     return 1;
   }
-  G3SIM_DrawInit();'''
+  G3SIM_DrawInit();
+  fprintf(stderr, "[Platina-Progress] renderer-ready\n");
+  fflush(stderr);'''
 SDL_VIEWPORT_ORIGINAL = "  glViewport(0, 0, windowWidth, windowHeight);"
 SDL_VIEWPORT_PATCHED = r'''  int drawableWidth = 0;
   int drawableHeight = 0;
@@ -1542,6 +1570,11 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
         raise RuntimePreparationError("Duplicate upstream mouse-state declarations detected.")
     blocks = (
         (
+            PLATINA_WINDOW_DECLARATION_ORIGINAL,
+            PLATINA_WINDOW_DECLARATION_PATCHED,
+            "first-frame presentation state",
+        ),
+        (
             SDL_SWAP_INTERVAL_SETUP_ORIGINAL,
             SDL_SWAP_INTERVAL_SETUP_PATCHED,
             "defer swap interval until a context exists",
@@ -1550,6 +1583,11 @@ def _prepare_renderer_startup(source: str) -> tuple[str, bool]:
         (SDL_WINDOW_CONTEXT_ORIGINAL, SDL_WINDOW_CONTEXT_PATCHED, "SDL window/context checks"),
         (GL_LOADER_ORIGINAL, GL_LOADER_PATCHED, "desktop OpenGL loader check"),
         (MAIN_RENDER_HANDOFF_ORIGINAL, MAIN_RENDER_HANDOFF_PATCHED, "renderer startup handoff check"),
+        (
+            PLATINA_FIRST_FRAME_HANDOFF_ORIGINAL,
+            PLATINA_FIRST_FRAME_HANDOFF_PATCHED,
+            "first game frame presentation handoff",
+        ),
         (SDL_VIEWPORT_ORIGINAL, SDL_VIEWPORT_PATCHED, "high-DPI OpenGL viewport"),
         (INPUT_RELEASE_HELPER_ORIGINAL, INPUT_RELEASE_HELPER_PATCHED, "desktop input release helper"),
         (WINDOW_EVENT_ORIGINAL, WINDOW_EVENT_PATCHED, "focus-loss and resize event handling"),
