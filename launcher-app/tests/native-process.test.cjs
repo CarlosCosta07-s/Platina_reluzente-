@@ -80,7 +80,7 @@ test('native process that exits during the initial startup window is reported as
 
   const result = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "setTimeout(() => process.exit(7), 1200);"],
+    args: ['-e', "process.stderr.write('[Platina-Progress] native-boot-start\\n[Platina-Progress] renderer-ready\\n'); setTimeout(() => process.exit(7), 1200);"],
     cwd: root,
     env: process.env,
     logPath,
@@ -89,7 +89,8 @@ test('native process that exits during the initial startup window is reported as
 
   assert.equal(result.ok, false);
   assert.equal(result.logPath, logPath);
-  assert.match(result.message, /encerrou durante a verificação inicial/);
+  assert.match(result.message, /encerrou antes de apresentar a primeira imagem/);
+  assert.match(result.message, /Última etapa confirmada: renderer-ready/);
   const log = await fs.readFile(logPath, 'utf8');
   assert.match(log, /process exit: code=7/);
 });
@@ -120,6 +121,7 @@ test('native launch times out without a first-frame marker and stops the hidden 
   assert.equal(sawRendererReadyWhileProcessWasActive, true);
   assert.match(result.message, /não apresentou a primeira imagem/);
   assert.match(result.message, /janela preta aparentemente congelada/);
+  assert.match(result.message, /Última etapa confirmada: renderer-ready/);
   await waitForLog(logPath, ['first-frame timeout', 'process exit:']);
   assert.equal(hasActiveNativeProcess(), false);
   const log = await fs.readFile(logPath, 'utf8');
@@ -163,6 +165,8 @@ test('native heartbeat watchdog detects a render stall and reports recovery with
   assert.equal(processWasActiveAtStall, true);
   assert.equal(processWasActiveAtRecovery, true);
   assert.ok(stallDetails.silentForMs >= 150);
+  assert.equal(stallDetails.lastProgressStage, 'heartbeat');
+  assert.equal(stallDetails.lastHeartbeatFrame, 1);
   assert.ok(recoveryDetails.resumedAt);
   await waitForLog(logPath, [
     'renderer heartbeat missing',
