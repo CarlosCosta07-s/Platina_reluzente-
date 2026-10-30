@@ -7,7 +7,6 @@ const { commitDesktopRom, recoverDesktopRom, sha1File } = require('./rom-storage
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec, createPreparedPlatinumLaunchSpec } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
 
-const MAX_ROM_BYTES = 512 * 1024 * 1024;
 const PLATINUM_USA_REV1_SIZE_BYTES = 134217728;
 // Native runtime and generated assets are pinned to this exact retail image.
 // Header fields alone do not prove that the imported ROM is the expected revision.
@@ -171,10 +170,6 @@ ipcMain.handle('platina:import-rom', async () => {
         + stat.size + ' bytes; esperado ' + PLATINUM_USA_REV1_SIZE_BYTES + ' bytes (128 MiB).'
     };
   }
-  if (stat.size < 0x200 || stat.size > MAX_ROM_BYTES) {
-    return { canceled: false, ok: false, message: 'Tamanho inválido para uma ROM Nintendo DS. Limite: 512 MiB.' };
-  }
-
   const sourceFile = await fs.promises.open(source, 'r');
   const header = Buffer.alloc(0x200);
   let headerBytesRead = 0;
