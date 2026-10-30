@@ -46,16 +46,18 @@ test('native preparation includes the last stderr diagnostic when it fails', asy
   assert.match(log, /prepare exit: code=4/);
 });
 
-test('native process startup writes stdout and stderr to a persistent local log', async (t) => {
+test('native process startup handles working directories with spaces and accents', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-log-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const logPath = path.join(root, 'logs', 'native-startup.log');
+  const workingDirectory = path.join(root, 'Dados São João', 'Platiná Reluzente');
+  await fs.mkdir(workingDirectory, { recursive: true });
+  const logPath = path.join(workingDirectory, 'logs locais', 'native-startup.log');
   const message = 'native-process-test';
 
   const result = await launchNativeProcess({
     executable: process.execPath,
     args: ['-e', "process.stdout.write('" + message + "-stdout\\n'); process.stderr.write('" + message + "-stderr\\n'); setTimeout(() => process.exit(0), 3500);"],
-    cwd: root,
+    cwd: workingDirectory,
     env: process.env,
     logPath,
     platform: process.platform,
@@ -68,6 +70,7 @@ test('native process startup writes stdout and stderr to a persistent local log'
   const log = await waitForLog(logPath, [message + '-stdout', message + '-stderr', 'spawn succeeded', 'process exit: code=0']);
   assert.match(log, /platform=/);
   assert.match(log, /rom_sha256=test-hash/);
+  assert.match(log, /working_directory=.*Dados São João.*Platiná Reluzente/);
 });
 
 test('native process that exits during the initial startup window is reported as a failure', async (t) => {
@@ -147,6 +150,35 @@ test('native launch rejects a symlink executable and a non-executable file', asy
     });
     assert.equal(noExec.ok, false);
   }
+});
+
+test('native launch rejects a symlink used as the working directory', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-cwd-symlink-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const target = path.join(root, 'real-runtime');
+  const link = path.join(root, 'runtime-link');
+  await fs.mkdir(target);
+  try {
+    await fs.symlink(target, link, 'junction');
+  } catch (error) {
+    if (error && ['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) {
+      t.skip('This platform does not permit creating directory symlinks for tests.');
+      return;
+    }
+    throw error;
+  }
+
+  const result = await launchNativeProcess({
+    executable: process.execPath,
+    args: ['-e', 'process.exit(0);'],
+    cwd: link,
+    env: process.env,
+    logPath: path.join(root, 'cwd-symlink.log'),
+    platform: process.platform
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /diretório real, sem link simbólico/);
 });
 
 test('native launcher does not start a second game while the first process is alive', async (t) => {
