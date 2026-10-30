@@ -27,6 +27,8 @@ test('Platinum launch contract passes the verified ROM and Linux AppImage extrac
   assert.equal(spec.cwd, runtime.root);
   assert.equal(spec.env.PLATINA_IMPORTED_ROM, rom.filePath);
   assert.equal(spec.env.PLATINA_IMPORTED_ROM_SHA256, rom.sha256);
+  assert.equal(spec.env.PLATINA_LANGUAGE, 'en');
+  assert.equal(spec.env.PLATINA_LOCALIZATION_DIR, undefined);
   assert.equal(spec.env.PATH, '/usr/bin');
   assert.equal(spec.env.DISPLAY, ':7');
   assert.equal(spec.logPath, '/tmp/platinum-logs/native-startup.log');
@@ -490,4 +492,34 @@ test('runtime integrity check refuses a tampered native executable even when the
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
+});
+
+
+test('Platinum PT-BR launch receives only the explicitly validated localization directory', () => {
+  const spec = createPlatinumLaunchSpec({
+    runtime: { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' },
+    rom: { filePath: '/tmp/private-rom/current.nds', sha256: 'd'.repeat(64) },
+    logPath: '/tmp/platinum-logs/native-startup.log',
+    platform: 'linux',
+    language: 'pt-BR',
+    localizationDirectory: '/tmp/private/localizations/pt-BR',
+    env: {
+      PATH: '/usr/bin',
+      PLATINA_LANGUAGE: 'fr',
+      PLATINA_LOCALIZATION_DIR: '/untrusted/parent/path'
+    }
+  });
+  assert.equal(spec.env.PLATINA_LANGUAGE, 'pt-BR');
+  assert.equal(spec.env.PLATINA_LOCALIZATION_DIR, '/tmp/private/localizations/pt-BR');
+});
+
+test('Platinum launch rejects an unsupported locale or PT-BR without an absolute package path', () => {
+  const common = {
+    runtime: { root: '/tmp/platinum-runtime', executable: '/tmp/platinum-runtime/main' },
+    rom: { filePath: '/tmp/private-rom/current.nds', sha256: 'e'.repeat(64) },
+    logPath: '/tmp/platinum-logs/native-startup.log',
+    platform: 'linux'
+  };
+  assert.throws(() => createPlatinumLaunchSpec({ ...common, language: 'fr' }), /idioma.*suportado/i);
+  assert.throws(() => createPlatinumLaunchSpec({ ...common, language: 'pt-BR' }), /diretório absoluto/);
 });

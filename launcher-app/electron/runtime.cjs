@@ -408,7 +408,7 @@ function validateNdsHeader(header, fileSize) {
   return title.length > 0 && code === 'CPUE' && romVersion === 1;
 }
 
-function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.platform, env = process.env }) {
+function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.platform, env = process.env, language = 'en', localizationDirectory = null }) {
   const isAbsolutePath = (value) => platform === 'win32'
     ? path.win32.isAbsolute(value)
     : path.posix.isAbsolute(value);
@@ -424,12 +424,22 @@ function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.pl
   if (platform !== 'win32' && platform !== 'linux') {
     throw new Error('O porte nativo de Platinum só oferece suporte a Windows e Linux.');
   }
+  if (language !== 'en' && language !== 'pt-BR') {
+    throw new TypeError('O idioma de Pokémon Platinum não é suportado.');
+  }
+  if (language === 'pt-BR'
+      && (typeof localizationDirectory !== 'string' || !isAbsolutePath(localizationDirectory))) {
+    throw new TypeError('O pacote PT-BR validado exige um diretório absoluto.');
+  }
 
-  const childEnv = {
-    ...env,
-    PLATINA_IMPORTED_ROM: rom.filePath,
-    PLATINA_IMPORTED_ROM_SHA256: rom.sha256
-  };
+  const childEnv = { ...env };
+  // Do not inherit language overrides from the parent shell or launcher environment.
+  delete childEnv.PLATINA_LANGUAGE;
+  delete childEnv.PLATINA_LOCALIZATION_DIR;
+  childEnv.PLATINA_IMPORTED_ROM = rom.filePath;
+  childEnv.PLATINA_IMPORTED_ROM_SHA256 = rom.sha256;
+  childEnv.PLATINA_LANGUAGE = language;
+  if (language === 'pt-BR') childEnv.PLATINA_LOCALIZATION_DIR = localizationDirectory;
   if (platform === 'linux') {
     // The launcher may itself be running from an AppImage. Do not let its
     // mount path or command identity leak into the nested game AppImage.

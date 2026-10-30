@@ -6,6 +6,7 @@ const { launchNativeProcess, runNativePrepare, hasActiveNativeProcess, onNativeP
 const { commitDesktopRom, recoverDesktopRom, sha1File } = require('./rom-storage.cjs');
 const { resolveRuntimeDirectory, findBundledExecutable, hasRequiredRuntimeData, isRuntimeUsable, prepareWritableRuntime, ensureHorizontalScreenLayout, validateNdsHeader, createPlatinumLaunchSpec, createPreparedPlatinumLaunchSpec } = require('./runtime.cjs');
 const { BLACK_ROM_SHA1, blackPaths, ensureBlackDirectories, inspectBlackRom, inspectBlackRuntime, isBlackImportedMetadataValid, createBlackLaunchSpec } = require('./black-runtime.cjs');
+const { verifyLocalizationPackage, installLocalizationPackage, readLanguagePreference, writeLanguagePreference } = require('./localization.cjs');
 
 const PLATINUM_USA_REV1_SIZE_BYTES = 134217728;
 // Native runtime and generated assets are pinned to this exact retail image.
@@ -45,6 +46,12 @@ function runtimeRoot() {
 }
 function metadataPath() {
   return path.join(app.getPath('userData'), 'rom-import.json');
+}
+function platinumLocalizationDirectory() {
+  return path.join(app.getPath('userData'), 'localizations', 'pt-BR');
+}
+function platinumLanguagePreferencePath() {
+  return path.join(app.getPath('userData'), 'platinum-language.txt');
 }
 async function readImportedRom() {
   const filePath = path.join(app.getPath('userData'), 'roms', 'current.nds');
@@ -145,6 +152,62 @@ ipcMain.handle('platina:runtime-status', async () => {
     platform: process.platform
   };
 });
+ipcMain.handle('platina:localization-status', async () => {
+  const language = readLanguagePreference(platinumLanguagePreferencePath());
+  try {
+    await verifyLocalizationPackage(platinumLocalizationDirectory());
+    return { language, packageAvailable: true, message: 'Pacote PT-BR validado.' };
+  } catch (error) {
+    return {
+      language,
+      packageAvailable: false,
+      message: error.message
+    };
+  }
+});
+
+ipcMain.handle('platina:set-language', async (_event, language) => {
+  if (language !== 'en' && language !== 'pt-BR') {
+    return { ok: false, message: 'Idioma de Pokémon Platinum não suportado.' };
+  }
+  if (language === 'pt-BR') {
+    try {
+      await verifyLocalizationPackage(platinumLocalizationDirectory());
+    } catch (error) {
+      return {
+        ok: false,
+        message: 'O pacote PT-BR não está instalado ou não passou na verificação: ' + error.message
+      };
+    }
+  }
+  writeLanguagePreference(platinumLanguagePreferencePath(), language);
+  return {
+    ok: true,
+    language,
+    packageAvailable: language === 'pt-BR'
+  };
+});
+
+ipcMain.handle('platina:import-localization', async () => {
+  const selection = await dialog.showOpenDialog({
+    title: 'Selecionar a pasta do pacote de localização PT-BR',
+    properties: ['openDirectory']
+  });
+  if (selection.canceled || selection.filePaths.length === 0) return { canceled: true };
+  try {
+    await installLocalizationPackage(selection.filePaths[0], platinumLocalizationDirectory());
+    writeLanguagePreference(platinumLanguagePreferencePath(), 'pt-BR');
+    return {
+      canceled: false,
+      ok: true,
+      language: 'pt-BR',
+      message: 'Pacote PT-BR instalado, verificado e selecionado.'
+    };
+  } catch (error) {
+    return { canceled: false, ok: false, message: error.message };
+  }
+});
+
 ipcMain.handle('platina:get-imported-rom', async () => {
   const rom = await readImportedRom();
   return rom ? { name: rom.name, size: rom.size, sha256: rom.sha256 } : null;
@@ -384,13 +447,30 @@ ipcMain.handle('platina:launch-game', async () => {
     };
   }
   const logPath = path.join(app.getPath('userData'), 'logs', 'native-startup.log');
+  let language;
+  let localizationDirectory = null;
+  try {
+    language = readLanguagePreference(platinumLanguagePreferencePath());
+    if (language === 'pt-BR') {
+      localizationDirectory = platinumLocalizationDirectory();
+      await verifyLocalizationPackage(localizationDirectory);
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: 'O idioma selecionado não está pronto para uso. O launcher não alternará automaticamente para inglês: ' + error.message,
+      logPath
+    };
+  }
   try {
     const launchSpec = createPlatinumLaunchSpec({
       runtime: writableRuntime,
       rom,
       logPath,
       platform: process.platform,
-      env: process.env
+      env: process.env,
+      language,
+      localizationDirectory
     });
     // Phase 1 (no game window yet): verify/extract the game data with progress.
     sendLaunchProgress('Preparando os dados do jogo…');

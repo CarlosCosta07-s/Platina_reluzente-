@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('platina', Object.freeze({
   getRuntimeStatus: () => ipcRenderer.invoke('platina:runtime-status'),
   getImportedRom: () => ipcRenderer.invoke('platina:get-imported-rom'),
   importRom: () => ipcRenderer.invoke('platina:import-rom'),
+  getLocalizationStatus: () => ipcRenderer.invoke('platina:localization-status'),
+  setLanguage: (language) => ipcRenderer.invoke('platina:set-language', language),
+  importLocalizationPackage: () => ipcRenderer.invoke('platina:import-localization'),
   launchGame: () => ipcRenderer.invoke('platina:launch-game'),
   onLaunchProgress: (callback) => {
     if (typeof callback !== 'function') return;
