@@ -5,6 +5,9 @@ in the repository. Update these values only after reviewing a new localization
 variant and documenting its provenance.
 """
 
+PTBR_SOURCE_ROM_SHA1 = "3d92f853eda6e70e9272809f01277db5fdb870ab"
+PLATINUM_USA_REV1_SHA1 = "0862ec35b24de5c7e2dcb88c9eea0873110d755c"
+
 PTBR_RESOURCE_SHA256 = {
     "battle/graphic/pl_b_plist_gra.narc": "bec3dbd9fd6493ec5c41e3907e6834ed548a0ba07d5243b2fc41b806f2c58cca",
     "data/slot.narc": "72fdd57fa2768e51880d13152d3877865bf574cd50436e056f3879eb734bbf41",

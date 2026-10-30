@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import json
+import stat
 import struct
 import shutil
 import sys
@@ -18,9 +20,9 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 try:
-    from localization_manifest import PTBR_RESOURCE_SHA256
+    from localization_manifest import PTBR_SOURCE_ROM_SHA1, PLATINUM_USA_REV1_SHA1, PTBR_RESOURCE_SHA256
 except ImportError:
-    from tools.localization_manifest import PTBR_RESOURCE_SHA256
+    from tools.localization_manifest import PTBR_SOURCE_ROM_SHA1, PLATINUM_USA_REV1_SHA1, PTBR_RESOURCE_SHA256
 
 HEADER_SIZE = 0x200
 MAX_ROM_SIZE = 512 * 1024 * 1024
@@ -471,33 +473,305 @@ def extract_localization(
     return written
 
 
+
+
+LOCALIZATION_PACKAGE_MANIFEST = "localization-manifest.json"
+
+
+def _sha1_file(path: Path) -> str:
+    digest = hashlib.sha1()
+    with path.open("rb") as stream:
+        while True:
+            chunk = stream.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while True:
+            chunk = stream.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_package_file(root: Path, relative_path: PurePosixPath) -> Path:
+    current = root
+    for index, component in enumerate(relative_path.parts):
+        if component in ("", ".", "..") or "/" in component or "\\" in component:
+            raise RomFormatError("Caminho inseguro no pacote de localização.")
+        current = current / component
+        try:
+            current_stat = current.lstat()
+        except OSError as error:
+            raise RomFormatError(
+                f"Arquivo ausente no pacote de localização: {relative_path}."
+            ) from error
+        if stat.S_ISLNK(current_stat.st_mode):
+            raise RomFormatError(f"Link simbólico não permitido no pacote: {relative_path}.")
+        if index < len(relative_path.parts) - 1:
+            if not stat.S_ISDIR(current_stat.st_mode):
+                raise RomFormatError(f"Componente não é diretório no pacote: {relative_path}.")
+        elif not stat.S_ISREG(current_stat.st_mode):
+            raise RomFormatError(f"Recurso do pacote não é arquivo regular: {relative_path}.")
+    return current
+
+
+def verify_localization_package(package_path: str | Path) -> dict[str, object]:
+    """Validate the complete isolated PT-BR package and all seven resource hashes."""
+    root = Path(package_path).expanduser().absolute()
+    try:
+        root_stat = root.lstat()
+    except OSError as error:
+        raise RomFormatError(f"Pacote de localização ausente: {root}.") from error
+    if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
+        raise RomFormatError("A raiz do pacote deve ser um diretório real, sem link simbólico.")
+
+    manifest_path = _safe_package_file(root, PurePosixPath(LOCALIZATION_PACKAGE_MANIFEST))
+    try:
+        package_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RomFormatError("Manifesto do pacote PT-BR ausente ou inválido.") from error
+
+    if not isinstance(package_manifest, dict):
+        raise RomFormatError("O manifesto PT-BR deve ser um objeto JSON.")
+    if (package_manifest.get("schemaVersion") != 1
+            or package_manifest.get("game") != "pokemon-platinum"
+            or package_manifest.get("locale") != "pt-BR"
+            or package_manifest.get("baseRomSha1") != PLATINUM_USA_REV1_SHA1
+            or package_manifest.get("sourceRomSha1") != PTBR_SOURCE_ROM_SHA1
+            or package_manifest.get("resourceCount") != len(TARGET_FILES)):
+        raise RomFormatError("Identidade ou compatibilidade do pacote PT-BR é inválida.")
+
+    resources = package_manifest.get("resources")
+    expected_paths = [item.as_posix() for item in TARGET_FILES]
+    if not isinstance(resources, list) or len(resources) != len(expected_paths):
+        raise RomFormatError("A quantidade de recursos do pacote PT-BR é inválida.")
+
+    expected_files = {LOCALIZATION_PACKAGE_MANIFEST}
+    expected_directories: set[str] = set()
+    for index, expected_name in enumerate(expected_paths):
+        entry = resources[index]
+        if not isinstance(entry, dict) or entry.get("path") != expected_name:
+            raise RomFormatError("A lista de recursos PT-BR não corresponde à allowlist.")
+        expected_sha256 = PTBR_RESOURCE_SHA256.get(expected_name)
+        if expected_sha256 is None or entry.get("sha256") != expected_sha256:
+            raise RomFormatError(f"SHA-256 de referência incorreto no manifesto: {expected_name}.")
+        size = entry.get("sizeBytes")
+        fat_size = entry.get("fatSizeBytes")
+        recovered = entry.get("sizeRecoveredFromNarcHeader")
+        if (not isinstance(size, int) or isinstance(size, bool) or size <= 0
+                or not isinstance(fat_size, int) or isinstance(fat_size, bool) or fat_size < 0
+                or not isinstance(recovered, bool)
+                or recovered != (size != fat_size)):
+            raise RomFormatError(f"Metadados de tamanho inválidos no manifesto: {expected_name}.")
+
+        relative = PurePosixPath(expected_name)
+        resource_path = _safe_package_file(root, relative)
+        if resource_path.stat().st_size != size:
+            raise RomFormatError(f"Tamanho divergente no pacote PT-BR: {expected_name}.")
+        if _sha256_file(resource_path) != expected_sha256:
+            raise RomFormatError(f"Conteúdo divergente no pacote PT-BR: {expected_name}.")
+        expected_files.add(expected_name)
+        parent = relative.parent
+        while parent != PurePosixPath("."):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+
+    actual_files: set[str] = set()
+    actual_directories: set[str] = set()
+    for item in root.rglob("*"):
+        if item.is_symlink():
+            raise RomFormatError(f"Link simbólico não permitido no pacote: {item.relative_to(root)}.")
+        relative_name = item.relative_to(root).as_posix()
+        if item.is_file():
+            actual_files.add(relative_name)
+        elif item.is_dir():
+            actual_directories.add(relative_name)
+        else:
+            raise RomFormatError(f"Entrada especial não permitida no pacote: {relative_name}.")
+    if actual_files != expected_files or actual_directories != expected_directories:
+        raise RomFormatError("O pacote contém arquivos ou diretórios fora da allowlist.")
+
+    return package_manifest
+
+
+def build_localization_package(
+    rom_path: str | Path,
+    package_path: str | Path,
+    *,
+    force: bool = False,
+) -> dict[str, object]:
+    """Build and atomically install an isolated PT-BR resource package."""
+    source_rom = Path(rom_path).expanduser().resolve()
+    _index_rom(source_rom)
+    source_sha1 = _sha1_file(source_rom)
+    if source_sha1 != PTBR_SOURCE_ROM_SHA1:
+        raise RomFormatError(
+            "A ROM PT-BR de origem não corresponde à variante aprovada "
+            f"(esperado SHA-1 {PTBR_SOURCE_ROM_SHA1}, recebido {source_sha1})."
+        )
+
+    destination = Path(package_path).expanduser().absolute()
+    parent = destination.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    if parent.is_symlink() or not parent.is_dir():
+        raise RomFormatError("O diretório-pai do pacote deve ser um diretório real.")
+    if destination.is_symlink():
+        raise RomFormatError("A raiz do pacote não pode ser um link simbólico.")
+    if destination.exists() and not destination.is_dir():
+        raise RomFormatError("O destino do pacote existe e não é diretório.")
+
+    if destination.exists():
+        if not force:
+            raise FileExistsError(
+                f"O pacote PT-BR já existe: {destination}. Use --force somente para substituí-lo."
+            )
+        marker = destination / LOCALIZATION_PACKAGE_MANIFEST
+        if marker.is_symlink() or not marker.is_file():
+            raise RomFormatError(
+                "O diretório existente não foi criado como pacote PT-BR por esta ferramenta; "
+                "ele não será substituído."
+            )
+        try:
+            existing_manifest = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise RomFormatError("O pacote existente não possui um manifesto reconhecível.") from error
+        if (not isinstance(existing_manifest, dict)
+                or existing_manifest.get("schemaVersion") != 1
+                or existing_manifest.get("game") != "pokemon-platinum"
+                or existing_manifest.get("locale") != "pt-BR"):
+            raise RomFormatError(
+                "O diretório existente não pertence ao pacote PT-BR gerenciado; "
+                "ele não será substituído."
+            )
+
+    transaction_root = Path(tempfile.mkdtemp(prefix=".ptbr-package-", dir=parent))
+    staged_package = transaction_root / "package"
+    previous_package = transaction_root / "previous-package"
+    failed_package = transaction_root / "failed-package"
+    moved_previous = False
+    installed_new = False
+    preserve_transaction = False
+
+    try:
+        entries = extract_localization(source_rom, staged_package, force=False)
+        package_manifest: dict[str, object] = {
+            "schemaVersion": 1,
+            "game": "pokemon-platinum",
+            "locale": "pt-BR",
+            "baseRomSha1": PLATINUM_USA_REV1_SHA1,
+            "sourceRomSha1": source_sha1,
+            "resourceCount": len(entries),
+            "resources": [
+                {
+                    "path": str(entry["path"]),
+                    "sizeBytes": int(entry["size_bytes"]),
+                    "fatSizeBytes": int(entry["fat_size_bytes"]),
+                    "sizeRecoveredFromNarcHeader": bool(
+                        entry["size_recovered_from_narc_header"]
+                    ),
+                    "sha256": str(entry["sha256"]),
+                }
+                for entry in entries
+            ],
+        }
+        manifest_file = staged_package / LOCALIZATION_PACKAGE_MANIFEST
+        with manifest_file.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(package_manifest, stream, ensure_ascii=False, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+
+        verify_localization_package(staged_package)
+
+        if destination.exists():
+            os.replace(destination, previous_package)
+            moved_previous = True
+
+        try:
+            os.replace(staged_package, destination)
+            installed_new = True
+            installed_manifest = verify_localization_package(destination)
+        except Exception as install_error:
+            rollback_errors: list[str] = []
+            if installed_new and destination.exists():
+                try:
+                    os.replace(destination, failed_package)
+                    installed_new = False
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if moved_previous:
+                try:
+                    os.replace(previous_package, destination)
+                    moved_previous = False
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if rollback_errors:
+                preserve_transaction = True
+                raise OSError(
+                    "A instalação do pacote PT-BR falhou e o rollback não terminou. "
+                    f"Backup preservado em {previous_package}: " + "; ".join(rollback_errors)
+                ) from install_error
+            raise
+
+        shutil.rmtree(transaction_root, ignore_errors=True)
+        return installed_manifest
+
+    except Exception:
+        if moved_previous and previous_package.exists() and not destination.exists():
+            try:
+                os.replace(previous_package, destination)
+                moved_previous = False
+            except OSError as rollback_error:
+                preserve_transaction = True
+                raise OSError(
+                    "A instalação do pacote PT-BR falhou e o pacote anterior não pôde ser "
+                    f"restaurado. Backup preservado em {previous_package}: {rollback_error}"
+                )
+        if not preserve_transaction:
+            shutil.rmtree(transaction_root, ignore_errors=True)
+        raise
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Importa recursos NARC localizados explicitamente autorizados de Pokémon Platinum CPUE para um diretório local."
+        description="Gera um pacote PT-BR isolado e validado para o porte nativo de Pokémon Platinum."
     )
-    parser.add_argument("--rom", required=True, help="Caminho local para o arquivo .nds do próprio usuário.")
+    parser.add_argument("--rom", required=True, help="Caminho local para a ROM PT-BR aprovada do próprio usuário.")
     parser.add_argument(
-        "--destination", required=True,
-        help="Diretório de trabalho do executável nativo; os caminhos originais da ROM serão criados abaixo dele."
+        "--package", required=True,
+        help="Diretório privado de saída do pacote PT-BR; não use a pasta raiz do runtime."
     )
-    parser.add_argument("--force", action="store_true", help="Permite substituir arquivos de destino existentes.")
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Substitui somente um pacote PT-BR gerenciado previamente por esta ferramenta."
+    )
     args = parser.parse_args(argv)
 
     try:
-        entries = extract_localization(args.rom, args.destination, force=args.force)
+        package = build_localization_package(args.rom, args.package, force=args.force)
     except (OSError, RomFormatError) as exc:
         print(f"Erro: {exc}", file=sys.stderr)
         return 2
 
-    print(f"Importação local concluída. Nenhuma ROM foi modificada; ROM de origem: {Path(args.rom).name}")
-    for entry in entries:
+    print("Pacote PT-BR isolado criado e verificado.")
+    print(f"Destino: {Path(args.package).expanduser().absolute()}")
+    print(f"ROM de origem SHA-1: {package['sourceRomSha1']}")
+    print(f"ROM-base compatível SHA-1: {package['baseRomSha1']}")
+    for entry in package["resources"]:
         recovered = (
             " (tamanho recuperado do cabeçalho NARC; FAT divergente)"
-            if entry["size_recovered_from_narc_header"]
+            if entry["sizeRecoveredFromNarcHeader"]
             else ""
         )
-        print(f"  {entry['path']}: {entry['size_bytes']} bytes (SHA-256 {entry['sha256']}){recovered}")
-    print("Mantenha os arquivos extraídos fora do Git e use-os apenas com seu próprio porte local.")
+        print(f"  {entry['path']}: {entry['sizeBytes']} bytes (SHA-256 {entry['sha256']}){recovered}")
+    print("O pacote contém somente recursos allowlisted e metadados; a ROM e o runtime original não foram modificados.")
     return 0
 
 

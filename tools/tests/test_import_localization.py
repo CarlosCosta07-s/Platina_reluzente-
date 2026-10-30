@@ -14,6 +14,8 @@ from import_localization import (  # noqa: E402
     TARGET_FILES,
     RomFormatError,
     extract_localization,
+    build_localization_package,
+    verify_localization_package,
 )
 
 
@@ -43,6 +45,28 @@ def _extract_synthetic(
     }
     with patch.dict(PTBR_RESOURCE_SHA256, synthetic_hashes, clear=True):
         return extract_localization(rom, destination, **kwargs)
+
+
+
+
+def _build_synthetic_package(
+    rom: Path,
+    package: Path,
+    file_ids: dict[str, int],
+    file_data: dict[int, bytes],
+    **kwargs: object,
+) -> dict[str, object]:
+    synthetic_hashes = {
+        target.as_posix(): hashlib.sha256(
+            file_data[file_ids[target.as_posix()]]
+        ).hexdigest()
+        for target in TARGET_FILES
+        if target.as_posix() in file_ids
+    }
+    source_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
+    with patch.dict(PTBR_RESOURCE_SHA256, synthetic_hashes, clear=True):
+        with patch("import_localization.PTBR_SOURCE_ROM_SHA1", source_sha1):
+            return build_localization_package(rom, package, **kwargs)
 
 
 def _align4(value: int) -> int:
@@ -389,6 +413,142 @@ class LocalizationImportTests(unittest.TestCase):
                 output = destination.joinpath(*target.parts)
                 self.assertEqual(output.read_bytes(), original_bytes[target.as_posix()])
             self.assertEqual(list(destination.glob(".ptbr-localization-*")), [])
+
+
+
+    def test_builds_an_isolated_package_with_manifest_and_leaves_runtime_data_untouched(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+
+            runtime = root / "runtime"
+            base_file = runtime / "msgdata" / "pl_msg.narc"
+            base_file.parent.mkdir(parents=True)
+            base_file.write_bytes(b"original-English-resource")
+            package = root / "user-data" / "localizations" / "pt-BR"
+
+            package_manifest = _build_synthetic_package(rom, package, file_ids, file_data)
+
+            self.assertEqual(package_manifest["locale"], "pt-BR")
+            self.assertEqual(package_manifest["game"], "pokemon-platinum")
+            self.assertEqual(package_manifest["resourceCount"], len(TARGET_FILES))
+            self.assertEqual(package_manifest["sourceRomSha1"], hashlib.sha1(rom_data).hexdigest())
+            self.assertEqual(base_file.read_bytes(), b"original-English-resource")
+            self.assertTrue((package / "localization-manifest.json").is_file())
+            for target in TARGET_FILES:
+                self.assertTrue(package.joinpath(*target.parts).is_file())
+                self.assertFalse(runtime.joinpath(*target.parts).exists())
+            self.assertEqual(verify_localization_package(package), package_manifest)
+
+    def test_package_verification_rejects_modified_resource_and_unlisted_file(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+            package = root / "localizations" / "pt-BR"
+            _build_synthetic_package(rom, package, file_ids, file_data)
+
+            resource = package.joinpath(*TARGET_FILES[0].parts)
+            resource.write_bytes(b"tampered")
+            with self.assertRaisesRegex(RomFormatError, "Tamanho divergente|Conteúdo divergente"):
+                verify_localization_package(package)
+            resource.write_bytes(file_data[file_ids[TARGET_FILES[0].as_posix()]])
+            (package / "extra.bin").write_bytes(b"not allowlisted")
+            with self.assertRaisesRegex(RomFormatError, "fora da allowlist"):
+                verify_localization_package(package)
+
+    def test_package_builder_refuses_wrong_source_rom_hash_before_creating_output(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+            package = root / "localizations" / "pt-BR"
+            with patch.dict(PTBR_RESOURCE_SHA256, {
+                target.as_posix(): hashlib.sha256(file_data[file_ids[target.as_posix()]]).hexdigest()
+                for target in TARGET_FILES
+            }, clear=True):
+                with patch("import_localization.PTBR_SOURCE_ROM_SHA1", "0" * 40):
+                    with self.assertRaisesRegex(RomFormatError, "ROM PT-BR de origem"):
+                        build_localization_package(rom, package)
+            self.assertFalse(package.exists())
+
+    def test_package_builder_refuses_to_replace_an_unmanaged_directory(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+            package = root / "localizations" / "pt-BR"
+            package.mkdir(parents=True)
+            sentinel = package / "keep.txt"
+            sentinel.write_text("do not replace", encoding="utf-8")
+            with self.assertRaisesRegex(RomFormatError, "não foi criado como pacote PT-BR"):
+                _build_synthetic_package(rom, package, file_ids, file_data, force=True)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "do not replace")
+
+    def test_package_builder_replaces_only_a_recognized_package_when_forced(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+            package = root / "localizations" / "pt-BR"
+            _build_synthetic_package(rom, package, file_ids, file_data)
+            previous_manifest = verify_localization_package(package)
+
+            replacement = _build_synthetic_package(rom, package, file_ids, file_data, force=True)
+
+            self.assertEqual(replacement, previous_manifest)
+            self.assertEqual(verify_localization_package(package), replacement)
+            self.assertEqual(list(package.parent.glob(".ptbr-package-*")), [])
+
+    def test_package_root_symlink_is_rejected_without_touching_target(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+            outside = root / "outside"
+            outside.mkdir()
+            sentinel = outside / "keep.txt"
+            sentinel.write_text("preserve", encoding="utf-8")
+            package = root / "pt-BR-link"
+            try:
+                package.symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Symlinks are unavailable in this environment: {error}")
+            with self.assertRaisesRegex(RomFormatError, "link simbólico"):
+                _build_synthetic_package(rom, package, file_ids, file_data)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+
+    def test_package_replacement_failure_restores_the_previous_package(self) -> None:
+        rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom = root / "translated.nds"
+            rom.write_bytes(rom_data)
+            package = root / "localizations" / "pt-BR"
+            _build_synthetic_package(rom, package, file_ids, file_data)
+            old_manifest = verify_localization_package(package)
+
+            real_replace = os.replace
+            def fail_stage_install(source: str | Path, target: str | Path) -> None:
+                source_path = Path(source)
+                target_path = Path(target)
+                if source_path.name == "package" and target_path == package:
+                    raise OSError("simulated package install failure")
+                real_replace(source, target)
+
+            with patch("import_localization.os.replace", side_effect=fail_stage_install):
+                with self.assertRaisesRegex(OSError, "simulated package install failure"):
+                    _build_synthetic_package(rom, package, file_ids, file_data, force=True)
+
+            self.assertEqual(verify_localization_package(package), old_manifest)
+            self.assertEqual(list(package.parent.glob(".ptbr-package-*")), [])
 
 
 

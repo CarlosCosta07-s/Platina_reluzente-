@@ -91,51 +91,55 @@ Os arquivos msgdata/msg.narc e msgdata/scenario/scr_msg.narc são idênticos ent
 
 ## Segurança do importador
 
-O arquivo `tools/import_localization.py`:
+O arquivo tools/import_localization.py:
+- valida cabeçalho, FNT/FAT, limites de arquivos e estrutura interna dos sete NARCs;
+- aceita somente a variante PT-BR aprovada, identificada pelo SHA-1 3d92f853eda6e70e9272809f01277db5fdb870ab;
+- exige correspondência SHA-256 individual dos sete recursos antes da publicação;
+- grava os arquivos em uma área temporária, verifica o pacote e só então instala a pasta por renomeação no mesmo volume;
+- gera localization-manifest.json com o idioma, a ROM-base compatível, a ROM-fonte e os sete hashes;
+- só permite --force para substituir um pacote PT-BR previamente criado por esta ferramenta;
+- rejeita links simbólicos, arquivos inesperados, recursos modificados e diretórios fora da allowlist;
+- não altera os dados-base do runtime, a ROM-fonte ou saves/configurações.
 
-- valida o cabeçalho da ROM e as tabelas FNT/FAT;
-- exige correspondência SHA-256 dos sete NARC com `tools/localization_manifest.py` antes de escrever qualquer arquivo, impedindo que uma ROM USA ou outra tradução seja importada por engano;
-- só aceita CPUE e extrai caminhos de uma allowlist explícita;
-- valida cabeçalho, tamanho e blocos essenciais dos arquivos NARC;
-- evita sobrescrever os arquivos existentes sem a opção explícita --force;
-- recusa intervalos sobrepostos a outro arquivo FAT;
-- permite recuperar o tamanho declarado pelo NARC quando o FAT termina antes, apenas quando o intervalo cabe na ROM e não se sobrepõe a outro arquivo FAT;
-- nunca modifica a ROM de origem nem faz upload de dados.
+## Fluxo de pacote PT-BR isolado
 
-## Fluxo provisório atual de desenvolvimento (não é a UX final do launcher)
-
-O procedimento abaixo documenta o importador atual para análise e testes internos. Ele ainda exige uma ROM PT-BR como fonte e substitui os arquivos allowlisted do destino com a opção --force. Deve ser refatorado para gerar/aplicar uma camada separada antes de ser considerado a implementação final do seletor de idioma.
-
-## Como importar os recursos PT-BR no diretório local
-
-Faça um build e inicie o jogo uma vez usando os dados locais da versão original para preparar o diretório de recursos. Encerre o jogo antes de importar para que nenhum arquivo esteja aberto.
+O pacote deve ficar em uma pasta privada de dados do usuário, separada da raiz do runtime. O importador não instala os NARCs na pasta de trabalho do jogo.
 
 Linux:
+```sh
+python3 tools/import_localization.py \
+  --rom "/caminho/local/PK Plat [PT-BR].nds" \
+  --package "$HOME/.local/share/PlatinaReluzente/localizations/pt-BR"
+```
 
-    python3 tools/import_localization.py \
-      --rom "/caminho/local/PK Plat [PT-BR].nds" \
-      --destination "vendor/pokeplatinum-native/build_linux/pokeplatinum" \
-      --force
+Windows (PowerShell):
+```powershell
+python tools/import_localization.py `
+  --rom "C:\ROMs\PK Plat [PT-BR].nds" `
+  --package "$env:APPDATA\PlatinaReluzente\localizations\pt-BR"
+```
 
-Windows: use o diretório de trabalho do executável em build_win64/pokeplatinum. O extrator upstream grava os arquivos no diretório de trabalho atual, então inicie o executável a partir de build_linux/pokeplatinum ou build_win64/pokeplatinum antes de importar os arquivos.
+Para substituir um pacote anterior reconhecido pela ferramenta, acrescente --force. A opção não substitui diretórios arbitrários nem arquivos da instalação original.
 
-A opção --force é necessária porque os recursos originais normalmente já existem no diretório de destino. Depois da importação, verifique o diretório com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum --require-localized-resources` (em Windows, substitua pelo caminho vendor/pokeplatinum-native/build_win64/pokeplatinum). O verificador compara os sete hashes SHA-256 com a variante PT-BR exata que foi usada como referência durante o desenvolvimento; não basta que um arquivo tenha um cabeçalho NARC válido. Se a ferramenta recusar uma ROM, caminho ou estrutura, não ignore o erro; investigue a diferença antes de tentar outra extração.
+O resultado contém os sete recursos nos caminhos relativos originais e localization-manifest.json. A geração e a verificação do pacote são automatizadas, mas a seleção de idioma no launcher e a resolução desses arquivos pelo filesystem nativo ainda não estão integradas. Não copie manualmente o conteúdo do pacote para a raiz do runtime.
 
 ## O que ainda precisa ser validado
 
-A extração segura comprova somente que os sete arquivos NARC podem ser copiados. O verificador local compara seus hashes com a variante PT-BR de referência para detectar arquivos incorretos ou versões diferentes. Isso não comprova que a versão PT-BR executa corretamente. Testes necessários:
+1. Validar a execução da ROM USA Rev. 1 em inglês, sem camada PT-BR.
+2. Integrar o manifesto e os sete arquivos como overlay de leitura, sem alterar os recursos originais.
+3. Implementar no launcher a opção English / Português (Brasil), com validação antes de iniciar.
+4. Inspecionar fontes, acentos, nomes, menus, tela de título e diálogos.
+5. Testar batalhas, transições, progressão e salvamento/carregamento com cada idioma.
 
-1. inicialização e jogo com a ROM USA Rev. 1 original;
-2. substituição local dos sete arquivos NARC allowlisted;
-3. inspeção de fontes, acentos, nomes, menus, tela de título e diálogos;
-4. teste de batalhas, transições, progressão de história e salvamento/carregamento;
-5. análise separada de qualquer diferença fora da allowlist, sem copiar executáveis/binários desconhecidos.
+A criação do pacote prova apenas a integridade dos arquivos e sua identidade. Ela não prova compatibilidade visual ou de gameplay.
 
 ## Testes automatizados
 
 Os testes sintéticos não precisam de ROM:
-
-    python3 -m unittest discover -s tools/tests -v
+```sh
+python3 -m unittest discover -s tools/tests -v
+python3 scripts/test.py --full
+```
 
 ## Política de dados
 
