@@ -22,6 +22,16 @@ async function makeStore(t) {
   return { root, romDir, destinationPath, metadataPath };
 }
 
+test('SHA-1 file digest is streamed and matches the full fixture bytes', async (t) => {
+  const store = await makeStore(t);
+  const sourcePath = path.join(store.root, 'streamed-fixture.nds');
+  const bytes = Buffer.alloc(5 * 1024 * 1024 + 37, 0x5a);
+  await fs.writeFile(sourcePath, bytes);
+
+  const expected = crypto.createHash('sha1').update(bytes).digest('hex');
+  assert.equal(await sha1File(sourcePath), expected);
+});
+
 test('desktop ROM replacement commits verified ROM bytes and metadata together', async (t) => {
   const store = await makeStore(t);
   const sourcePath = path.join(store.root, 'selected.nds');
