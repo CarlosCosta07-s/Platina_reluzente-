@@ -912,12 +912,7 @@ SIM_ROM_EXTRACTOR_ORIGINAL = r'''void SIM_ShowRomExtractionDialog() {
 SIM_ROM_EXTRACTOR_PATCHED = r'''void SIM_ShowRomExtractionDialog() {
     const char *managedRomPath = std::getenv("PLATINA_IMPORTED_ROM");
     if (managedRomPath != nullptr && managedRomPath[0] != '\0') {
-        const int extractionStatus = SIM_NDSExtract(std::string(managedRomPath));
-        if (extractionStatus != 0) {
-            std::fprintf(stderr, "[rom-extract] Automatic extraction failed with status %d.\n", extractionStatus);
-        } else {
-            std::fprintf(stderr, "[rom-extract] Missing runtime data extracted from the imported ROM.\n");
-        }
+        std::fprintf(stderr, "[rom-extract] Refusing synchronous extraction from an imported ROM while the game is running. Close the game and prepare data again from the launcher.\\n");
         return;
     }
 
