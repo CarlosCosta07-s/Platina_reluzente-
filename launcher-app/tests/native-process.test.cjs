@@ -102,7 +102,7 @@ test('native launch times out without a first-frame marker and stops the hidden 
 
   const result = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "process.stderr.write('renderer initialized; waiting for first frame\\n'); setTimeout(() => process.exit(0), 5000);"],
+    args: ['-e', "process.stderr.write('[Platina-Progress] renderer-ready\\nrenderer initialized; waiting for first frame\\n'); setTimeout(() => process.exit(0), 5000);"],
     cwd: root,
     env: process.env,
     logPath,
