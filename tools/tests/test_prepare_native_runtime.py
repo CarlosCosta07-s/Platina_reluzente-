@@ -381,7 +381,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("platina-rom-extraction.manifest", content)
             self.assertIn("Reusing local game data after per-file CRC32 verification.", content)
             self.assertLess(
-                content.index("SIM_NDSExtract(std::string(managedRomPath))"),
+                content.index("SIM_NDSExtract(absoluteRomPath.string())"),
                 content.index("SIM_RenderInit(NULL)"),
             )
             self.assertNotIn("SDL_AndroidGetInternalStoragePath", content)
@@ -540,7 +540,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("Prepared game data changed after launcher verification", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("inspectFileCrc32", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("platina-rom-extraction.manifest", ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn("required local data is missing/corrupted", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("required extracted data is missing or invalid", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("collectOverlayPaths", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("bool verifyContents", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("if (verifyContents)", ROM_PREFLIGHT_ENTRY_PATCHED)
@@ -550,7 +550,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn('return fail("required " + prefix + " overlay directory is missing:', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("unexpected entry in ", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("could not fully read or verify overlay file", ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn("Extraction did not produce a valid ARM9 overlay set: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("extracted overlay validation failed: ", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('const std::string stem = prefix + "_";', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('collectOne("overlay9", "overlay9", requireAll)', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('collectOne("overlay7", "overlay7", false)', ROM_PREFLIGHT_ENTRY_PATCHED)
