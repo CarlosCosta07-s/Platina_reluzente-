@@ -56,7 +56,7 @@ test('native process startup handles working directories with spaces and accents
 
   const result = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "process.stdout.write('" + message + "-stdout\\n'); process.stderr.write('" + message + "-stderr\\n'); setTimeout(() => process.exit(0), 3500);"],
+    args: ['-e', "process.stdout.write('" + message + "-stdout\\n'); process.stderr.write('" + message + "-stderr\\n'); setTimeout(() => process.stderr.write('[Platina-Progress] renderer-ready\\n'), 100); setTimeout(() => process.stdout.write('[Platina-Progress] window-ready\\n'), 250); setTimeout(() => process.exit(0), 1500);"],
     cwd: workingDirectory,
     env: process.env,
     logPath,
@@ -65,9 +65,9 @@ test('native process startup handles working directories with spaces and accents
   });
 
   assert.equal(result.ok, true);
+  assert.equal(result.windowReady, true);
   assert.equal(result.logPath, logPath);
-  assert.match(result.message, /janela do jogo não foi confirmada/);
-  const log = await waitForLog(logPath, [message + '-stdout', message + '-stderr', 'spawn succeeded', 'process exit: code=0']);
+  const log = await waitForLog(logPath, [message + '-stdout', message + '-stderr', 'renderer-ready', 'window-ready', 'spawn succeeded', 'process exit: code=0']);
   assert.match(log, /platform=/);
   assert.match(log, /rom_sha256=test-hash/);
   assert.match(log, /working_directory=.*Dados São João.*Platiná Reluzente/);
@@ -92,6 +92,39 @@ test('native process that exits during the initial startup window is reported as
   assert.match(result.message, /encerrou durante a verificação inicial/);
   const log = await fs.readFile(logPath, 'utf8');
   assert.match(log, /process exit: code=7/);
+});
+
+test('native launch times out without a first-frame marker and stops the hidden process', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'platina-native-first-frame-timeout-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const logPath = path.join(root, 'first-frame-timeout.log');
+  let sawRendererReadyWhileProcessWasActive = false;
+
+  const result = await launchNativeProcess({
+    executable: process.execPath,
+    args: ['-e', "process.stderr.write('renderer initialized; waiting for first frame\\n'); setTimeout(() => process.exit(0), 5000);"],
+    cwd: root,
+    env: process.env,
+    logPath,
+    platform: process.platform,
+    startupTimeoutMs: 150,
+    onProgress: (stage) => {
+      if (stage === 'renderer-ready') {
+        sawRendererReadyWhileProcessWasActive = hasActiveNativeProcess();
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.startupTimedOut, true);
+  assert.equal(sawRendererReadyWhileProcessWasActive, true);
+  assert.match(result.message, /não apresentou a primeira imagem/);
+  assert.match(result.message, /janela preta aparentemente congelada/);
+  await waitForLog(logPath, ['first-frame timeout', 'process exit:']);
+  assert.equal(hasActiveNativeProcess(), false);
+  const log = await fs.readFile(logPath, 'utf8');
+  assert.match(log, /renderer initialized; waiting for first frame/);
+  assert.match(log, /process exit:/);
 });
 
 test('native process startup failure is returned and recorded in the log', async (t) => {
@@ -187,7 +220,7 @@ test('native launcher does not start a second game while the first process is al
   const logPath = path.join(root, 'first.log');
   const first = await launchNativeProcess({
     executable: process.execPath,
-    args: ['-e', "setTimeout(() => process.exit(0), 5000);"],
+    args: ['-e', "process.stdout.write('[Platina-Progress] window-ready\\n'); setTimeout(() => process.exit(0), 5000);"],
     cwd: root,
     env: process.env,
     logPath,
