@@ -19,7 +19,6 @@ Isso é preferível a reconstruir as mecânicas do zero em uma engine genérica.
 | Build desktop | Meson + Ninja, orquestrados por Make | Configuração e compilação reproduzível |
 | Compatibilidade com SDK | libntr / camada do porte | Substituir serviços do NitroSDK usados pelo jogo |
 | Windows/Linux | Binário nativo de host | Execução sem emulação da CPU do DS |
-| Entrada/áudio/ciclo de vida móveis | Avaliar SDL3 onde isso não conflitar com a camada existente | APIs portáveis de plataforma; não será usada como engine substituta |
 
 ## Dependências reproduzíveis
 
