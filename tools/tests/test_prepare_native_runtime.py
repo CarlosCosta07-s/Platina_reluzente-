@@ -27,8 +27,11 @@ from scripts.prepare_native_runtime import (
     SHADER_LOG_LENGTH_QUERY_ORIGINAL,
     SHADER_LOG_LENGTH_QUERY_PATCHED,
     SDL_WINDOW_CONTEXT_PATCHED,
+    SDL_WINDOW_CONTEXT_PATCHED_LEGACY,
     PLATINA_WINDOW_DECLARATION_PATCHED,
+    PLATINA_WINDOW_DECLARATION_PATCHED_LEGACY,
     PLATINA_FIRST_FRAME_HANDOFF_PATCHED,
+    PLATINA_FIRST_FRAME_HANDOFF_PATCHED_LEGACY,
     SDL_VIEWPORT_PATCHED,
     INPUT_RELEASE_HELPER_PATCHED,
     MOUSE_DOWN_DECLARATION_ORIGINAL,
@@ -442,6 +445,15 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             source = self.make_source(root)
             self.assertTrue(prepare_native_runtime(root))
             content = source.read_text(encoding="utf-8")
+            # Simulate a checkout prepared by the previous launcher revision.
+            content = content.replace(SDL_WINDOW_CONTEXT_PATCHED, SDL_WINDOW_CONTEXT_PATCHED_LEGACY, 1)
+            content = content.replace(PLATINA_WINDOW_DECLARATION_PATCHED, PLATINA_WINDOW_DECLARATION_PATCHED_LEGACY, 1)
+            content = content.replace(PLATINA_FIRST_FRAME_HANDOFF_PATCHED, PLATINA_FIRST_FRAME_HANDOFF_PATCHED_LEGACY, 1)
+            source.write_text(content, encoding="utf-8")
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertIn(PLATINA_FIRST_FRAME_HANDOFF_PATCHED, content)
+            self.assertIn("[Platina-Progress] heartbeat frame=%llu", content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', content)
             self.assertIn('fopen(importedRomPath, "rb")', content)
             self.assertIn(ROM_PREFLIGHT_ENTRY_PATCHED, content)
