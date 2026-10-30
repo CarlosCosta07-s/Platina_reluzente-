@@ -41,7 +41,13 @@ test('Black import and launch use an internal runtime slot; no external runtime 
   assert.match(electronMain, /ipcMain\.handle\('platina:black-status'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:import-black-rom'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:launch-black-game'/);
-  assert.doesNotMatch(electronMain, /platina:select-black-runtime|showOpenDialog\(\{[\s\S]*openDirectory/);
+  assert.doesNotMatch(electronMain, /platina:select-black-runtime/);
+  const blackImportSection = electronMain.slice(
+    electronMain.indexOf("ipcMain.handle('platina:import-black-rom'"),
+    electronMain.indexOf("ipcMain.handle('platina:launch-black-game'")
+  );
+  assert.doesNotMatch(blackImportSection, /openDirectory/);
+  assert.match(electronMain, /ipcMain\.handle\('platina:import-localization'[\s\S]*?openDirectory/);
   assert.doesNotMatch(preload, /selectBlackRuntime|platina:select-black-runtime/);
   assert.match(blackRuntimeNotice, /not included in public builds at this stage/i);
   assert.match(blackRuntimeNotice, /must never browse for or launch its executable manually/i);
@@ -85,4 +91,18 @@ test('Platinum ROM validation and launch IPC remain part of the same app', () =>
   assert.match(electronMain, /ipcMain\.handle\('platina:import-rom'/);
   assert.match(electronMain, /ipcMain\.handle\('platina:launch-game'/);
   assert.match(electronMain, /path\.join\(app\.getPath\('userData'\), 'roms', 'current\.nds'\)/);
+});
+
+
+test('Platinum PT-BR package controls are validated and keep English assets untouched', () => {
+  assert.match(html, /id="game-language"/);
+  assert.match(html, /id="install-ptbr-button"/);
+  assert.match(appJs, /getLocalizationStatus\(\)/);
+  assert.match(appJs, /setLanguage\(selectedLanguage\)/);
+  assert.match(appJs, /importLocalizationPackage\(\)/);
+  assert.match(electronMain, /verifyLocalizationPackage\(localizationDirectory\)/);
+  assert.match(electronMain, /O launcher não alternará automaticamente para inglês/);
+  assert.match(preload, /getLocalizationStatus:/);
+  assert.match(preload, /setLanguage:/);
+  assert.match(preload, /importLocalizationPackage:/);
 });

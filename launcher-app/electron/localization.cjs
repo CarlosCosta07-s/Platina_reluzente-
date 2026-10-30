@@ -205,11 +205,13 @@ function pathExists(filePath) {
 async function installLocalizationPackage(sourceRoot, destinationRoot, policy = DEFAULT_POLICY) {
   const source = path.resolve(sourceRoot);
   const destination = path.resolve(destinationRoot);
-  const relativeDestination = path.relative(source, destination);
-  if (source === destination
-      || (!relativeDestination.startsWith('..' + path.sep) && relativeDestination !== '..'
-          && !path.isAbsolute(relativeDestination))) {
-    throw new Error('A pasta de instalação não pode ficar dentro do pacote de origem.');
+  const destinationFromSource = path.relative(source, destination);
+  const sourceFromDestination = path.relative(destination, source);
+  const isWithin = (relativePath) => relativePath === ''
+    || (relativePath !== '..' && !relativePath.startsWith('..' + path.sep)
+        && !path.isAbsolute(relativePath));
+  if (isWithin(destinationFromSource) || isWithin(sourceFromDestination)) {
+    throw new Error('A origem e a pasta de instalação do pacote não podem se sobrepor.');
   }
 
   await verifyLocalizationPackage(source, policy);
