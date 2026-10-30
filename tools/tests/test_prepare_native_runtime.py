@@ -366,7 +366,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
             self.assertNotIn("sLauncherManagedRomExtractionAttempted", fs_content)
-            self.assertNotIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
+            managed_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[0]
+            self.assertNotIn("SIM_ShowRomExtractionDialog();", managed_fallback)
+            self.assertIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
             self.assertNotIn("return FS_OpenFile(p_file, path);", FS_OPEN_FALLBACK_PATCHED)
             self.assertIn("No extraction will be attempted while the game window is open.", FS_OPEN_FALLBACK_PATCHED)
             self.assertIn("return FALSE;", FS_OPEN_FALLBACK_PATCHED)
@@ -449,7 +451,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         self.assertIn("Overlay validation failed: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('return fail("required " + prefix + " overlay directory is missing:', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("unexpected entry in ", ROM_PREFLIGHT_ENTRY_PATCHED)
-        self.assertIn("could not read or verify overlay file", ROM_PREFLIGHT_ENTRY_PATCHED)
+        self.assertIn("could not fully read or verify overlay file", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn("Extraction did not produce a valid ARM9 overlay set: %s", ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('const std::string stem = prefix + "_";', ROM_PREFLIGHT_ENTRY_PATCHED)
         self.assertIn('collectOne("overlay9", "overlay9", requireAll)', ROM_PREFLIGHT_ENTRY_PATCHED)
@@ -565,7 +567,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, upgraded)
             self.assertNotIn(FS_OPEN_FALLBACK_PATCHED_LEGACY, upgraded)
             self.assertNotIn("sLauncherManagedRomExtractionAttempted", upgraded)
-            self.assertNotIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
+            managed_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[0]
+            self.assertNotIn("SIM_ShowRomExtractionDialog();", managed_fallback)
+            self.assertIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
             self.assertFalse(prepare_native_runtime(root))
             self.assertEqual(fs_source.read_text(encoding="utf-8"), upgraded)
 
