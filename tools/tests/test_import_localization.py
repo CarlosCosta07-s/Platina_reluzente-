@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import struct
 import sys
@@ -68,6 +69,24 @@ def _build_synthetic_package(
     with patch.dict(PTBR_RESOURCE_SHA256, synthetic_hashes, clear=True):
         with patch("import_localization.PTBR_SOURCE_ROM_SHA1", source_sha1):
             return build_localization_package(rom, package, **kwargs)
+
+
+
+
+def _verify_synthetic_package(package: Path) -> dict[str, object]:
+    package_manifest = json.loads(
+        (package / "localization-manifest.json").read_text(encoding="utf-8")
+    )
+    synthetic_hashes = {
+        entry["path"]: entry["sha256"]
+        for entry in package_manifest["resources"]
+    }
+    with patch.dict(PTBR_RESOURCE_SHA256, synthetic_hashes, clear=True):
+        with patch(
+            "import_localization.PTBR_SOURCE_ROM_SHA1",
+            package_manifest["sourceRomSha1"],
+        ):
+            return verify_localization_package(package)
 
 
 def _align4(value: int) -> int:
@@ -425,9 +444,13 @@ class LocalizationImportTests(unittest.TestCase):
             rom.write_bytes(rom_data)
 
             runtime = root / "runtime"
-            base_file = runtime / "msgdata" / "pl_msg.narc"
-            base_file.parent.mkdir(parents=True)
-            base_file.write_bytes(b"original-English-resource")
+            original_base_files: dict[str, bytes] = {}
+            for target in TARGET_FILES:
+                runtime_file = runtime.joinpath(*target.parts)
+                runtime_file.parent.mkdir(parents=True, exist_ok=True)
+                original_bytes = b"original-English:" + target.as_posix().encode("ascii")
+                runtime_file.write_bytes(original_bytes)
+                original_base_files[target.as_posix()] = original_bytes
             package = root / "user-data" / "localizations" / "pt-BR"
 
             package_manifest = _build_synthetic_package(rom, package, file_ids, file_data)
@@ -436,12 +459,15 @@ class LocalizationImportTests(unittest.TestCase):
             self.assertEqual(package_manifest["game"], "pokemon-platinum")
             self.assertEqual(package_manifest["resourceCount"], len(TARGET_FILES))
             self.assertEqual(package_manifest["sourceRomSha1"], hashlib.sha1(rom_data).hexdigest())
-            self.assertEqual(base_file.read_bytes(), b"original-English-resource")
             self.assertTrue((package / "localization-manifest.json").is_file())
             for target in TARGET_FILES:
+                relative_name = target.as_posix()
                 self.assertTrue(package.joinpath(*target.parts).is_file())
-                self.assertFalse(runtime.joinpath(*target.parts).exists())
-            self.assertEqual(verify_localization_package(package), package_manifest)
+                self.assertEqual(
+                    runtime.joinpath(*target.parts).read_bytes(),
+                    original_base_files[relative_name],
+                )
+            self.assertEqual(_verify_synthetic_package(package), package_manifest)
 
     def test_package_verification_rejects_modified_resource_and_unlisted_file(self) -> None:
         rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
@@ -455,7 +481,7 @@ class LocalizationImportTests(unittest.TestCase):
             resource = package.joinpath(*TARGET_FILES[0].parts)
             resource.write_bytes(b"tampered")
             with self.assertRaisesRegex(RomFormatError, "Tamanho divergente|Conteúdo divergente"):
-                verify_localization_package(package)
+                _verify_synthetic_package(package)
             resource.write_bytes(file_data[file_ids[TARGET_FILES[0].as_posix()]])
             (package / "extra.bin").write_bytes(b"not allowlisted")
             with self.assertRaisesRegex(RomFormatError, "fora da allowlist"):
@@ -499,12 +525,12 @@ class LocalizationImportTests(unittest.TestCase):
             rom.write_bytes(rom_data)
             package = root / "localizations" / "pt-BR"
             _build_synthetic_package(rom, package, file_ids, file_data)
-            previous_manifest = verify_localization_package(package)
+            previous_manifest = _verify_synthetic_package(package)
 
             replacement = _build_synthetic_package(rom, package, file_ids, file_data, force=True)
 
             self.assertEqual(replacement, previous_manifest)
-            self.assertEqual(verify_localization_package(package), replacement)
+            self.assertEqual(_verify_synthetic_package(package), replacement)
             self.assertEqual(list(package.parent.glob(".ptbr-package-*")), [])
 
     def test_package_root_symlink_is_rejected_without_touching_target(self) -> None:
@@ -534,7 +560,7 @@ class LocalizationImportTests(unittest.TestCase):
             rom.write_bytes(rom_data)
             package = root / "localizations" / "pt-BR"
             _build_synthetic_package(rom, package, file_ids, file_data)
-            old_manifest = verify_localization_package(package)
+            old_manifest = _verify_synthetic_package(package)
 
             real_replace = os.replace
             def fail_stage_install(source: str | Path, target: str | Path) -> None:
@@ -548,7 +574,7 @@ class LocalizationImportTests(unittest.TestCase):
                 with self.assertRaisesRegex(OSError, "simulated package install failure"):
                     _build_synthetic_package(rom, package, file_ids, file_data, force=True)
 
-            self.assertEqual(verify_localization_package(package), old_manifest)
+            self.assertEqual(_verify_synthetic_package(package), old_manifest)
             self.assertEqual(list(package.parent.glob(".ptbr-package-*")), [])
 
 
