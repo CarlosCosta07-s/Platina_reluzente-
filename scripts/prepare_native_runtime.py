@@ -850,6 +850,35 @@ CONFIG_ALARM_SECOND_PATCHED = r'''    if(MATCH("OSNVRAM", "Alarm_Second")) {
         config->osNvramConfig.ncd.alarm.second = atoi(value);
     }'''
 CONFIG_SAVE_OPEN_ORIGINAL = '    FILE * configFile = fopen(SIM_CONFIG_FILE_PATH, "w");'
+
+PROJECT_SIM_CONFIG_HANDLER_ORIGINAL = r'''    if(MATCH("Cheats", "RunFromTrainerBattles")) {
+        config->runFromTrainerBattles = StringToBool(value);
+    }
+}'''
+PROJECT_SIM_CONFIG_HANDLER_PATCHED = r'''    if(MATCH("Cheats", "RunFromTrainerBattles")) {
+        config->runFromTrainerBattles = StringToBool(value);
+    }
+
+    // inih uses zero to signal a handler error; ignore unknown keys safely.
+    return 1;
+}'''
+PROJECT_SIM_CONFIG_PARSE_ORIGINAL = '    return (ini_parse(SIM_CONFIG_PRJ_FILE_PATH, IniHandler, aConfig) >= 0);'
+PROJECT_SIM_CONFIG_PARSE_PATCHED = '    return (ini_parse(SIM_CONFIG_PRJ_FILE_PATH, IniHandler, aConfig) == 0);'
+PROJECT_SIM_CONFIG_SAVE_OPEN_ORIGINAL = '    FILE * configFile = fopen(SIM_CONFIG_PRJ_FILE_PATH, "w");'
+PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED = (
+    PROJECT_SIM_CONFIG_SAVE_OPEN_ORIGINAL
+    + "\n    if (configFile == NULL) {\n"
+      "        fprintf(stderr, \"[Platina] Unable to write simulator configuration file.\\n\");\n"
+      "        return;\n"
+      "    }"
+)
+PROJECT_SIM_CONFIG_CLOSE_ORIGINAL = '    fclose(configFile);'
+PROJECT_SIM_CONFIG_CLOSE_PATCHED = (
+    '    if (fclose(configFile) != 0) {\n'
+    '        fprintf(stderr, "[Platina] Failed to flush simulator configuration file.\\n");\n'
+    '    }'
+)
+
 SDL_INIT_ORIGINAL = r'''  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
            SDL_INIT_JOYSTICK);
   SIM_Audio_Init(44100);'''
@@ -2063,6 +2092,51 @@ def _prepare_nvram_file_backing(source_root: str | Path) -> tuple[Path, str, boo
     return source_path, current, current != original
 
 
+
+def _prepare_project_sim_config(source_root: str | Path) -> tuple[Path, str, bool]:
+    """Harden the project-specific INI callback and configuration persistence."""
+    source_path = Path(source_root).expanduser().resolve() / "src" / "port" / "sim_config_prj.c"
+    if not source_path.is_file():
+        raise RuntimePreparationError(f"Project simulator config source missing: {source_path}")
+
+    original = source_path.read_text(encoding="utf-8")
+    current = original
+
+    patches = (
+        (
+            PROJECT_SIM_CONFIG_HANDLER_ORIGINAL,
+            PROJECT_SIM_CONFIG_HANDLER_PATCHED,
+            "project INI callback return contract",
+        ),
+        (
+            PROJECT_SIM_CONFIG_PARSE_ORIGINAL,
+            PROJECT_SIM_CONFIG_PARSE_PATCHED,
+            "project INI parse-result handling",
+        ),
+        (
+            PROJECT_SIM_CONFIG_SAVE_OPEN_ORIGINAL,
+            PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED,
+            "project configuration fopen guard",
+        ),
+        (
+            PROJECT_SIM_CONFIG_CLOSE_ORIGINAL,
+            PROJECT_SIM_CONFIG_CLOSE_PATCHED,
+            "project configuration close check",
+        ),
+    )
+    for upstream, patched, label in patches:
+        if current.count(patched) == 1 and current.count(upstream) == 0:
+            continue
+        if current.count(upstream) != 1 or current.count(patched) != 0:
+            raise RuntimePreparationError(
+                f"Expected exactly one recognized upstream marker for {label}; refusing an uncertain patch."
+            )
+        current = current.replace(upstream, patched, 1)
+
+    return source_path, current, current != original
+
+
+
 def _prepare_sim_config(config_path: Path) -> tuple[str, bool]:
     """Fix known simulator config bugs; reject unknown source rather than patching blindly."""
     if not config_path.is_file():
@@ -2153,6 +2227,7 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     # Validate every source file before writing any of them.
     config_path = path.parent / "config" / "sim_config.c"
     config_updated, config_changed = _prepare_sim_config(config_path)
+    project_config_path, project_config_updated, project_config_changed = _prepare_project_sim_config(source_root)
     fs_path, fs_updated, fs_changed = _prepare_fs_missing_resource_fallback(source_root)
     extractor_path, extractor_updated, extractor_changed = _prepare_sim_rom_extractor(source_root)
     nds_extractor_path, nds_extractor_updated, nds_extractor_changed = _prepare_nds_extractor(source_root)
@@ -2163,13 +2238,15 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     metroskrew_path, metroskrew_updated, metroskrew_changed = _prepare_metroskrew_downloader(source_root)
 
     changed = (
-        current != original or config_changed or fs_changed or extractor_changed or nds_extractor_changed
+        current != original or config_changed or project_config_changed or fs_changed or extractor_changed or nds_extractor_changed
         or backup_changed or card_changed or audio_changed or nvram_changed or metroskrew_changed
     )
     if current != original:
         path.write_text(current, encoding="utf-8")
     if config_changed:
         config_path.write_text(config_updated, encoding="utf-8")
+    if project_config_changed:
+        project_config_path.write_text(project_config_updated, encoding="utf-8")
     if fs_changed:
         fs_path.write_text(fs_updated, encoding="utf-8")
     if extractor_changed:
