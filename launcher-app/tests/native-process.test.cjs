@@ -39,7 +39,7 @@ test('native preparation includes the last stderr diagnostic when it fails', asy
 
   assert.equal(result.ok, false);
   assert.equal(result.code, 4);
-  assert.match(result.message, /Detalhe: \\[Platina\\] test diagnostic: overlay 9 unavailable/);
+  assert.match(result.message, /Detalhe: \[Platina\] test diagnostic: overlay 9 unavailable/);
   assert.match(result.message, /Consulte o log completo:/);
   const log = await fs.readFile(logPath, 'utf8');
   assert.match(log, /test diagnostic: overlay 9 unavailable/);
