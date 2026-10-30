@@ -1,0 +1,18 @@
+# Keep scripts and sources LF on every platform. Windows checkouts with
+# autocrlf break shell scripts, Python helpers and the patched MSYS2 helpers.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.cjs  text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+*.ps1  text eol=lf
+
+# Never diff or normalize binaries.
+*.png  binary
+*.ico  binary
+*.icns binary

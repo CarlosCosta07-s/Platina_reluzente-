@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidade de segurança
+    url: https://github.com/CarlosCosta07-s/Platina_reluzente-/security/policy
+    about: Não abra uma issue pública; siga a política de segurança.

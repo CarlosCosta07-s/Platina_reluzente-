@@ -1,0 +1,42 @@
+name: Relatar problema ao iniciar ou jogar
+description: A janela não abre, fica preta, fecha sozinha ou o launcher mostra um erro.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Nunca anexe a ROM, arquivos extraídos, saves ou o firmware.**
+        Envie somente texto do log `native-startup.log` (veja `docs/TROUBLESHOOTING.md`).
+  - type: dropdown
+    id: game
+    attributes:
+      label: Jogo
+      options: [Pokémon Platinum, Pokémon Black]
+    validations: { required: true }
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema operacional
+      options: [Windows 10/11 x64, Linux x86-64]
+    validations: { required: true }
+  - type: input
+    id: build
+    attributes:
+      label: Versão do launcher e de onde baixou (execução do GitHub Actions)
+  - type: input
+    id: gpu
+    attributes:
+      label: Placa de vídeo e versão do driver
+      description: O jogo exige OpenGL 4.2. Em Windows, rode `dxdiag`.
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: Janela preta? "Não está respondendo"? Mensagem de erro do launcher?
+    validations: { required: true }
+  - type: textarea
+    id: log
+    attributes:
+      label: Trechos relevantes do native-startup.log
+      description: Cole as últimas ~60 linhas. Remova caminhos pessoais se quiser.
+      render: text
