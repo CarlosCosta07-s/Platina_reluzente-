@@ -480,19 +480,33 @@ ipcMain.handle('platina:launch-game', async () => {
       onProgress: (stage) => sendLaunchProgress(PREPARE_PROGRESS_TEXT[stage] || stage)
     });
     if (!prepared.ok) return { ok: false, message: prepared.message, logPath };
-    // Phase 2: only now start the real game process and its window.
-    const launched = await launchNativeProcess(createPreparedPlatinumLaunchSpec(launchSpec));
-    if (launched.ok) {
-      const windows = BrowserWindow.getAllWindows();
-      for (const window of windows) { if (!window.isDestroyed()) window.minimize(); }
-      onNativeProcessIdle(() => {
-        for (const window of BrowserWindow.getAllWindows()) {
-          if (window.isDestroyed()) continue;
-          window.restore();
-          window.setFullScreen(true);
-          window.focus();
+    // Phase 2: keep SDL hidden until the native runtime presents a complete frame.
+    const restoreLauncher = () => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.isDestroyed()) continue;
+        window.restore();
+        window.setFullScreen(true);
+        window.focus();
+      }
+    };
+    const launched = await launchNativeProcess({
+      ...createPreparedPlatinumLaunchSpec(launchSpec),
+      onProgress: (stage) => {
+        if (stage === 'native-boot-start') {
+          sendLaunchProgress('Runtime nativo iniciado. Preparando o renderizador…');
+        } else if (stage === 'renderer-ready') {
+          sendLaunchProgress('Renderizador nativo inicializado. Aguardando a primeira imagem…');
         }
-      });
+      },
+      onWindowReady: () => {
+        sendLaunchProgress('Primeira imagem apresentada. Abrindo o jogo…');
+        for (const window of BrowserWindow.getAllWindows()) {
+          if (!window.isDestroyed()) window.minimize();
+        }
+      }
+    });
+    if (launched.ok || hasActiveNativeProcess()) {
+      onNativeProcessIdle(restoreLauncher);
     }
     return launched;
   } catch (error) {
