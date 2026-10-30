@@ -1,6 +1,6 @@
 # Porte móvel (Android e iOS) — análise de viabilidade
 
-**Estado:** pesquisa. O suporte Android foi encerrado em 29/10/2026 após falhas recorrentes no pipeline ARM64 (ver README) e **não há alvo móvel em desenvolvimento**. Este documento registra o que um retorno exigiria, para que a decisão seja informada. Nada aqui foi compilado em um dispositivo.
+**Estado:** pesquisa. O suporte Android foi encerrado em 29/10/2026 após falhas recorrentes no pipeline ARM64 (ver README) e **não há alvo móvel em desenvolvimento**. Este documento registra o que um retorno exigiria, para que a decisão seja informada. Nada aqui foi compilado em um dispositivo. Consulte também a [auditoria de viabilidade e o plano por gates](MOBILE_PORT_AUDIT.md), atualizados em 30/10/2026.
 
 ## Meta
 
@@ -20,9 +20,11 @@ Paridade com o desktop: importar a ROM USA Rev. 1, preparar os dados localmente,
 ## Distribuição e questões jurídicas
 
 - A importação da ROM do próprio usuário e a ausência de dados protegidos no pacote continuam obrigatórias.
-- **iOS:** instalação direta é restrita pela Apple. Publicação na App Store depende da política vigente para esse tipo de app e de revisão jurídica; **não assuma aprovação**. Alternativas (distribuição fora da loja, cadastro de desenvolvedor) têm custos e limites próprios.
-- **Android:** distribuição por APK/AAB fora da Play Store é mais simples; a Play Store tem suas próprias regras.
-- Nada disso foi consultado com um advogado.
+- **iOS:** a aprovação na App Store continua incerta e não deve ser presumida. TestFlight é somente beta: cada build fica disponível por até 90 dias. Ad Hoc exige dispositivos registrados. O Apple Developer Program custa atualmente US$ 99/ano, com preço local e impostos variáveis.
+- **Brasil:** desde iOS 26.5, a Apple documenta distribuição de apps por marketplaces alternativos no Brasil, desde que o app esteja devidamente autenticado/notarizado e o marketplace seja elegível. Isso não é instalação livre de um IPA por URL. Operar o próprio marketplace exige conta de organização, entitlement e aprovação da Apple; não será presumido como o caminho deste projeto.
+- A diretriz Apple 4.7 descreve mini apps e emuladores. Este projeto mantém o núcleo C/C++ nativo e não usa emulador de DS; isso não garante aprovação nem resolve direitos autorais, marcas, licenças ou políticas de conteúdo. A classificação final depende da análise da Apple.
+- **Android:** distribuição por APK/AAB fora da Play Store é uma opção técnica; distribuir pela Play Store exige uma análise separada de suas políticas.
+- Esta documentação não é aconselhamento jurídico; é necessária revisão por advogado.
 
 ## Marcos sugeridos
 
