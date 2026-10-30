@@ -2125,9 +2125,17 @@ def _prepare_project_sim_config(source_root: str | Path) -> tuple[Path, str, boo
         ),
     )
     for upstream, patched, label in patches:
-        if current.count(patched) == 1 and current.count(upstream) == 0:
+        patched_count = current.count(patched)
+        upstream_count = current.count(upstream)
+        if patched_count == 1:
+            # The fopen guard intentionally retains the original fopen line.
+            expected_overlap = 1 if patched.startswith(upstream) else 0
+            if upstream_count != expected_overlap:
+                raise RuntimePreparationError(
+                    f"Conflicting upstream and patched markers for {label}; refusing an uncertain patch."
+                )
             continue
-        if current.count(upstream) != 1 or current.count(patched) != 0:
+        if patched_count != 0 or upstream_count != 1:
             raise RuntimePreparationError(
                 f"Expected exactly one recognized upstream marker for {label}; refusing an uncertain patch."
             )
