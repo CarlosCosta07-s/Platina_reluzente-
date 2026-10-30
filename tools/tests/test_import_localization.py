@@ -485,7 +485,7 @@ class LocalizationImportTests(unittest.TestCase):
             resource.write_bytes(file_data[file_ids[TARGET_FILES[0].as_posix()]])
             (package / "extra.bin").write_bytes(b"not allowlisted")
             with self.assertRaisesRegex(RomFormatError, "fora da allowlist"):
-                verify_localization_package(package)
+                _verify_synthetic_package(package)
 
     def test_package_builder_refuses_wrong_source_rom_hash_before_creating_output(self) -> None:
         rom_data, _fat_offset, file_ids, _ranges, file_data = _synthetic_rom()
