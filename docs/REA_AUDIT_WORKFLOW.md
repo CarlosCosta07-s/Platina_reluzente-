@@ -23,6 +23,14 @@ O REA será usado para inspecionar os executáveis nativos de Windows/Linux, loc
 
 A análise nativa do REA precisa de um provedor como Ghidra, Hopper ou IDA. Para começar com custo de licença zero, a rota preferida é um host Linux x86-64 com Ghidra e JDK 21 ou mais recente, seguindo os requisitos atuais do REA. O suporte de Ghidra no Windows é indicado pelo projeto REA como experimental.
 
+Pré-requisitos atuais para o computador que executa o agente:
+
+- Node.js 22.19 ou mais recente na linha 22.x, 24.11 ou mais recente na linha 24.x, ou uma linha 26.x compatível;
+- JDK 21 ou mais recente;
+- Ghidra instalado e configurado como provedor (recomendado para começar em Linux x86-64).
+
+O ambiente desta sessão possui Node.js 22.16 e Java 21, mas não possui Ghidra/analyzeHeadless nem um provedor REA conectado; portanto, esta sessão não executa a análise nativa.
+
 Configuração no computador que executa o agente:
 
 ```sh
