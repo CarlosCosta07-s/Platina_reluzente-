@@ -518,12 +518,17 @@ ipcMain.handle('platina:launch-game', async () => {
           if (!window.isDestroyed()) window.minimize();
         }
       },
-      onStall: ({ silentForMs }) => {
+      onStall: ({ silentForMs, lastHeartbeatFrame }) => {
         restoreLauncher();
+        const frameDetail = Number.isSafeInteger(lastHeartbeatFrame)
+          ? ' Último frame confirmado: #' + lastHeartbeatFrame + '.'
+          : '';
         sendLaunchProgress(
           'O runtime não apresentou novos frames há '
           + Math.ceil(silentForMs / 1000)
-          + ' segundos. O launcher ainda não recebeu o encerramento do processo e não o finalizará automaticamente; a interface foi reaberta para diagnóstico. Consulte o log antes de encerrar o jogo.'
+          + ' segundos.'
+          + frameDetail
+          + ' O launcher ainda não recebeu o encerramento do processo e não o finalizará automaticamente; a interface foi reaberta para diagnóstico. Consulte o log antes de encerrar o jogo.'
         );
       },
       onRecovered: () => {
