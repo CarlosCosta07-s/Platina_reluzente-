@@ -2084,7 +2084,10 @@ def prepare_native_runtime(source_root: str | Path) -> bool:
     if nvram_changed:
         nvram_path.write_text(nvram_updated, encoding="utf-8")
     if metroskrew_changed:
-        metroskrew_path.write_text(metroskrew_updated, encoding="utf-8")
+        # This helper is executed by Bash under MSYS2 on Windows. Preserve LF
+        # endings so Python's Windows newline translation cannot append CR bytes.
+        with metroskrew_path.open("w", encoding="utf-8", newline="\n") as stream:
+            stream.write(metroskrew_updated)
     return changed
 
 

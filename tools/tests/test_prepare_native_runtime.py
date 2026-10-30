@@ -474,6 +474,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("--tries=5", METROSKREW_DOWNLOAD_PATCHED)
             self.assertIn("curl --fail --location", METROSKREW_DOWNLOAD_PATCHED)
             self.assertIn("download_archive=\"$SKREW_ARC.part\"", METROSKREW_DOWNLOAD_PATCHED)
+            self.assertNotIn("\\r", metroskrew_content)
             self.assertNotIn("sLauncherManagedRomExtractionAttempted", fs_content)
             managed_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[0]
             self.assertNotIn("SIM_ShowRomExtractionDialog();", managed_fallback)
