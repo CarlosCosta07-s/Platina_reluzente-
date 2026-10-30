@@ -29,11 +29,20 @@ function createWindow() {
       event.preventDefault();
     }
   });
+  window.webContents.once('did-finish-load', () => {
+    if (lastLaunchProgress) {
+      window.webContents.send('platina:launch-progress', lastLaunchProgress);
+    }
+  });
   window.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
 }
+let lastLaunchProgress = '';
 function sendLaunchProgress(message) {
+  lastLaunchProgress = String(message);
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send('platina:launch-progress', String(message));
+    if (!window.isDestroyed() && !window.webContents.isLoadingMainFrame()) {
+      window.webContents.send('platina:launch-progress', lastLaunchProgress);
+    }
   }
 }
 const PREPARE_PROGRESS_TEXT = {
