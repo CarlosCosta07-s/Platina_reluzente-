@@ -12,10 +12,23 @@ Padrões úteis adaptados ao contexto de Platinum:
 
 1. **Validar a ROM antes da importação.** O launcher já restringe a imagem aceita à revisão suportada e valida a assinatura integral; o runtime não deve começar uma extração a partir de um arquivo simplesmente selecionado.
 2. **Separar importação do loop de renderização.** A leitura de uma ROM pode demorar. O Launcher 0.2.0 prepara os dados extraídos antes de criar a janela SDL/OpenGL, em vez de bloquear o loop de eventos quando um recurso não é encontrado.
-3. **Manter cache privado e recuperável.** A extração é local, o marcador `platina-rom-extraction.sha256` associa os dados à impressão SHA-256 da ROM importada, e a próxima inicialização reutiliza os dados quando o marcador e um recurso-chave estão presentes. Se a importação não terminar, o marcador não deve certificar uma extração bem-sucedida.
+3. **Manter cache privado, verificável e ligado à versão que o gerou.** A extração ocorre na pasta privada gravável do usuário, fora do executável empacotado. O manifesto `platina-rom-extraction.manifest` usa o formato V2 e associa os recursos extraídos a dois identificadores: SHA-256 integral da ROM importada e `PLATINA_RUNTIME_BUILD_ID` (o build ID SHA-256 do executável e das bibliotecas nativas verificadas pelo launcher). Também registra os caminhos relativos, tamanhos e CRC-32 dos arquivos extraídos. O runtime só reutiliza o cache quando identidade da ROM, identidade do runtime e arquivos obrigatórios conferem. Uma atualização do runtime invalida o cache antigo e solicita nova preparação. O manifesto de conclusão só é publicado depois que a extração em staging foi validada; uma extração interrompida não deve ser anunciada como pronta.
 4. **Testar as regras sem compartilhar dados protegidos.** Testes automatizados usam arquivos temporários e fixtures sintéticas, sem incluir ROMs ou recursos extraídos no repositório. Os builds não devem empacotar conteúdo protegido do jogo.
 
 Gen1Recomp é baseado em Lua/LÖVE e dá suporte a várias gerações de jogos Game Boy. Platinum usa código reconstruído C/C++ e a camada libntr/NitroSDK para um alvo desktop. Portanto, não copiamos o motor, o renderizador, as rotinas de importação de Game Boy nem suas estruturas internas. Adaptamos somente os princípios de importação local, cache, diagnóstico e testes.
+
+
+## Fluxo real de boot do Platina Reluzente
+
+A adaptação dos princípios do Gen1Recomp já existe no backend nativo e não troca o motor C/C++ por Lua/LÖVE:
+
+1. **Importação e identidade:** o launcher valida a revisão da ROM e mantém a cópia privada com metadados SHA-1/SHA-256. A substituição da ROM e dos metadados usa staging, backup e recuperação de transação interrompida.
+2. **Preparação sem janela do jogo:** o launcher copia/valida o payload nativo em uma pasta gravável por usuário e chama o executável com `--platina-prepare`. A extração acontece antes de iniciar o loop gráfico do jogo; o launcher recebe mensagens de progresso.
+3. **Cache V2:** o runtime extrai em `.platina-extraction-staging`, valida manifesto de caminhos, arquivos, overlays, tamanhos e CRC-32 e só então publica os dados. O manifesto V2 associa o cache ao SHA-256 da ROM e ao build ID SHA-256 do executável/bibliotecas nativas. Se qualquer identidade ou recurso obrigatório mudar, a preparação é repetida.
+4. **Boot do jogo:** após a preparação ser concluída, o launcher chama o runtime com `--platina-prepared`. O runtime confirma que o cache não foi alterado desde a preparação, depois inicializa a janela SDL/OpenGL e só a revela quando o primeiro frame completo do jogo alcança a apresentação.
+5. **Monitoramento:** mensagens de etapa, primeiro frame, heartbeat de renderização e log persistente ajudam a distinguir falha de preparação, falha de boot e pausa do loop gráfico. A ausência de heartbeat não encerra automaticamente o processo durante possível gravação de save.
+
+O fluxo não transforma a ROM em um jogo Lua, não interpreta instruções ARM e não é uma emulação de CPU DS. A ROM é usada como origem local para extrair recursos necessários ao código nativo reconstruído. A lógica do jogo continua sendo executada pelo runtime compilado para Windows x64/Linux x86-64.
 
 ## Atualizações do launcher: o que vale adaptar
 
