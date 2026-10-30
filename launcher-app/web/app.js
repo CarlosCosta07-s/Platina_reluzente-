@@ -13,6 +13,9 @@
   const launchStatus = $('launch-status');
   const startupLogButton = $('startup-log-button');
   const romSummary = $('rom-summary');
+  const languageSelect = $('game-language');
+  const installLocalizationButton = $('install-ptbr-button');
+  const languageStatus = $('language-status');
   const blackRomButton = $('black-rom-button');
   const blackLaunchButton = $('black-launch-button');
   const blackRomSummary = $('black-rom-summary');
@@ -28,7 +31,10 @@
     romSize: 0,
     runtimeAvailable: false,
     runtimeDataAvailable: false,
-    importing: false
+    importing: false,
+    gameLanguage: 'en',
+    localizationAvailable: false,
+    localizationBusy: false
   };
   const blackState = {
     runtimeAvailable: false,
@@ -65,6 +71,92 @@
     romSummary.textContent = state.romImported
       ? state.romName + (state.romSize ? ' · ' + formatSize(state.romSize) : '')
       : 'Nenhuma ROM importada.';
+  }
+
+  function renderLanguageControls() {
+    if (!languageSelect || !installLocalizationButton || !languageStatus) return;
+    const portugueseOption = languageSelect.querySelector('option[value="pt-BR"]');
+    if (portugueseOption) {
+      // Keep a saved-but-now-invalid PT-BR choice visible so the user can
+      // explicitly switch back to English; otherwise require package install.
+      portugueseOption.disabled = !state.localizationAvailable && state.gameLanguage !== 'pt-BR';
+    }
+    languageSelect.value = state.gameLanguage;
+    languageSelect.disabled = state.localizationBusy || !window.platina;
+    installLocalizationButton.disabled = state.localizationBusy || !window.platina;
+  }
+
+  async function refreshLocalizationStatus() {
+    if (!window.platina || typeof window.platina.getLocalizationStatus !== 'function') {
+      state.localizationAvailable = false;
+      state.gameLanguage = 'en';
+      languageStatus.textContent = 'A seleção de idioma e a instalação do pacote estão disponíveis na versão desktop.';
+      renderLanguageControls();
+      return;
+    }
+    const value = await window.platina.getLocalizationStatus();
+    state.gameLanguage = value && value.language === 'pt-BR' ? 'pt-BR' : 'en';
+    state.localizationAvailable = Boolean(value && value.packageAvailable);
+    if (state.gameLanguage === 'pt-BR' && !state.localizationAvailable) {
+      languageStatus.textContent = 'Português (Brasil) continua selecionado, mas o pacote não está disponível ou não passou na verificação. O jogo não iniciará em inglês automaticamente. Instale novamente o pacote ou selecione English.';
+      languageStatus.classList.add('status-error');
+    } else if (state.gameLanguage === 'pt-BR') {
+      languageStatus.textContent = 'Português (Brasil) selecionado. O pacote será verificado novamente antes de cada inicialização.';
+      languageStatus.classList.remove('status-error');
+    } else if (state.localizationAvailable) {
+      languageStatus.textContent = 'English (original) selecionado. O pacote PT-BR está instalado e pode ser escolhido.';
+      languageStatus.classList.remove('status-error');
+    } else {
+      languageStatus.textContent = 'English (original) usa os recursos da ROM USA Rev. 1. Importe um pacote validado para habilitar Português (Brasil).';
+      languageStatus.classList.remove('status-error');
+    }
+    renderLanguageControls();
+  }
+
+  async function changeGameLanguage() {
+    if (!window.platina || typeof window.platina.setLanguage !== 'function') return;
+    const selectedLanguage = languageSelect.value;
+    state.localizationBusy = true;
+    renderLanguageControls();
+    try {
+      const result = await window.platina.setLanguage(selectedLanguage);
+      if (!result || !result.ok) {
+        throw new Error(result && result.message ? result.message : 'Não foi possível salvar o idioma.');
+      }
+      state.gameLanguage = result.language;
+      await refreshLocalizationStatus();
+    } catch (error) {
+      languageStatus.textContent = error.message;
+      languageStatus.classList.add('status-error');
+      languageSelect.value = state.gameLanguage;
+    } finally {
+      state.localizationBusy = false;
+      renderLanguageControls();
+    }
+  }
+
+  async function importLocalizationPackage() {
+    if (!window.platina || typeof window.platina.importLocalizationPackage !== 'function') {
+      languageStatus.textContent = 'A instalação do pacote PT-BR exige a versão desktop do launcher.';
+      languageStatus.classList.add('status-error');
+      return;
+    }
+    state.localizationBusy = true;
+    renderLanguageControls();
+    try {
+      const result = await window.platina.importLocalizationPackage();
+      if (!result || result.canceled) return;
+      if (!result.ok) throw new Error(result.message || 'Não foi possível instalar o pacote PT-BR.');
+      await refreshLocalizationStatus();
+      languageStatus.textContent = result.message || 'Pacote PT-BR instalado e selecionado.';
+      languageStatus.classList.remove('status-error');
+    } catch (error) {
+      languageStatus.textContent = 'Falha ao instalar o pacote PT-BR: ' + error.message;
+      languageStatus.classList.add('status-error');
+    } finally {
+      state.localizationBusy = false;
+      renderLanguageControls();
+    }
   }
 
   function renderPrimaryAction() {
@@ -275,6 +367,7 @@
       platformLabel.textContent = 'Windows / Linux desktop';
       renderRom();
       renderPrimaryAction();
+      renderLanguageControls();
       renderBlackActions();
       setBlackStatus('Disponível na versão desktop', 'Abra o launcher desktop para consultar os motores nativos e importar ROMs.', false);
       setStatus('Abra a versão desktop do launcher para importar uma ROM e iniciar o jogo.', true);
@@ -287,10 +380,14 @@
       : value === 'linux'
         ? 'Linux x86-64'
         : value;
-    const [runtime, rom] = await Promise.all([
+    const [runtime, rom, localization] = await Promise.all([
       window.platina.getRuntimeStatus(),
-      window.platina.getImportedRom()
+      window.platina.getImportedRom(),
+      window.platina.getLocalizationStatus()
     ]);
+    state.gameLanguage = localization && localization.language === 'pt-BR' ? 'pt-BR' : 'en';
+    state.localizationAvailable = Boolean(localization && localization.packageAvailable);
+    renderLanguageControls();
     state.runtimeAvailable = Boolean(runtime && runtime.available);
     state.runtimeDataAvailable = Boolean(runtime && runtime.runtimeDataAvailable);
     if (rom) {
@@ -300,6 +397,7 @@
     }
     renderRom();
     renderPrimaryAction();
+    await refreshLocalizationStatus();
     if (!state.runtimeAvailable) {
       setStatus('O runtime nativo de Platinum está ausente deste pacote.', true);
     } else if (state.romImported) {
@@ -376,6 +474,8 @@
   });
   launchButton.addEventListener('click', launchGame);
   romButton.addEventListener('click', chooseRom);
+  languageSelect.addEventListener('change', changeGameLanguage);
+  installLocalizationButton.addEventListener('click', importLocalizationPackage);
   startupLogButton.addEventListener('click', openStartupLog);
   blackRomButton.addEventListener('click', importBlackRom);
   blackLaunchButton.addEventListener('click', launchBlackGame);

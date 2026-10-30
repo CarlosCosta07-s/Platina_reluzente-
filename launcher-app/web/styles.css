@@ -321,3 +321,64 @@ html, body {
 .battery.low .battery-fill { background: #ff7a7a; }
 .battery-bolt { color: #ffd76a; }
 @media (max-width: 560px) { .battery { padding: 6px 9px; font-size: 11px; } }
+
+
+.language-settings {
+  margin: 17px 0 19px;
+  padding: 13px 14px;
+  border: 1px solid #344155;
+  border-radius: 9px;
+  background: #111925a8;
+}
+.language-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+.language-heading label {
+  color: #a9c9f0;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 1.2px;
+}
+.language-heading span {
+  color: #7f8ea3;
+  font-size: 9px;
+}
+.language-controls {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.language-controls select {
+  min-width: 190px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #3b4b62;
+  border-radius: 6px;
+  background: #202b3a;
+  color: #e7edf6;
+  font: inherit;
+  font-size: 10px;
+}
+.language-controls select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.language-controls select:disabled { opacity: .55; }
+.language-status {
+  margin: 9px 0 0;
+  color: #91a1b8;
+  font-size: 9px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.language-status.status-error { color: #f0a2a2; }
+@media (max-width: 560px) {
+  .language-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .language-controls { align-items: stretch; flex-direction: column; }
+  .language-controls select, .language-controls .secondary-button { width: 100%; }
+}

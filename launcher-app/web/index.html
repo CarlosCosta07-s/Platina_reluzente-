@@ -80,6 +80,20 @@
           <p class="game-edition">Nintendo DS · USA Rev. 1</p>
           <p class="detail-description">O runtime nativo de Platinum já vem integrado ao pacote desktop. Importe uma cópia compatível para preparar os dados do jogo localmente — não é necessário procurar nem escolher um executável separado.</p>
           <div class="feature-tags"><span>C / C++ NATIVO</span><span>WINDOWS / LINUX</span><span>BUILD EXPERIMENTAL</span></div>
+          <section class="language-settings" aria-label="Idioma de Pokémon Platinum">
+            <div class="language-heading">
+              <label for="game-language">IDIOMA DO JOGO</label>
+              <span>Preferência salva neste dispositivo</span>
+            </div>
+            <div class="language-controls">
+              <select id="game-language" aria-label="Idioma de Pokémon Platinum">
+                <option value="en">English (original)</option>
+                <option value="pt-BR" disabled>Português (Brasil)</option>
+              </select>
+              <button id="install-ptbr-button" class="secondary-button" type="button">Importar pacote PT-BR</button>
+            </div>
+            <p id="language-status" class="language-status" role="status" aria-live="polite">English (original) usa os recursos da ROM USA Rev. 1.</p>
+          </section>
           <div class="detail-actions">
             <button id="launch-button" class="primary-button" type="button"><span class="play-icon" aria-hidden="true">▶</span><span id="launch-label">Importar ROM</span></button>
             <button id="rom-button" class="secondary-button" type="button">Importar / trocar ROM</button>

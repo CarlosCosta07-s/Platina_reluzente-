@@ -121,7 +121,11 @@ python tools/import_localization.py `
 
 Para substituir um pacote anterior reconhecido pela ferramenta, acrescente --force. A opção não substitui diretórios arbitrários nem arquivos da instalação original.
 
-O resultado contém os sete recursos nos caminhos relativos originais e localization-manifest.json. A geração e a verificação do pacote são automatizadas, mas a seleção de idioma no launcher e a resolução desses arquivos pelo filesystem nativo ainda não estão integradas. Não copie manualmente o conteúdo do pacote para a raiz do runtime.
+O resultado contém os sete recursos nos caminhos relativos originais e localization-manifest.json. A geração e a verificação do pacote são automatizadas. No launcher desktop, use **Importar pacote PT-BR** e selecione a pasta criada pelo importador. O launcher valida novamente o manifesto, a identidade USA Rev. 1, os sete hashes e a estrutura exata; em seguida copia somente os arquivos permitidos para a pasta privada de dados do aplicativo, mantendo a ROM e os arquivos-base do runtime intactos.
+
+A escolha de **English (original)** ou **Português (Brasil)** fica salva em `platinum-language.txt` dentro dos dados privados do launcher. Antes de cada inicialização, o pacote selecionado é verificado novamente. Com PT-BR selecionado, a camada nativa consulta somente os sete caminhos permitidos. Se algum arquivo traduzido estiver ausente ou inválido, a inicialização falha explicitamente; não há fallback silencioso para inglês. Não copie manualmente o conteúdo do pacote para a raiz do runtime.
+
+Essa integração confirma somente a validação e a resolução de arquivos. Ainda é necessário testar os recursos traduzidos em execução, incluindo fonte/acentos, menus, título, diálogos, batalhas, progressão e saves. Um pacote com hashes corretos não prova, por si só, que o runtime renderiza todos os textos corretamente.
 
 ## O que ainda precisa ser validado
 
