@@ -1,6 +1,22 @@
 # Roteiro de desenvolvimento
 
-O foco é compilar e executar a base nativa de **Windows e Linux**, sem otimização prematura. Cada marco só muda para concluído com evidência reproduzível. O alvo Android foi encerrado em 29/10/2026 após falhas recorrentes na validação do pipeline ARM64.
+O foco é concluir e estabilizar a base nativa de **Windows x64 e Linux x86-64**, sem otimização prematura. Cada marco só muda para concluído com evidência reproduzível.
+
+## Ordem obrigatória de plataformas
+
+Até o porte de Pokémon Platinum para PC estar pronto e validado, **todo o desenvolvimento ativo de Platinum fica restrito a Windows x64 e Linux x86-64**. Android e iOS permanecem pausados: não iniciar backend gráfico móvel, shell mobile, builds ARM64/Xcode, workflows ou tarefas de paridade móvel neste período. A documentação móvel existente é apenas registro de pesquisa e não altera essa prioridade.
+
+O retorno ao desenvolvimento móvel fica condicionado a todos estes critérios no PC:
+
+- builds limpos e empacotados de Windows e Linux aprovados na CI atual, com testes ROM-free verdes;
+- importação local da ROM Pokémon Platinum USA Rev. 1, preparação dos dados e chegada reproduzível à tela de título;
+- sessão de jogo real com movimentação, menus, transições, batalha, áudio e entradas validadas;
+- salvamento, encerramento, retomada e carregamento de progresso confirmados sem corrupção;
+- launcher, logs e mensagens de erro validados nos dois sistemas; idioma original e pacote PT-BR testados sem regressão.
+
+Compilação, smoke test sem ROM ou aprovação isolada de uma plataforma não satisfazem esse gate. Só depois da validação conjunta de Windows e Linux a trilha Android/iOS será reaberta.
+
+O alvo Android foi encerrado em 29/10/2026 após falhas recorrentes na validação do pipeline ARM64; essa decisão histórica não muda a prioridade acima.
 
 ## Trilha paralela — Pokémon Black Version
 
