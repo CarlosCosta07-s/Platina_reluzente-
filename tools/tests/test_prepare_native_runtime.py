@@ -1018,7 +1018,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         )
         published = patch.index("std::filesystem::copy_file(", marker_removed)
         final_cache = patch.index(
-            "writeExtractionCache(expectedDataPaths, romSha256)",
+            "writeExtractionCache(expectedDataPaths, romSha256, runtimeBuildId)",
             published,
         )
         self.assertLess(stage_verified, marker_removed)
