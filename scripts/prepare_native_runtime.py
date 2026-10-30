@@ -887,6 +887,11 @@ FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLAT
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "ROM Extraction Required", "ROM filesystem is missing. Select 'OK' and choose a NDS ROM file in the next step.", NULL);
         #endif
 
+        SIM_ShowRomExtractionDialog();
+
+        // Manual desktop launches may still use the legacy extraction flow.
+        return FS_OpenFile(p_file, path);'''
+
 SHADER_LOG_LENGTH_QUERY_ORIGINAL = "glGetShaderiv(g2FragmentShader, GL_INFO_LOG_LENGTH, &logSize);"
 SHADER_LOG_LENGTH_QUERY_PATCHED = "glGetShaderiv(_id, GL_INFO_LOG_LENGTH, &logSize);"
 
