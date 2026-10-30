@@ -387,6 +387,7 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
 
   const auto verifyExtractionCache = [&](const std::vector<std::string> &paths,
                                          const std::string &romSha256,
+                                         const std::string &runtimeBuildId,
                                          bool verifyFullCrc) {
     bool hasOverlay9 = false;
     for (const std::string &relativeName : paths) {
@@ -402,8 +403,9 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     if (!cache.is_open()) return false;
 
     std::string line;
-    if (!std::getline(cache, line) || line != "PLATINA_EXTRACTION_CACHE_V1") return false;
+    if (!std::getline(cache, line) || line != "PLATINA_EXTRACTION_CACHE_V2") return false;
     if (!std::getline(cache, line) || line != romSha256) return false;
+    if (!std::getline(cache, line) || line != runtimeBuildId) return false;
     if (!std::getline(cache, line)) return false;
 
     std::size_t cachedCount = 0;
@@ -463,7 +465,8 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
   };
 
   const auto writeExtractionCache = [&](const std::vector<std::string> &paths,
-                                        const std::string &romSha256) {
+                                        const std::string &romSha256,
+                                        const std::string &runtimeBuildId) {
     const std::filesystem::path cachePath("platina-rom-extraction.manifest");
     const std::filesystem::path tempPath("platina-rom-extraction.manifest.tmp");
     const std::filesystem::path previousPath("platina-rom-extraction.manifest.previous");
@@ -485,7 +488,8 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
 
     std::ofstream output(tempPath, std::ios::binary | std::ios::out | std::ios::trunc);
     if (!output.is_open()) return false;
-    output << "PLATINA_EXTRACTION_CACHE_V1\n" << romSha256 << '\n' << paths.size() << '\n';
+    output << "PLATINA_EXTRACTION_CACHE_V2\n" << romSha256 << '\n'
+           << runtimeBuildId << '\n' << paths.size() << '\n';
     for (const std::string &relativeName : paths) {
       std::uint64_t fileSize = 0;
       std::uint32_t crc32 = 0;
@@ -570,6 +574,15 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
     }
     const std::string romSha256(managedRomSha256);
 
+    const char *managedRuntimeBuildId = getenv("PLATINA_RUNTIME_BUILD_ID");
+    if (managedRuntimeBuildId == NULL || std::strlen(managedRuntimeBuildId) != 64 ||
+        !std::all_of(managedRuntimeBuildId, managedRuntimeBuildId + 64,
+                     [](unsigned char value) { return std::isxdigit(value) != 0; })) {
+      fprintf(stderr, "[Platina] The launcher did not provide a valid native runtime build identity.\\n");
+      return 2;
+    }
+    const std::string runtimeBuildId(managedRuntimeBuildId);
+
     std::vector<std::string> baseDataPaths;
     if (!loadExpectedDataPaths(baseDataPaths)) {
       fprintf(stderr, "[Platina] The packaged Platinum data-path manifest is missing or invalid. Rebuild the desktop package.\n");
@@ -586,7 +599,8 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
 
     fprintf(stdout, "[Platina-Progress] verifying\n");
     fflush(stdout);
-    if (!verifyExtractionCache(expectedDataPaths, romSha256, !platinaPreparedByLauncher)) {
+    if (!verifyExtractionCache(expectedDataPaths, romSha256, runtimeBuildId,
+                               !platinaPreparedByLauncher)) {
       if (platinaPreparedByLauncher) {
         fprintf(stderr, "[Platina] Prepared game data changed after launcher verification. Close the game and run data preparation again from the launcher.\n");
         return 4;
@@ -682,9 +696,9 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
                 if (!validateExtractedData(stagedDataPaths, &missingDataPath)) {
                   stagingFailure = "required extracted data is missing or invalid: " +
                                    missingDataPath;
-                } else if (!writeExtractionCache(stagedDataPaths, romSha256)) {
+                } else if (!writeExtractionCache(stagedDataPaths, romSha256, runtimeBuildId)) {
                   stagingFailure = "could not write the staging integrity manifest";
-                } else if (!verifyExtractionCache(stagedDataPaths, romSha256, true)) {
+                } else if (!verifyExtractionCache(stagedDataPaths, romSha256, runtimeBuildId, true)) {
                   stagingFailure = "staging integrity manifest self-check failed";
                 } else {
                   stagingReady = true;
@@ -807,13 +821,13 @@ ROM_PREFLIGHT_ENTRY_PATCHED = r'''int main(int argc, char *argv[]) {
                 publishedMissingPath.c_str());
         return 4;
       }
-      if (!writeExtractionCache(expectedDataPaths, romSha256)) {
+      if (!writeExtractionCache(expectedDataPaths, romSha256, runtimeBuildId)) {
         (void)removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest");
         discardStaging();
         fprintf(stderr, "[Platina] Could not write the final runtime integrity manifest.\n");
         return 4;
       }
-      if (!verifyExtractionCache(expectedDataPaths, romSha256, true)) {
+      if (!verifyExtractionCache(expectedDataPaths, romSha256, runtimeBuildId, true)) {
         (void)removeRelativeFileWithoutSymlinks("platina-rom-extraction.manifest");
         discardStaging();
         fprintf(stderr, "[Platina] Final runtime integrity manifest self-check failed.\n");
