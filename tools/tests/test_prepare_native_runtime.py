@@ -2,6 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools.localization_manifest import TARGET_FILES
+
 from scripts.prepare_native_runtime import (
     CONFIG_ALARM_SECOND_PATCHED,
     BACKUP_FILE_IO_HELPERS_PATCHED,
@@ -13,6 +15,9 @@ from scripts.prepare_native_runtime import (
     CARD_IDENTIFY_BACKUP_PATCHED,
     CONFIG_SAVE_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
+    FS_LOCALIZATION_HELPERS_PATCHED,
+    FS_LOCALIZATION_OPEN_ORIGINAL,
+    FS_LOCALIZATION_OPEN_PATCHED,
     FS_OPEN_FALLBACK_PATCHED_LEGACY,
     FS_OPEN_FALLBACK_ORIGINAL,
     GL_LOADER_PATCHED,
@@ -208,6 +213,10 @@ UPSTREAM_FS_FILE = r'''#include <nitro/os.h>
 
 BOOL FS_OpenFile (FSFile *p_file, const char *path)
 {
+#ifdef SDK_PORT
+	p_file->pcFilePtr = NULL;
+	p_file->pcFilePtr = fopen(path, "rb");
+#endif
     if (p_file->pcFilePtr == NULL) {
         #if FS_FILE_OPEN_DEBUG
         char messageBuf[200] = {0};
@@ -399,6 +408,15 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             fs_content = (root / "subprojects/libntr/libraries/fs/src/fs_file.c").read_text(encoding="utf-8")
             self.assertIn(FS_OPEN_FALLBACK_PATCHED, fs_content)
             self.assertIn('getenv("PLATINA_IMPORTED_ROM")', fs_content)
+            self.assertIn(FS_LOCALIZATION_HELPERS_PATCHED, fs_content)
+            self.assertIn(FS_LOCALIZATION_OPEN_PATCHED, fs_content)
+            self.assertEqual(fs_content.count(FS_LOCALIZATION_HELPERS_PATCHED), 1)
+            self.assertEqual(fs_content.count(FS_LOCALIZATION_OPEN_PATCHED), 1)
+            for resource in TARGET_FILES:
+                self.assertIn('"' + resource.as_posix() + '"', FS_LOCALIZATION_HELPERS_PATCHED)
+            self.assertIn('getenv("PLATINA_LANGUAGE")', FS_LOCALIZATION_OPEN_PATCHED)
+            self.assertIn('getenv("PLATINA_LOCALIZATION_DIR")', FS_LOCALIZATION_OPEN_PATCHED)
+            self.assertIn("Required PT-BR resource is missing or unreadable", FS_LOCALIZATION_OPEN_PATCHED)
             self.assertNotIn("sLauncherManagedRomExtractionAttempted", fs_content)
             managed_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[0]
             self.assertNotIn("SIM_ShowRomExtractionDialog();", managed_fallback)
@@ -456,6 +474,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             audio_content = (root / "subprojects/libntr/libraries/sim/src/sim_audio.cpp").read_text(encoding="utf-8")
             self.assertIn(SIM_AUDIO_OPEN_PATCHED, audio_content)
             self.assertIn('SDL_AudioInit("dummy")', audio_content)
+            self.assertFalse(prepare_native_runtime(root))
             self.assertIn("buf[i] = 0xFF;", nvram_content)
             self.assertNotIn('fseek(s_nvramFilePtr, address, SEEK_SET);', nvram_content)
             self.assertFalse(prepare_native_runtime(root))
@@ -626,6 +645,28 @@ class NativeRuntimePreparationTests(unittest.TestCase):
                 extractor_source.read_text(encoding="utf-8"),
                 "unknown ROM extractor implementation\\n",
             )
+
+    def test_unknown_fs_localization_open_path_fails_before_any_source_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+            original_main = source.read_text(encoding="utf-8")
+            config = source.parent / "config" / "sim_config.c"
+            original_config = config.read_text(encoding="utf-8")
+            fs_source = root / "subprojects/libntr/libraries/fs/src/fs_file.c"
+            changed_fs = UPSTREAM_FS_FILE.replace(
+                FS_LOCALIZATION_OPEN_ORIGINAL,
+                "\tp_file->pcFilePtr = NULL;\n\tp_file->pcFilePtr = fopen(unrecognizedPath, \"rb\");",
+                1,
+            )
+            fs_source.write_text(changed_fs, encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimePreparationError, "file-open call for localization"):
+                prepare_native_runtime(root)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), original_main)
+            self.assertEqual(config.read_text(encoding="utf-8"), original_config)
+            self.assertEqual(fs_source.read_text(encoding="utf-8"), changed_fs)
 
     def test_unknown_fs_fallback_fails_before_any_source_file_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:

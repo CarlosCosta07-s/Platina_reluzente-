@@ -1068,6 +1068,72 @@ FS_OPEN_FALLBACK_PATCHED = r'''        const char *managedRomPath = getenv("PLAT
         // Manual desktop launches may still use the legacy extraction flow.
         return FS_OpenFile(p_file, path);'''
 
+FS_LOCALIZATION_HELPERS_PATCHED = r'''static int Platina_LocalizationPathEquals(const char *path, const char *expected) {
+    while (*path != '\0' && *expected != '\0') {
+        unsigned char pathChar = (unsigned char)*path;
+        unsigned char expectedChar = (unsigned char)*expected;
+        if (pathChar == '\\') pathChar = '/';
+        if (expectedChar == '\\') expectedChar = '/';
+        if (tolower(pathChar) != tolower(expectedChar)) return FALSE;
+        ++path;
+        ++expected;
+    }
+    return *path == '\0' && *expected == '\0';
+}
+
+static const char *Platina_GetLocalizedResourcePath(const char *path) {
+    // Keep this exact allowlist synchronized with tools/localization_manifest.py.
+    static const char *const allowedResources[] = {
+        "battle/graphic/pl_b_plist_gra.narc",
+        "data/slot.narc",
+        "demo/title/op_demo.narc",
+        "graphic/pl_bag_gra.narc",
+        "graphic/pl_plist_gra.narc",
+        "graphic/pl_pst_gra.narc",
+        "msgdata/pl_msg.narc"
+    };
+    size_t index;
+    if (path == NULL) return NULL;
+    for (index = 0; index < sizeof(allowedResources) / sizeof(allowedResources[0]); ++index) {
+        if (Platina_LocalizationPathEquals(path, allowedResources[index])) {
+            return allowedResources[index];
+        }
+    }
+    return NULL;
+}'''
+
+FS_LOCALIZATION_OPEN_ORIGINAL = "\tp_file->pcFilePtr = NULL;\n\tp_file->pcFilePtr = fopen(path, \"rb\");"
+FS_LOCALIZATION_OPEN_PATCHED = r'''	p_file->pcFilePtr = NULL;
+	const char *requestedLocale = getenv("PLATINA_LANGUAGE");
+	const char *localizedResourcePath = Platina_GetLocalizedResourcePath(path);
+	if (requestedLocale != NULL && strcmp(requestedLocale, "pt-BR") == 0 &&
+	    localizedResourcePath != NULL) {
+		const char *localizationRoot = getenv("PLATINA_LOCALIZATION_DIR");
+		char localizedPath[4096];
+		if (localizationRoot == NULL || localizationRoot[0] == '\0') {
+			fprintf(stderr, "[Platina][localization] PT-BR is selected but its package path is not configured: %s\n",
+			        localizedResourcePath);
+			return FALSE;
+		}
+		const int localizedPathLength = snprintf(
+		    localizedPath, sizeof(localizedPath), "%s/%s",
+		    localizationRoot, localizedResourcePath);
+		if (localizedPathLength < 0 ||
+		    (size_t)localizedPathLength >= sizeof(localizedPath)) {
+			fprintf(stderr, "[Platina][localization] PT-BR resource path is too long: %s\n",
+			        localizedResourcePath);
+			return FALSE;
+		}
+		p_file->pcFilePtr = fopen(localizedPath, "rb");
+		if (p_file->pcFilePtr == NULL) {
+			fprintf(stderr, "[Platina][localization] Required PT-BR resource is missing or unreadable: %s\n",
+			        localizedResourcePath);
+			return FALSE;
+		}
+	} else {
+		p_file->pcFilePtr = fopen(path, "rb");
+	}'''
+
 SHADER_LOG_LENGTH_QUERY_ORIGINAL = "glGetShaderiv(g2FragmentShader, GL_INFO_LOG_LENGTH, &logSize);"
 SHADER_LOG_LENGTH_QUERY_PATCHED = "glGetShaderiv(_id, GL_INFO_LOG_LENGTH, &logSize);"
 
@@ -1615,7 +1681,7 @@ def _prepare_card_backup_identification(source_root: str | Path) -> tuple[Path, 
 
 
 def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path, str, bool]:
-    """Fail clearly instead of extracting synchronously after the game window opens."""
+    """Apply safe missing-resource handling and the allowlisted localization overlay."""
     fs_path = (
         Path(source_root).expanduser().resolve()
         / "subprojects" / "libntr" / "libraries" / "fs" / "src" / "fs_file.c"
@@ -1647,17 +1713,23 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
         "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>\n"
         "static BOOL sLauncherManagedRomExtractionAttempted = FALSE;"
     )
-    patched_include = "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>"
-    # The patched include block is a prefix of the legacy block. Check and
-    # remove the full legacy block first, otherwise its obsolete state variable
-    # survives an upgrade while the shorter prefix appears to be present.
+    previous_patched_include = (
+        "#include <string.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <SDL2/SDL.h>"
+    )
+    patched_include = previous_patched_include + "\n#include <ctype.h>"
+
+    # Upgrade earlier launcher patches as well as untouched pinned upstream source.
     if legacy_include in current:
         if current.count(legacy_include) != 1:
             raise RuntimePreparationError("Duplicate legacy extraction-state declaration in fs_file.c.")
         current = current.replace(legacy_include, patched_include, 1)
     elif patched_include in current:
         if current.count(patched_include) != 1:
-            raise RuntimePreparationError("Duplicate standard-library include block in fs_file.c.")
+            raise RuntimePreparationError("Duplicate SDK_PORT include block in fs_file.c.")
+    elif previous_patched_include in current:
+        if current.count(previous_patched_include) != 1:
+            raise RuntimePreparationError("Duplicate previous SDK_PORT include block in fs_file.c.")
+        current = current.replace(previous_patched_include, patched_include, 1)
     else:
         if current.count(original_include) != 1:
             raise RuntimePreparationError("Expected exactly one SDK_PORT include block in fs_file.c.")
@@ -1665,6 +1737,30 @@ def _prepare_fs_missing_resource_fallback(source_root: str | Path) -> tuple[Path
 
     if "sLauncherManagedRomExtractionAttempted" in current:
         raise RuntimePreparationError("Obsolete synchronous extraction state remains in fs_file.c.")
+
+    if FS_LOCALIZATION_HELPERS_PATCHED in current:
+        if current.count(FS_LOCALIZATION_HELPERS_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate PT-BR localization helper block in fs_file.c.")
+    else:
+        if current.count(patched_include) != 1:
+            raise RuntimePreparationError("Cannot install the PT-BR helpers without a unique SDK_PORT include block.")
+        current = current.replace(
+            patched_include,
+            patched_include + "\n\n" + FS_LOCALIZATION_HELPERS_PATCHED,
+            1,
+        )
+
+    if FS_LOCALIZATION_OPEN_PATCHED in current:
+        if current.count(FS_LOCALIZATION_OPEN_PATCHED) != 1:
+            raise RuntimePreparationError("Duplicate PT-BR localized file-open path in fs_file.c.")
+        if FS_LOCALIZATION_OPEN_ORIGINAL in current:
+            raise RuntimePreparationError("Both original and localized file-open paths exist in fs_file.c.")
+    else:
+        if current.count(FS_LOCALIZATION_OPEN_ORIGINAL) != 1:
+            raise RuntimePreparationError(
+                "Expected exactly one known SDK_PORT file-open call for localization; refusing an uncertain patch."
+            )
+        current = current.replace(FS_LOCALIZATION_OPEN_ORIGINAL, FS_LOCALIZATION_OPEN_PATCHED, 1)
 
     return fs_path, current, current != original
 
