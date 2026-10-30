@@ -8,7 +8,7 @@ Antes de iniciar, o launcher oferecerá:
 - **English (original):** usa os recursos originais extraídos da ROM USA Rev. 1.
 - **Português (Brasil):** usa um pacote de localização separado, validado e aplicado a um ambiente local isolado do idioma.
 
-A opção escolhida será salva nas configurações privadas do launcher. A base original deverá permanecer intacta; a preparação do ambiente PT-BR não poderá sobrescrever permanentemente os recursos originais. Caso o pacote PT-BR esteja ausente, incompleto ou seja incompatível, o launcher deverá impedir a inicialização nesse idioma e explicar como resolver o problema, sem alternar silenciosamente para inglês.
+A opção escolhida já é salva nas configurações privadas do launcher. A base original permanece intacta: o launcher instala uma cópia verificada do pacote PT-BR em uma pasta privada separada e o filesystem nativo a consulta somente para os sete caminhos permitidos. Caso o pacote esteja ausente, incompleto ou incompatível, o launcher impede a inicialização nesse idioma, sem alternar silenciosamente para inglês.
 
 A estrutura do pacote deve conter somente os recursos aprovados pelo manifesto de localização e informação de compatibilidade/hash. O fluxo atual de importação a partir de uma ROM PT-BR é uma ferramenta provisória de desenvolvimento — não é ainda a experiência final do jogador. A transformação e distribuição do pacote devem passar por revisão legal; ROMs completas e recursos extraídos não serão adicionados ao Git nem publicados como artefatos de CI.
 
@@ -49,7 +49,7 @@ A inspeção local comparou os sete caminhos permitidos entre a ROM USA Rev. 0 r
 
 O `msgdata/pl_msg.narc` da ROM PT-BR tem tamanho declarado de 4.185.274 bytes no cabeçalho NARC, mas a entrada FAT declara apenas 4.184.402 bytes. O importador já recupera os 872 bytes adicionais somente após validar o cabeçalho e provar que o intervalo não se sobrepõe a outro arquivo FAT. Esse caso precisa continuar coberto pelos testes.
 
-**Conclusão de dados:** existe evidência em nível de arquivo de que os sete recursos traduzidos são identificáveis e compatíveis com a allowlist de importação, inclusive na ROM Rev. 0 recém-enviada. Isso permite preparar uma camada de localização para o runtime Rev. 1 como próximo passo de implementação. Contudo, não prova que o runtime nativo mostre corretamente esses recursos: o teste em jogo permanece pendente, e a ROM Rev. 0 em si continua incompatível com o alvo nativo atual.
+**Conclusão de dados:** existe evidência em nível de arquivo de que os sete recursos traduzidos são identificáveis e correspondem à allowlist aprovada. O pacote isolado, a instalação privada pelo launcher, a preferência persistente e a resolução nativa dos sete caminhos já foram implementados. Isso não prova que o runtime mostre corretamente esses recursos: a validação visual e o teste em jogo permanecem pendentes, e a ROM Rev. 0 continua incompatível com o alvo nativo atual.
 
 ## Verificação do patch PT-BR v1.2.0 (29/10/2026)
 
@@ -65,7 +65,7 @@ Os sete arquivos NARC da lista permitida foram comparados com `tools/localizatio
 
 O `msgdata/pl_msg.narc` traduzido declara 4.185.274 bytes no cabeçalho NARC, enquanto seu intervalo FAT mede 4.184.402 bytes. O importador já contém recuperação condicionada ao tamanho do NARC e à verificação de que o intervalo não sobreponha outro arquivo FAT; esse comportamento precisa continuar coberto por testes.
 
-**Conclusão de compatibilidade:** a tradução pode ser representada pelos sete recursos aprovados no runtime local, mas o patch `.xdelta` enviado não está comprovado como aplicável diretamente à ROM USA Rev. 1. A próxima etapa é preparar um pacote de idioma/overlay isolado e validado — ou demonstrar, com a base correta, como gerar esses sete recursos — sem modificar a ROM original e sem distribuir ROMs ou arquivos extraídos no repositório.
+**Conclusão de compatibilidade:** os sete recursos aprovados já são gerados, validados e instalados como pacote isolado; o launcher permite selecionar English ou Português (Brasil) e o filesystem nativo redireciona os sete caminhos autorizados sem sobrescrever os originais. O patch `.xdelta` enviado continua sem compatibilidade comprovada com a ROM USA Rev. 1. O próximo passo é validar a execução real, conferir fontes/acentos e testar menus, diálogos, batalhas, progressão e salvamentos.
 
 ## Diferenças encontradas na variante PT-BR
 
@@ -129,13 +129,13 @@ Essa integração confirma somente a validação e a resolução de arquivos. Ai
 
 ## O que ainda precisa ser validado
 
-1. Validar a execução da ROM USA Rev. 1 em inglês, sem camada PT-BR.
-2. Integrar o manifesto e os sete arquivos como overlay de leitura, sem alterar os recursos originais.
-3. Implementar no launcher a opção English / Português (Brasil), com validação antes de iniciar.
-4. Inspecionar fontes, acentos, nomes, menus, tela de título e diálogos.
-5. Testar batalhas, transições, progressão e salvamento/carregamento com cada idioma.
+1. Confirmar a compilação Windows da revisão atual após a correção de download da ferramenta auxiliar usada pelo build.
+2. Validar o início da ROM USA Rev. 1 em inglês e confirmar se chega à tela de título.
+3. Inspecionar em PT-BR fontes, acentuação, nomes, menus, tela de título e diálogos.
+4. Testar batalhas, transições, progressão e salvamento/carregamento nos dois idiomas.
+5. Confirmar que uma seleção PT-BR incompleta ou corrompida falha de forma clara no runtime real.
 
-A criação do pacote prova apenas a integridade dos arquivos e sua identidade. Ela não prova compatibilidade visual ou de gameplay.
+A geração do pacote prova a identidade e a integridade dos arquivos; os testes do launcher provam sua validação e instalação; a compilação prova que o código nativo compila. Nenhuma dessas verificações, isoladamente, prova compatibilidade visual ou de gameplay.
 
 ## Testes automatizados
 

@@ -16,11 +16,11 @@ O porte paralelo está agora fixado nas revisões compatíveis do [aletheia](htt
 ## Estado real do projeto
 
 - **Base nativa desktop:** vinculada como checkout externo e fixada em um commit específico do porte de PC baseado na decompilação pret/pokeplatinum.
-- **Linux x86-64 e Windows x64:** ambos os alvos passaram na execução [40647214112 do GitHub Actions](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40647214112), em 28 de outubro de 2026. Os testes automatizados também passaram e cada pacote foi validado contra os 340 caminhos do manifesto upstream, incluindo recursos de animação. Isso valida compilação e integridade do pacote, não a inicialização nem a jogabilidade.
+- **Linux x86-64 e Windows x64:** a base desktop anterior compilou nos dois alvos e passou pela verificação dos 340 caminhos do manifesto upstream. Na revisão de localização de 30/10/2026, a suíte Python passou e o build Linux compilou, verificou o pacote e abriu a interface sem ROM ([execução 41047480079](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41047480079)). O build Windows não chegou ao compilador: falhou ao baixar `metroskrew` do GitHub (erro de rede do `wget`). O preparador agora inclui tentativas adicionais e fallback via `curl`; a revisão com correção dos finais de linha LF para MSYS2 está em validação ([execução 41130771002](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41130771002)). Ainda não se afirma que a revisão mais recente compila nas duas plataformas.
 - **Escopo de plataforma:** o suporte Android foi encerrado após falhas recorrentes na validação final do pipeline ARM64. O projeto e a CI ficam concentrados exclusivamente em Windows x64 e Linux x86-64.
 - **Inicialização da interface Linux:** o AppImage nativo abriu uma janela visível e permaneceu ativo por 15 segundos no teste [40691585390](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40691585390), usando um diretório temporário vazio e sem ROM. Isso confirma somente que a interface inicia; **não** comprova que uma ROM foi extraída, que a tela de título apareceu ou que o jogo está jogável.
 - **ROM aceita pelo launcher:** o runtime está fixado em Pokémon Platinum USA Rev. 1. O launcher verifica o cabeçalho e o SHA-1 integral `0862ec35b24de5c7e2dcb88c9eea0873110d755c`; a USA Rev. 0 enviada em 29/10/2026 (`ce81046eda7d232513069519cb2085349896dec7`, CRC-32 `9253921D`) é reconhecida como Rev. 0 e recusada porque ainda não há um build Rev. 0 validado.
-- **Português brasileiro:** os sete NARC permitidos foram comparados com a ROM USA Rev. 0 enviada; todos os caminhos e IDs FAT coincidem, são arquivos NARC válidos e a ROM PT-BR de referência corresponde ao manifesto de hashes. Isso comprova compatibilidade estrutural dos recursos, não a tradução dentro do jogo. O patch Xdelta v1.2.0 exige CRC-32 `1D8A5220`, diferente da ROM Rev. 0 enviada (`9253921D`) e da Rev. 1 alvo (`69D628E8`); sua aplicação direta a qualquer uma delas não foi comprovada. O seletor de idioma ainda não foi implementado; veja a [verificação técnica](docs/LOCALIZATION.md).
+- **Português brasileiro:** a ferramenta gera um pacote isolado com manifesto e hashes dos sete NARC aprovados. O launcher já permite importar essa pasta, validar manifesto/estrutura/hashes, instalar uma cópia privada e selecionar English ou Português (Brasil). O `FS_OpenFile` nativo consulta os sete caminhos autorizados sem substituir os arquivos-base; a ausência de um recurso PT-BR bloqueia a abertura, sem fallback silencioso para inglês. O patch Xdelta v1.2.0 continua sem compatibilidade comprovada com a Rev. 1. A integração técnica e os testes automatizados não comprovam a renderização correta dos textos; ainda faltam validação visual e gameplay em execução. Veja a [documentação técnica](docs/LOCALIZATION.md).
 
 **Próximo objetivo de execução:** provar que o binário desktop consegue abrir com uma cópia local válida da ROM USA Rev. 1 e chegar à tela inicial; depois validar uma sequência mínima de gameplay e salvamento.
 
@@ -32,7 +32,7 @@ Depois de compilar o runtime nativo, o launcher inclui apenas o executável port
 
 A CI testa a lógica de importação, compila o runtime nativo para Windows/Linux e empacota o launcher desktop integrado. O pipeline principal é **[Native desktop build and localization checks](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/workflows/native-desktop.yml)**. Os workflows de empacotamento separados já publicaram ambos os launchers: [Linux — execução #3](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40892855183), artefato `Platina-Reluzente-Launcher-Linux-x64`, e [Windows — execução #4](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/40894404142), artefato `Platina-Reluzente-Launcher-Windows-x64`. Abra a execução correspondente e baixe o artefato na seção **Artifacts**. Eles expiram em 14 dias e incluem hashes SHA-256 e instruções iniciais. Nenhum pacote deve conter ROM, firmware, arquivos NARC, recursos extraídos, saves ou patches: importe uma cópia legal e compatível de Pokémon Platinum USA Rev. 1 no launcher, e os dados ausentes deverão ser extraídos localmente no primeiro início. São builds experimentais, não releases finais. A CI comprovou que a interface nativa Linux abre sem ROM; a tela de título e a jogabilidade com uma ROM ainda não foram confirmadas. O launcher registra stdout/stderr em `native-startup.log` dentro dos dados privados do aplicativo.
 
-Baixe o launcher integrado pela execução mais recente do workflow na aba Actions. No Windows, execute o arquivo `.exe` portátil; no Linux, dê permissão de execução à AppImage, se necessário, e abra-a. Importe uma cópia compatível USA Rev. 1 obtida legalmente. A ROM que você importou não é alterada nem enviada ao GitHub. Se a inicialização falhar, envie somente o log `native-startup.log`, nunca a ROM ou os dados extraídos. O smoke test automático confirma apenas a criação de uma janela Linux sem ROM; não comprova que o jogo chega à tela inicial ou que seja jogável. A importação PT-BR ainda é separada e exige validação dentro do jogo.
+Baixe um artefato do launcher somente de uma execução bem-sucedida na aba Actions. No Windows, execute o arquivo `.exe` portátil; no Linux, dê permissão de execução à AppImage, se necessário, e abra-a. Importe uma cópia compatível USA Rev. 1 obtida legalmente. A ROM não é alterada nem enviada ao GitHub. Se a inicialização falhar, envie somente `native-startup.log`, nunca a ROM ou os dados extraídos. O smoke test automático confirma apenas a criação de uma janela Linux sem ROM; não comprova tela de título ou jogabilidade. Para PT-BR, gere o pacote isolado conforme a seção abaixo e instale-o pela interface do launcher; a tradução dentro do jogo ainda exige validação.
 
 ## Decisão técnica
 
@@ -81,36 +81,47 @@ Após a compilação, `scripts/verify_native_package.py` compara os 340 caminhos
 
 Os builds de desktop **compilam o código**; eles não executam testes de jogo automaticamente. Para jogar, use somente uma cópia obtida legalmente e mantenha ROMs e recursos extraídos fora deste repositório. Consulte os documentos legais antes de distribuir qualquer compilação.
 
-## Importar recursos localizados PT-BR localmente
+## Gerar e instalar o pacote PT-BR
 
-> **Nota de desenvolvimento:** o comando abaixo é o fluxo provisório existente, não o comportamento final desejado. A próxima etapa é transformar os recursos numa camada de idioma isolada e selecionável no launcher; a ROM original e os recursos-base não deverão ser modificados. Consulte [a estratégia PT-BR](docs/LOCALIZATION.md).
+A tradução não altera a ROM USA Rev. 1 nem sobrescreve os arquivos ingleses do runtime. A ferramenta de importação produz uma pasta isolada com somente estes sete recursos NARC, acompanhados por `localization-manifest.json`:
 
-A comparação das ROMs fornecidas identificou estes sete arquivos NARC localizados que podem ser selecionados explicitamente para importação:
+- `battle/graphic/pl_b_plist_gra.narc`
+- `data/slot.narc`
+- `demo/title/op_demo.narc`
+- `graphic/pl_bag_gra.narc`
+- `graphic/pl_plist_gra.narc`
+- `graphic/pl_pst_gra.narc`
+- `msgdata/pl_msg.narc`
 
-- battle/graphic/pl_b_plist_gra.narc
-- data/slot.narc
-- demo/title/op_demo.narc
-- graphic/pl_bag_gra.narc
-- graphic/pl_plist_gra.narc
-- graphic/pl_pst_gra.narc
-- msgdata/pl_msg.narc
+A ferramenta aceita somente a ROM PT-BR de referência aprovada, confere o SHA-256 dos sete recursos e valida seus cabeçalhos NARC. O pacote resultante continua local e não é incluído no Git ou na CI.
 
-Os arquivos msgdata/msg.narc e msgdata/scenario/scr_msg.narc são idênticos entre as duas ROMs fornecidas, então não precisam ser substituídos. As entradas data/utility.bin, dwc/utility.bin e a entrada FAT sem caminho no FNT foram deliberadamente excluídas: não serão copiadas ao runtime sem análise de compatibilidade específica.
+Linux:
 
-Após compilar e iniciar o porte uma vez para preparar os dados locais, feche o jogo e execute o importador, apontando para o diretório-raiz onde os recursos extraídos estão organizados:
+```sh
+python3 tools/import_localization.py \
+  --rom "/caminho/local/PK Plat [PT-BR].nds" \
+  --package "$HOME/.local/share/PlatinaReluzente/localizations/pt-BR"
+```
 
-    python3 tools/import_localization.py \
-      --rom "/caminho/local/PK Plat [PT-BR].nds" \
-      --destination "vendor/pokeplatinum-native/build_linux/pokeplatinum" \
-      --force
+Windows (PowerShell):
 
-Em Windows, use o diretório de trabalho do executável em build_win64/pokeplatinum. O extrator upstream usa o diretório de trabalho atual; execute o jogo a partir de build_linux/pokeplatinum ou build_win64/pokeplatinum, e não de outra pasta. A ferramenta modifica apenas os sete arquivos allowlisted no diretório de destino; não altera a ROM de origem nem faz upload. Ela valida a estrutura NARC, exige que o SHA-256 de cada um dos sete recursos corresponda ao manifesto da variante PT-BR aprovada e só recupera o tamanho declarado no NARC quando o intervalo adicional não se sobrepõe a outro arquivo FAT. A verificação dos sete hashes acontece antes de qualquer arquivo ser escrito, então uma ROM USA ou outra tradução é recusada sem alterar o runtime.
+```powershell
+python tools/import_localization.py `
+  --rom "C:\ROMs\PK Plat [PT-BR].nds" `
+  --package "$env:APPDATA\PlatinaReluzente\localizations\pt-BR"
+```
 
-Depois da importação, confira os arquivos locais com `python3 tools/check_runtime_data.py --runtime-dir vendor/pokeplatinum-native/build_linux/pokeplatinum --require-localized-resources`. Além de validar a estrutura NARC, essa opção compara SHA-256 com a versão PT-BR específica usada como referência; um NARC estruturalmente válido, mas de outra versão, não será aceito. A validação não inicia o jogo. A importação desses recursos ainda não prova que todas as telas e eventos funcionam em PT-BR. Confirme fontes, acentos, menus, diálogos, batalhas e salvamento dentro do jogo antes de considerar essa variante compatível. Veja a [documentação de localização](docs/LOCALIZATION.md).
+Depois de gerar o pacote, abra o launcher, selecione **Pokémon Platinum** e use **Importar pacote PT-BR**. Escolha a pasta criada pelo comando. O launcher verifica novamente o manifesto, os sete hashes e a estrutura exata; então instala uma cópia na pasta privada do aplicativo e seleciona Português (Brasil). A preferência fica salva localmente. Também é possível voltar para **English (original)** sem remover o pacote.
+
+Antes de cada inicialização em PT-BR, o launcher verifica o pacote novamente. O filesystem nativo redireciona somente os sete caminhos autorizados para a pasta traduzida. Se um recurso estiver ausente ou inválido, o jogo não inicia nesse idioma e não troca silenciosamente para inglês. Os arquivos originais permanecem intactos.
+
+A integração comprova a validação e a resolução dos arquivos, mas ainda não prova a renderização correta em jogo. É necessário testar acentuação, fontes, menus, tela de título, diálogos, batalhas, progressão e salvamentos. O patch Xdelta v1.2.0 não foi comprovado como aplicável diretamente à ROM USA Rev. 1; não o aplique presumindo compatibilidade.
 
 Execute os testes automatizados sem precisar de ROM:
 
-    python3 -m unittest discover -s tools/tests -v
+```sh
+python3 scripts/test.py --full
+```
 
 ## Regra do repositório
 
