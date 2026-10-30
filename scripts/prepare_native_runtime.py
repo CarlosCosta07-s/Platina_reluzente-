@@ -925,10 +925,6 @@ NDS_EXTRACTOR_INPUT_CHECK_PATCHED = r'''	std::error_code inputError;
 	}
 	const unsigned ndsFileSize = static_cast<unsigned>(ndsFileSizeValue);'''
 
-        SIM_ShowRomExtractionDialog();
-
-        // Manual desktop launches may still use the legacy extraction flow.
-        return FS_OpenFile(p_file, path);'''
 
 SIM_ROM_EXTRACTOR_ORIGINAL = r'''void SIM_ShowRomExtractionDialog() {
     bool fileSelected = false;
