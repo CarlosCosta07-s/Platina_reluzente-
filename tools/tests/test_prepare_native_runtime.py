@@ -369,7 +369,10 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             managed_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[0]
             self.assertNotIn("SIM_ShowRomExtractionDialog();", managed_fallback)
             self.assertIn("SIM_ShowRomExtractionDialog();", FS_OPEN_FALLBACK_PATCHED)
-            self.assertNotIn("return FS_OpenFile(p_file, path);", FS_OPEN_FALLBACK_PATCHED)
+            self.assertNotIn("return FS_OpenFile(p_file, path);", managed_fallback)
+            manual_fallback = FS_OPEN_FALLBACK_PATCHED.split("#if FS_FILE_OPEN_DEBUG", 1)[1]
+            self.assertIn("SIM_ShowRomExtractionDialog();", manual_fallback)
+            self.assertIn("return FS_OpenFile(p_file, path);", manual_fallback)
             self.assertIn("No extraction will be attempted while the game window is open.", FS_OPEN_FALLBACK_PATCHED)
             self.assertIn("return FALSE;", FS_OPEN_FALLBACK_PATCHED)
             self.assertNotIn("SDK_BUILD_ANDROID", fs_content)
