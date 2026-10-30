@@ -179,9 +179,10 @@ class LocalizationImportTests(unittest.TestCase):
     def test_extracts_only_the_allowlisted_localized_archives(self) -> None:
         rom_data, _fat_offset, _file_ids, _ranges, file_data = _synthetic_rom()
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp) / "Dados São João" / "Platiná Reluzente"
+            root.mkdir(parents=True)
             rom = root / "test.nds"
-            destination = root / "out"
+            destination = root / "runtime com acentos"
             rom.write_bytes(rom_data)
             result = _extract_synthetic(rom, destination, _file_ids, file_data)
             self.assertEqual(
