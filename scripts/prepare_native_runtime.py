@@ -922,7 +922,9 @@ SDL_WINDOW_CONTEXT_PATCHED = r'''  window = SDL_CreateWindow(
 
 PLATINA_WINDOW_DECLARATION_ORIGINAL = "static SDL_Window *window;"
 PLATINA_WINDOW_DECLARATION_PATCHED = r'''static SDL_Window *window;
-static bool sPlatinaFirstFramePresented = false;'''
+static bool sPlatinaFirstFramePresented = false;
+static struct timespec sPlatinaLastHeartbeat = {};
+static unsigned long long sPlatinaPresentedFrameCount = 0;'''
 
 # This exact context occurs in SIM_Render, not the setup swap in SIM_RenderInit.
 PLATINA_FIRST_FRAME_HANDOFF_ORIGINAL = (
@@ -937,6 +939,23 @@ PLATINA_FIRST_FRAME_HANDOFF_PATCHED = r'''    SDL_GL_SwapWindow(window);
       sPlatinaFirstFramePresented = true;
       fprintf(stderr, "[Platina-Progress] window-ready\n");
       fflush(stderr);
+    }
+
+    // Emit a bounded-rate heartbeat only after a completed game-frame swap.
+    // It is deliberately independent of UI/event-pump activity and never
+    // performs SDL or OpenGL work from another thread.
+    ++sPlatinaPresentedFrameCount;
+    struct timespec heartbeatNow = {};
+    if (clock_gettime(CLOCK_MONOTONIC, &heartbeatNow) == 0) {
+      const long long heartbeatElapsedNs =
+          ((long long)heartbeatNow.tv_sec - (long long)sPlatinaLastHeartbeat.tv_sec) * 1000000000LL +
+          ((long long)heartbeatNow.tv_nsec - (long long)sPlatinaLastHeartbeat.tv_nsec);
+      if (sPlatinaPresentedFrameCount == 1ULL || heartbeatElapsedNs >= 5000000000LL) {
+        sPlatinaLastHeartbeat = heartbeatNow;
+        fprintf(stderr, "[Platina-Progress] heartbeat frame=%llu\n",
+                sPlatinaPresentedFrameCount);
+        fflush(stderr);
+      }
     }
 
     if(sChangeInternalResAfterRender) {'''
