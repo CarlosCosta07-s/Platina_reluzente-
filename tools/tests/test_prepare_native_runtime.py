@@ -16,6 +16,7 @@ from scripts.prepare_native_runtime import (
     CONFIG_SAVE_OPEN_PATCHED,
     PROJECT_SIM_CONFIG_HANDLER_PATCHED,
     PROJECT_SIM_CONFIG_PARSE_PATCHED,
+    PROJECT_SIM_CONFIG_INIT_FAILURE_PATCHED,
     PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED,
     PROJECT_SIM_CONFIG_CLOSE_PATCHED,
     FS_OPEN_FALLBACK_PATCHED,
@@ -137,8 +138,17 @@ BOOL SIM_Config_prj_LoadConfigFile(SIM_Config_prj_type * aConfig)
 void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
 {
     FILE * configFile = fopen(SIM_CONFIG_PRJ_FILE_PATH, "w");
-    fprintf(configFile, "WalkThroughWalls=%s\\n", BoolToString(aConfig->walkThroughWalls));
+    fprintf(configFile, "WalkThroughWalls=%s\n", BoolToString(aConfig->walkThroughWalls));
     fclose(configFile);
+}
+
+void SIM_Config_prj_init()
+{
+    SIM_Config_prj_LoadDefaults(&s_SIM_config_prj);
+    if(!SIM_Config_prj_LoadConfigFile(&s_SIM_config_prj)){
+        //Config file does not exist. Save config file with defaults
+        SIM_Config_prj_SaveConfigFile(&s_SIM_config_prj);
+    }
 }'''
 
 UPSTREAM_BACKUP_HEADER = r'''#ifndef NITRO_CARD_BACKUP_H_
@@ -760,6 +770,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             once = project_config.read_text(encoding="utf-8")
             self.assertEqual(once.count(PROJECT_SIM_CONFIG_HANDLER_PATCHED), 1)
             self.assertEqual(once.count(PROJECT_SIM_CONFIG_PARSE_PATCHED), 1)
+            self.assertEqual(once.count(PROJECT_SIM_CONFIG_INIT_FAILURE_PATCHED), 1)
             self.assertEqual(once.count(PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED), 1)
             self.assertEqual(once.count(PROJECT_SIM_CONFIG_CLOSE_PATCHED), 1)
 
