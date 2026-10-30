@@ -28,6 +28,8 @@ A adaptação dos princípios do Gen1Recomp já existe no backend nativo e não 
 4. **Boot do jogo:** após a preparação ser concluída, o launcher chama o runtime com `--platina-prepared`. O runtime confirma que o cache não foi alterado desde a preparação, depois inicializa a janela SDL/OpenGL e só a revela quando o primeiro frame completo do jogo alcança a apresentação.
 5. **Monitoramento:** mensagens de etapa, primeiro frame, heartbeat de renderização e log persistente ajudam a distinguir falha de preparação, falha de boot e pausa do loop gráfico. A ausência de heartbeat não encerra automaticamente o processo durante possível gravação de save.
 
+**Não copiamos o agendador de jogo de 60 Hz do Gen1Recomp.** O `Game.lua` do Gen1Recomp dirige uma engine LÖVE própria através de `FixedStep`. Platinum já possui seu ritmo de jogo no `NitroMain` e no sistema de interrupções/VBlank de `src/main.c`; adicionar um segundo fixed-step por fora poderia executar lógica em duplicidade ou alterar a temporização. O port mantém o loop do jogo e adapta somente os serviços de host, apresentação e handoff entre launcher e runtime.
+
 O fluxo não transforma a ROM em um jogo Lua, não interpreta instruções ARM e não é uma emulação de CPU DS. A ROM é usada como origem local para extrair recursos necessários ao código nativo reconstruído. A lógica do jogo continua sendo executada pelo runtime compilado para Windows x64/Linux x86-64.
 
 ## Atualizações do launcher: o que vale adaptar
