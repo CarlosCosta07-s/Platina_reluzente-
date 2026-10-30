@@ -34,7 +34,7 @@ Correção aplicada: substituir a fixture pela versão exata de `src/port/sim_co
 
 ### 2.3 O que o antigo teste gráfico Android realmente comprovou
 
-O workflow experimental [run 408694? — GLES source/shader validation](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions) exportou quatro shaders GLES e passou `glslangValidator` nos dois shaders G2 e nos dois G3. Isso comprova apenas a tradução/compilação dos arquivos de shader naquele protótipo. Não comprova link dos programas com o renderer completo, chamadas de desenho, imagem apresentada, equivalência visual, APK ou execução em aparelho. O script experimental de preparação por strings Python não será reaproveitado como arquitetura final; alterações nativas devem ser arquivos `.patch`/ `.cpp` versionados.
+O workflow experimental [código experimental no commit 4877f94](https://github.com/CarlosCosta07-s/Platina_reluzente-/commit/4877f94479350cad2c69c6f81c5c3a8c1580c15e) (job histórico 123222636120) exportou quatro shaders GLES e passou `glslangValidator` nos dois shaders G2 e nos dois G3. Isso comprova apenas a tradução/compilação dos arquivos de shader naquele protótipo. Não comprova link dos programas com o renderer completo, chamadas de desenho, imagem apresentada, equivalência visual, APK ou execução em aparelho. O script experimental de preparação por strings Python não será reaproveitado como arquitetura final; alterações nativas devem ser arquivos `.patch`/ `.cpp` versionados.
 
 ## 3. Auditoria do renderer
 
