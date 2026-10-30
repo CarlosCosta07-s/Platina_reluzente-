@@ -25,6 +25,8 @@ from scripts.prepare_native_runtime import (
     WINDOW_EVENT_PATCHED,
     KEYDOWN_PATCHED,
     MAIN_RENDER_HANDOFF_PATCHED,
+    NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL,
+    NDS_EXTRACTOR_INPUT_CHECK_PATCHED,
     NVRAM_FILE_READ_PATCHED,
     SIM_AUDIO_OPEN_PATCHED,
     ORIGINAL_HEADER_LOAD,
@@ -305,6 +307,21 @@ void SIM_ShowRomExtractionDialog() {
     printf("%d", foo);
 }'''
 
+UPSTREAM_NDS_EXTRACTOR = r'''#include <filesystem>
+#include <iostream>
+#include <string>
+namespace fs = std::filesystem;
+
+int SIM_NDSExtract(std::string ndsFilePath) {
+	fs::path ndsInputPath(ndsFilePath);
+	fs::path fsOutputPath = fs::current_path();
+	fs::path ov9Path = fsOutputPath.string() + "/overlay9";
+	fs::path ov7Path = fsOutputPath.string() + "/overlay7";
+	fs::path dataPath = fsOutputPath.string() + "/";
+''' + NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL + r'''
+	return 0;
+}'''
+
 
 class NativeRuntimePreparationTests(unittest.TestCase):
     def make_source(self, root: Path, content: str = UPSTREAM_HEADER) -> Path:
@@ -320,6 +337,9 @@ class NativeRuntimePreparationTests(unittest.TestCase):
         fs_source.write_text(UPSTREAM_FS_FILE, encoding="utf-8")
         extractor_source = root / "subprojects/libntr/libraries/sim/src/sim_RomExtractor.cpp"
         extractor_source.write_text(UPSTREAM_SIM_ROM_EXTRACTOR, encoding="utf-8")
+        nds_extractor_source = root / "subprojects/libntr/libraries/sim/src/fireflower/nds-extract.cpp"
+        nds_extractor_source.parent.mkdir(parents=True, exist_ok=True)
+        nds_extractor_source.write_text(UPSTREAM_NDS_EXTRACTOR, encoding="utf-8")
         backup_header = root / "subprojects/libntr/include/nitro/card/backup.h"
         backup_header.parent.mkdir(parents=True, exist_ok=True)
         backup_header.write_text(UPSTREAM_BACKUP_HEADER, encoding="utf-8")
@@ -437,6 +457,26 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn("SDL_WINDOW_ALLOW_HIGHDPI", content)
             self.assertIn("SDL_JOYDEVICEREMOVED", content)
             self.assertIn("SDL_WINDOWEVENT_FOCUS_LOST", content)
+            self.assertFalse(prepare_native_runtime(root))
+
+    def test_nds_extractor_checks_file_type_and_size_errors_before_reading_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_source(root)
+
+            self.assertTrue(prepare_native_runtime(root))
+            extractor = (
+                root / "subprojects/libntr/libraries/sim/src/fireflower/nds-extract.cpp"
+            ).read_text(encoding="utf-8")
+
+            self.assertIn(NDS_EXTRACTOR_INPUT_CHECK_PATCHED, extractor)
+            self.assertNotIn(NDS_EXTRACTOR_INPUT_CHECK_ORIGINAL, extractor)
+            self.assertLess(extractor.index("fs::status(ndsInputPath"), extractor.index("fs::file_size(ndsInputPath"))
+            self.assertIn("fs::file_size(ndsInputPath, inputError)", extractor)
+            self.assertIn("if (inputError)", extractor)
+            self.assertIn("const unsigned ndsFileSize = static_cast<unsigned>(ndsFileSizeValue);", extractor)
+
+            # Re-running the patcher must not reapply the extractor patch.
             self.assertFalse(prepare_native_runtime(root))
 
     def test_extraction_cache_requires_the_complete_path_manifest_and_per_file_integrity(self):
