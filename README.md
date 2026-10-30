@@ -56,6 +56,12 @@ O Launcher 0.2.0 prepara a extração da ROM antes de inicializar a janela SDL/O
 
 As decisões de importação local, cache recuperável e testes sem dados protegidos são informadas pelo [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) e seu [guia de desenvolvimento e testes](https://github.com/bryanthaboi/gen1recomp/wiki/Guide-Developer-Setup). O renderizador e a lógica original de Platinum continuam baseados em C/C++, [pret/pokeplatinum](https://github.com/pret/pokeplatinum) e na camada desktop [libntr](https://github.com/cybervisi0n/libntr); não importamos o motor Lua/LÖVE do Gen1Recomp. Veja a [nota de referências técnicas](docs/GEN1RECOMP_REFERENCE.md).
 
+## Auditoria nativa e segurança
+
+O runtime parte da decompilação em C de [pret/pokeplatinum](https://github.com/pret/pokeplatinum), por meio do porte desktop fixado em [cybervisi0n/pokeplatinum](https://github.com/cybervisi0n/pokeplatinum). Essa árvore é uma reconstrução comunitária em andamento, não o código-fonte oficial fornecido pela Game Freak. A licença do projeto não substitui as licenças e permissões de cada dependência externa; a distribuição de código derivado e binários depende de revisão específica.
+
+O procedimento de investigação do executável com **REA** está em [docs/REA_AUDIT_WORKFLOW.md](docs/REA_AUDIT_WORKFLOW.md). O REA deve complementar a leitura do C, as análises estáticas e os testes de regressão; não é uma certificação de segurança. Consulte [SECURITY.md](SECURITY.md) para relatos privados de vulnerabilidades. ROMs, firmware, arquivos extraídos, saves e dumps não devem ser enviados ao REA, à CI ou ao repositório.
+
 ## Código de referência e compilação
 
 A base desktop usada como referência está em [cybervisi0n/pokeplatinum](https://github.com/cybervisi0n/pokeplatinum), baseada na [decompilação pret/pokeplatinum](https://github.com/pret/pokeplatinum) e na biblioteca [libntr](https://github.com/cybervisi0n/libntr). Ela é vinculada como dependência externa fixada e não é modificada permanentemente por este projeto sem revisão específica das condições do upstream.
