@@ -4,9 +4,11 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+import pin_native_dependencies as pin_module  # noqa: E402
 from pin_native_dependencies import (  # noqa: E402
     PINNED_DEPENDENCIES,
     PinningError,
@@ -51,6 +53,35 @@ class PinNativeDependenciesTests(unittest.TestCase):
             self.assertEqual(set(changed), set(PINNED_DEPENDENCIES))
             for filename, (_url, sha) in PINNED_DEPENDENCIES.items():
                 self.assertEqual(_revision(root / "subprojects" / filename), sha)
+
+    def test_failed_wrap_write_rolls_back_earlier_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _make_native_root(Path(tmp))
+            subprojects = root / "subprojects"
+            before = {
+                filename: (subprojects / filename).read_text(encoding="utf-8")
+                for filename in PINNED_DEPENDENCIES
+            }
+            real_atomic_write = pin_module._atomic_write
+            failed_once = False
+
+            def fail_on_second_wrap(path: Path, content: str) -> None:
+                nonlocal failed_once
+                if path.name == "libntrsystem.wrap" and not failed_once:
+                    failed_once = True
+                    raise OSError("simulated failure while pinning second wrap")
+                real_atomic_write(path, content)
+
+            with patch.object(pin_module, "_atomic_write", side_effect=fail_on_second_wrap):
+                with self.assertRaisesRegex(OSError, "simulated failure"):
+                    pin_native_dependencies(root)
+
+            after = {
+                filename: (subprojects / filename).read_text(encoding="utf-8")
+                for filename in PINNED_DEPENDENCIES
+            }
+            self.assertTrue(failed_once)
+            self.assertEqual(after, before)
 
     def test_pin_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
