@@ -508,7 +508,7 @@ test('horizontal layout refuses a symlinked config file', (t) => {
 });
 
 
-test('runtime integrity check refuses a tampered native executable even when the old marker remains', async () => {
+test('runtime integrity check repairs tampering and prunes unmanifested native code', async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'platina-runtime-manifest-tamper-'));
   const source = path.join(temp, 'bundled-runtime');
   const destination = path.join(temp, 'user-data', 'runtime');
@@ -536,10 +536,15 @@ test('runtime integrity check refuses a tampered native executable even when the
     fs.writeFileSync(path.join(destination, 'untrusted.so'), 'unmanifested native library');
     assert.equal(await verifyRuntimeManifest(destination, 'linux'), false);
     assert.equal(await isRuntimeUsable(destination, 'linux'), false);
-    await assert.rejects(prepareWritableRuntime(source, destination, 'linux'), /post-copy validation/);
-    assert.equal(fs.existsSync(path.join(destination, 'untrusted.so')), true);
-    fs.unlinkSync(path.join(destination, 'untrusted.so'));
+
+    // Refresh keeps user data but drops native code that is not in the
+    // verified bundle's allowlist, then validates the resulting runtime.
+    const refreshed = await prepareWritableRuntime(source, destination, 'linux');
+    assert.equal(refreshed.reused, false);
     assert.equal(await verifyRuntimeManifest(destination, 'linux'), true);
+    assert.equal(fs.existsSync(path.join(destination, 'untrusted.so')), false);
+    assert.equal(fs.readFileSync(path.join(destination, 'save.bin'), 'utf8'), 'user save');
+    assert.equal(fs.readFileSync(path.join(destination, 'sim_config.ini'), 'utf8'), 'user config');
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
