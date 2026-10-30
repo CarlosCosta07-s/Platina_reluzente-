@@ -864,6 +864,17 @@ PROJECT_SIM_CONFIG_HANDLER_PATCHED = r'''    if(MATCH("Cheats", "RunFromTrainerB
 }'''
 PROJECT_SIM_CONFIG_PARSE_ORIGINAL = '    return (ini_parse(SIM_CONFIG_PRJ_FILE_PATH, IniHandler, aConfig) >= 0);'
 PROJECT_SIM_CONFIG_PARSE_PATCHED = '    return (ini_parse(SIM_CONFIG_PRJ_FILE_PATH, IniHandler, aConfig) == 0);'
+
+PROJECT_SIM_CONFIG_INIT_FAILURE_ORIGINAL = r'''  if(!SIM_Config_prj_LoadConfigFile(&s_SIM_config_prj)){
+    //Config file does not exist. Save config file with defaults
+    SIM_Config_prj_SaveConfigFile(&s_SIM_config_prj);
+  }'''
+PROJECT_SIM_CONFIG_INIT_FAILURE_PATCHED = r'''  if(!SIM_Config_prj_LoadConfigFile(&s_SIM_config_prj)){
+    // Reject partially applied settings after a malformed or unreadable config.
+    SIM_Config_prj_LoadDefaults(&s_SIM_config_prj);
+    SIM_Config_prj_SaveConfigFile(&s_SIM_config_prj);
+  }'''
+
 PROJECT_SIM_CONFIG_SAVE_OPEN_ORIGINAL = '    FILE * configFile = fopen(SIM_CONFIG_PRJ_FILE_PATH, "w");'
 PROJECT_SIM_CONFIG_SAVE_OPEN_PATCHED = (
     PROJECT_SIM_CONFIG_SAVE_OPEN_ORIGINAL
@@ -2112,6 +2123,11 @@ def _prepare_project_sim_config(source_root: str | Path) -> tuple[Path, str, boo
             PROJECT_SIM_CONFIG_PARSE_ORIGINAL,
             PROJECT_SIM_CONFIG_PARSE_PATCHED,
             "project INI parse-result handling",
+        ),
+        (
+            PROJECT_SIM_CONFIG_INIT_FAILURE_ORIGINAL,
+            PROJECT_SIM_CONFIG_INIT_FAILURE_PATCHED,
+            "project configuration defaults after parse failure",
         ),
         (
             PROJECT_SIM_CONFIG_SAVE_OPEN_ORIGINAL,
