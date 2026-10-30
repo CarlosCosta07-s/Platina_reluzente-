@@ -246,7 +246,7 @@ function launchNativeProcess({
         heartbeatStalled = true;
         appendLog(
           absoluteLogPath,
-          'renderer heartbeat missing for ' + silentForMs + ' ms; native process remains active'
+          'renderer heartbeat missing for ' + silentForMs + ' ms; no process-exit event has been received yet'
         );
         try {
           onStall({
