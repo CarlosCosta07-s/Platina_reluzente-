@@ -413,7 +413,8 @@ function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.pl
     ? path.win32.isAbsolute(value)
     : path.posix.isAbsolute(value);
   if (!runtime || typeof runtime.executable !== 'string' || !isAbsolutePath(runtime.executable)
-      || typeof runtime.root !== 'string' || !isAbsolutePath(runtime.root)) {
+      || typeof runtime.root !== 'string' || !isAbsolutePath(runtime.root)
+      || typeof runtime.buildId !== 'string' || !/^[a-f0-9]{64}$/i.test(runtime.buildId)) {
     throw new TypeError('O runtime de Platinum deve ser preparado antes da inicialização.');
   }
   if (!rom || typeof rom.filePath !== 'string' || !isAbsolutePath(rom.filePath)
@@ -436,8 +437,11 @@ function createPlatinumLaunchSpec({ runtime, rom, logPath, platform = process.pl
   // Do not inherit language overrides from the parent shell or launcher environment.
   delete childEnv.PLATINA_LANGUAGE;
   delete childEnv.PLATINA_LOCALIZATION_DIR;
+  delete childEnv.PLATINA_RUNTIME_BUILD_ID;
   childEnv.PLATINA_IMPORTED_ROM = rom.filePath;
   childEnv.PLATINA_IMPORTED_ROM_SHA256 = rom.sha256;
+  // Tie generated data to this exact native executable/library payload.
+  childEnv.PLATINA_RUNTIME_BUILD_ID = runtime.buildId.toLowerCase();
   childEnv.PLATINA_LANGUAGE = language;
   if (language === 'pt-BR') childEnv.PLATINA_LOCALIZATION_DIR = localizationDirectory;
   if (platform === 'linux') {
