@@ -16,6 +16,22 @@ EXPECTED_SHADERS = (
     "g3_vertex.glsl",
     "g3_fragment.glsl",
 )
+EXPECTED_G2_SCENES = (
+    "backdrop_top",
+    "backdrop_bottom",
+    "bg_stack_default_order",
+    "bg_stack_permuted_order",
+    "alpha_bg_over_bg",
+    "alpha_bg_over_backdrop",
+    "alpha_bg_over_obj",
+    "brightness_increase",
+    "brightness_decrease",
+    "master_brightness_up",
+    "master_brightness_down",
+    "obj_priority_stack",
+    "obj_window_masks",
+    "bg0_3d_alpha",
+)
 
 
 def without_glsl_comments(source: str) -> str:
@@ -81,6 +97,29 @@ class MobileRendererSourceTests(unittest.TestCase):
         self.assertIn("vec4 targetColor = sampleBg(currentBgDrawn);", source)
         self.assertIn("vec4 objColor = sampleObj(j);", source)
         self.assertIn("vec4 objColor = sampleObj(i);", source)
+
+    def test_g2_pixel_probe_and_runner_cover_the_same_synthetic_scenes(self):
+        probe_path = ROOT / "tools" / "tests" / "cpp" / "renderer_g2_pixel_probe.cpp"
+        runner_path = ROOT / "tools" / "tests" / "run_mobile_renderer_g2_pixel_comparison.py"
+        workflow_path = ROOT / ".github" / "workflows" / "mobile-shader-source-validation.yml"
+        self.assertTrue(probe_path.is_file(), f"Missing G2 host probe: {probe_path}")
+        self.assertTrue(runner_path.is_file(), f"Missing G2 comparison runner: {runner_path}")
+        self.assertTrue(workflow_path.is_file(), f"Missing shader validation workflow: {workflow_path}")
+
+        probe = probe_path.read_text(encoding="utf-8")
+        runner = runner_path.read_text(encoding="utf-8")
+        workflow = workflow_path.read_text(encoding="utf-8")
+
+        probe_names = tuple(re.findall(r'^\s*\{"([a-z0-9_]+)",', probe, flags=re.MULTILINE))
+        scene_block = re.search(r"SCENE_NAMES = \((.*?)\n\)", runner, flags=re.DOTALL)
+        self.assertIsNotNone(scene_block, "G2 runner must declare its scene order.")
+        runner_names = tuple(re.findall(r'"([a-z0-9_]+)"', scene_block.group(1)))
+
+        self.assertEqual(probe_names, EXPECTED_G2_SCENES)
+        self.assertEqual(runner_names, EXPECTED_G2_SCENES)
+        self.assertIn("run_mobile_renderer_g2_pixel_comparison.py", workflow)
+        self.assertIn('MESA_GL_VERSION_OVERRIDE"] = "4.2"', runner)
+        self.assertIn('MESA_GLES_VERSION_OVERRIDE"] = "3.0"', runner)
 
     def test_g3_keeps_dynamic_fog_arrays_as_non_sampler_uniforms(self):
         source = without_glsl_comments(self.read_shader("g3_fragment.glsl"))
