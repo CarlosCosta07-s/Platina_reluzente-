@@ -223,9 +223,10 @@ def _replace_once(source: str, original: str, patched: str, label: str) -> tuple
     patched_count = source.count(patched)
     original_count = source.count(original)
     if patched_count == 1:
-        if original_count:
+        remainder = source.replace(patched, "", 1)
+        if original in remainder:
             raise MobileRendererPreparationError(
-                f"Both original and mobile-patched forms exist for {label}."
+                f"An additional original {label} block exists outside the mobile patch."
             )
         return source, False
     if patched_count > 1 or original_count != 1:
