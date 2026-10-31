@@ -2,7 +2,7 @@
 
 **Base inspecionada:** cybervisi0n/libntr, commit 1555d911ac80c0190ac1c321f99f1323de8b3c09, usado pelo porte Desktop fixado em cybervisi0n/pokeplatinum commit 35067868f64f23d25d17ac3e536cfdd9a7f40523.
 
-**Estado:** quatro variantes GLSL ES 3.00 isoladas foram compiladas e linkadas no host com glslangValidator; o workflow 41150452186 também aplicou o preparador source-only à revisão real de libntr `1555d911` e repetiu a execução sem alterações. O preparador instala os quatro shaders como literais raw C++ na árvore nativa para que `sim_shaders.cpp` os inclua corretamente. O patcher foi exercitado no commit fixado e é idempotente. O código ainda não está conectado a um runtime executável nem passou por comparação de pixels ou driver móvel. Não há build Android/iOS autorizado nesta fase.
+**Estado:** quatro variantes GLSL ES 3.00 foram compiladas/linkadas no host; o preparador source-only foi aplicado duas vezes com sucesso à revisão real libntr `1555d911`; e o G3 passou por comparação de pixels em Mesa/EGL com contextos forçados a Desktop GL 4.2 Core e OpenGL ES 3.0. Dez cenas sintéticas G3 tiveram max channel delta 0 e zero pixels divergentes no workflow 41152253802. O G2 ainda não passou pelo comparador; o renderer não está integrado a um app móvel e não foi exercitado em driver de aparelho. Não há build Android/iOS autorizado nesta fase.
 
 ## 1. Bloqueios encontrados na fonte exata
 
@@ -73,17 +73,16 @@ O Dear ImGui backend contém código condicional IMGUI_IMPL_OPENGL_ES3 que evita
 ### Gate de compilação/link em host
 - [x] glslangValidator compila os quatro shaders como ESSL 3.00 no host.
 - [x] glslangValidator cria e linka os programas G2 e G3 (workflow host-only 41149162996).
-- [x] Comparação G3 host-only: dez cenas sintéticas renderizadas em Desktop GL 4.5 (mínimo 4.2) e GLES 3.2 (mínimo 3.0), todas com `max_delta=0` e zero pixels divergentes, workflow 41151048626.
+- [x] Comparação G3 host-only em Mesa/EGL com versões mínimas forçadas: Desktop GL 4.2 Core × OpenGL ES 3.0; dez cenas, todas com `max_delta=0` e zero pixels divergentes (workflow 41152253802).
 - [ ] Expandir a comparação para o pipeline G2 com BG priorities, OBJ windows, alpha blending, backdrop e master brightness.
 - [x] Aplicar o preparador fail-closed à revisão real libntr `1555d911` e confirmar que a segunda execução é idempotente (workflow host-only 41150452186).
 
 ### Gate de paridade visual
-- quatro BGs, prioridades, janelas OBJ, composição OBJ, alpha blend e backdrop;
-- master brightness up/down;
-- 3D com textura, cor de vértice, alpha, fog e todos os modos wrap S/T;
-- coordenadas dentro, fora e exatamente em 0 e 1;
-- dois layouts de tela e seleção de tela superior/inferior;
-- cenário no qual bgOrder muda entre pixels vizinhos, para provar que a seleção de sampler funciona sem indexação dinâmica.
+- [x] G3 sintético: textura, cor de vértice, alpha discard, fog, transparent border S/T/S+T, repeat e mirror; 10/10 cenas com igualdade exata em Mesa GL 4.2 Core × ES 3.0 (workflow 41152253802).
+- [ ] G2: quatro BGs, prioridades, janelas OBJ, composição OBJ, alpha blend, backdrop e master brightness up/down.
+- [ ] Coordenadas de borda dentro, fora e exatamente em 0 e 1 no G2; cena em que bgOrder muda entre pixels vizinhos.
+- [ ] Dois layouts de tela e seleção superior/inferior com a composição real das duas telas.
+- [ ] Repetir o conjunto no ANGLE/Metal para a rota iOS e em drivers de aparelho.
 
 Cada cena precisa ser renderizada também no Desktop GL 4.2. Comparar imagens RGBA; exigir igualdade exata sempre que possível. Qualquer tolerância deve indicar canal, limiar e número máximo de pixels divergentes. O conjunto idêntico tem de passar no ANGLE/Metal para o caminho iOS.
 
@@ -94,7 +93,7 @@ Cada cena precisa ser renderizada também no Desktop GL 4.2. Comparar imagens RG
 3. Implementar os uniforms de border clamp nos caminhos normais e deferred de G3.
 4. Integrar o helper de uniforms existente no código pinado, testar a preservação de GL_CURRENT_PROGRAM com contexto real e reduzir as trocas de programa agrupando escritas quando isso não alterar o estado.
 5. Selecionar o backend OpenGL ES 3.0 e o modo IMGUI_IMPL_OPENGL_ES3 por macro de alvo, com loader correto.
-6. Adicionar cenas sintéticas e comparador de pixels.
+6. Completar o probe sintético G2; o comparador G3 já está aprovado em GL 4.2 Core × ES 3.0.
 7. Só após aprovação visual iniciar o trabalho de API C lifecycle e integração com os shells.
 
 O contrato completo de plataformas e o bloqueio dos builds móveis permanecem em docs/MOBILE_PARITY_CONTRACT.md.
