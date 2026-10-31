@@ -2,7 +2,7 @@
 
 Estas quatro fontes são variantes móveis do renderer da revisão de libntr 1555d911ac80c0190ac1c321f99f1323de8b3c09. Elas não substituem nem editam as fontes Desktop do submódulo.
 
-O arquivo `program_uniform_compat.hpp` é um helper GLES source-only para as quatro chamadas glProgramUniform usadas no renderer fixado. Ele preserva o programa ativo com um binding temporário. O teste de host usa uma API GLES simulada. O header `sim_gles3_compat.h` reúne os includes GLES3 e mapeia essas quatro chamadas para os wrappers. O preparador `scripts/prepare_mobile_renderer.py` copia os headers e shaders para um checkout temporário da revisão fixada; o workflow host-only 41150452186 aplicou e reaplicou essa preparação com sucesso. O renderer ainda não foi ligado a um app móvel nem perfilado em GPU.
+O arquivo `program_uniform_compat.hpp` é um helper GLES source-only para as quatro chamadas glProgramUniform usadas no renderer fixado. Ele preserva o programa ativo com um binding temporário. O teste de host usa uma API GLES simulada. O header `sim_gles3_compat.h` reúne os includes GLES3 e mapeia essas quatro chamadas para os wrappers. O preparador `scripts/prepare_mobile_renderer.py` copia os headers e shaders para um checkout temporário da revisão fixada e instala os shaders como raw string literals C++ para `sim_shaders.cpp`; o workflow host-only 41150619851 aplicou e reaplicou essa preparação com sucesso. O renderer ainda não foi ligado a um app móvel nem perfilado em GPU.
 
 **Importante:** os arquivos ainda não estão ligados a um alvo de build Android/iOS e não constituem um renderer aprovado. São o primeiro passo source-only para avaliar a portabilidade GLSL ES 3.00.
 
@@ -25,7 +25,7 @@ Os arrays de floats fogDepthBoundary[32] e fogDensity[32] no shader G3 não são
 
 - [x] Variantes separadas das fontes Desktop.
 - [x] Teste estático ROM-free impede indexação dinâmica de sampler arrays.
-- [x] GLSL ES 3.00 compile e program link com glslangValidator no workflow host-only 41149162996.
+- [x] GLSL ES 3.00 compile e program link com glslangValidator no workflow host-only 41150619851.
 - [x] Adaptador glProgramUniform C++ compila e passa teste de preservação de estado com GLES mock no host.
 - [ ] Comparação pixel a pixel contra o Desktop GL 4.2.
 - [ ] Renderer GLES exercitado em driver Android real.
