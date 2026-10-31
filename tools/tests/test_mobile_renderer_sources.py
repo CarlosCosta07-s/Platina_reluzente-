@@ -99,7 +99,7 @@ class MobileRendererSourceTests(unittest.TestCase):
         )
         self.assertIn("fragTexCoord.s < 0.0 || fragTexCoord.s > 1.0", source)
         self.assertIn("fragTexCoord.t < 0.0 || fragTexCoord.t > 1.0", source)
-        self.assertIn("return vec4(0.0);", source)
+        self.assertIn("? vec4(0.0) : texel;", source)
         self.assertIn("vec4 texel = sampleG3Texture();", source)
 
     def test_variants_do_not_redefine_or_replace_the_desktop_renderer(self):
