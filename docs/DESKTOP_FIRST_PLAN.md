@@ -8,6 +8,10 @@ Concluir uma versão nativa de Pokémon Platinum que funcione de forma reproduz�
 
 A ROM e os recursos do jogo continuam sendo fornecidos e mantidos localmente pelo usuário. Nenhuma ROM, firmware, arquivo extraído, save ou patch com conteúdo protegido deve entrar no Git, nos workflows ou nos artefatos públicos.
 
+## Auditoria atual do runtime
+
+O ciclo de vida de encerramento e os dados de identificação OpenGL foram auditados em [DESKTOP_RUNTIME_AUDIT.md](DESKTOP_RUNTIME_AUDIT.md). O upstream encerra com `exit(0)` dentro de `SIM_Render`, acionado no caminho de VBlank, enquanto `NitroMain` tem loop infinito. Não fazer uma substituição superficial por `return`; primeiro mapear o estado de saves e a parada das threads. O diagnóstico OpenGL deverá registrar vendor, renderer, versão da API e GLSL antes do primeiro frame, com tratamento para strings nulas. Esta auditoria não marca o shutdown como implementado.
+
 ## Como aproveitamos as três referências
 
 As referências são guias de arquitetura e critérios de qualidade. Não copiamos código, assets, decompilações ou dependências de terceiros sem uma licença compatível. Cada ideia é adaptada ao formato NDS, ao runtime C/C++ e à nossa versão Desktop.
