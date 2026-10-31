@@ -97,3 +97,26 @@ Cada cena precisa ser renderizada também no Desktop GL 4.2. Comparar imagens RG
 7. Só após aprovação visual iniciar o trabalho de API C lifecycle e integração com os shells.
 
 O contrato completo de plataformas e o bloqueio dos builds móveis permanecem em docs/MOBILE_PARITY_CONTRACT.md.
+
+
+## 9. Decisão posterior: manter OpenGL e adicionar Vulkan
+
+A pesquisa complementar do [porte PC e Android do Budokai Tenkaichi 3](BT3_PORT_REFERENCE.md) confirma que manter dois renderers independentes é uma estratégia útil: o jogador escolhe Vulkan ou OpenGL/OpenGL ES; a seleção automática e o fallback tentam preservar a inicialização quando um driver falha.
+
+**Decisão do projeto:** não remover o renderer OpenGL/GLES que já foi comparado no host. Adicionar Vulkan como backend paralelo, com seleção Automático / OpenGL / Vulkan e fallback testado. Essa é uma decisão de arquitetura; o backend Vulkan ainda não existe neste repositório.
+
+A matriz planejada é:
+- Windows/Linux: OpenGL 4.2 Core e Vulkan nativo.
+- Android: OpenGL ES 3.0 e Vulkan nativo.
+- iOS: ANGLE/Metal para o caminho OpenGL e MoltenVK para o caminho Vulkan, somente se ambos passarem pelas mesmas provas.
+
+No BT3, a experiência publicada mostra que a escolha não deve ser feita por uma regra universal de fabricante. Um Mali-G57 MC4 e um Adreno 650 tiveram respostas diferentes em determinadas resoluções, e uma extensão de framebuffer fetch produziu imagens incorretas em uma GPU Mali. Vamos construir perfis apenas com benchmark reproduzível.
+
+O novo gate Vulkan é independente da aprovação GLES já obtida:
+1. renderer Vulkan compila e renderiza as mesmas fixtures host-only;
+2. comparador OpenGL × Vulkan verifica pixels e estados de duas telas;
+3. teardown completo e fallback Vulkan → OpenGL são testados em falhas simuladas;
+4. recursos opcionais (timeline semaphores, dynamic rendering, formatos e compressão) têm alternativas;
+5. o benchmark registra GPU/driver, p50/p95/p99, uso de CPU/GPU e memória.
+
+Referência de implementação e contrato: [MOBILE_RENDERER_BACKENDS.md](MOBILE_RENDERER_BACKENDS.md).
