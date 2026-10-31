@@ -24,7 +24,6 @@ class MobileRendererPreparationTests(unittest.TestCase):
                     mobile.SIM_GL_ATTRIBUTES_ORIGINAL,
                     "  context = SDL_GL_CreateContext(window);",
                     mobile.GLAD_LOADER_ORIGINAL,
-                    "  gladLoadGLLoader(SDL_GL_GetProcAddress);",
                     "  glClear(GL_COLOR_BUFFER_BIT);",
                     mobile.DEBUG_OUTPUT_ORIGINAL,
                     "  return nullptr;",
