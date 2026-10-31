@@ -238,7 +238,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
 --- a/include/simulator/sim_gui.hpp
 +++ b/include/simulator/sim_gui.hpp
-@@ -1,5 +1,6 @@
+@@ -1,6 +1,7 @@
  #ifndef LIBNTR_SIM_GUI_HPP
  #define LIBNTR_SIM_GUI_HPP
  
@@ -246,7 +246,8 @@ diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
  #include <nitro/types.h>
  #include <SDL2/SDL.h>
  #include <functional>
-@@ -17,6 +18,14 @@
+@@ -17,7 +18,18 @@
+ void OpenFileDialog(std::function<void(std::string)> callback);
  bool IsGameLogicPaused();
  void AppButton(const char * label, bool * state, void (*aInitFunc)(void), void (*aAppFunc)(bool *));
  
@@ -267,15 +268,16 @@ diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
 diff --git a/libraries/sim/src/sim_gui.cpp b/libraries/sim/src/sim_gui.cpp
 --- a/libraries/sim/src/sim_gui.cpp
 +++ b/libraries/sim/src/sim_gui.cpp
-@@ -6,6 +6,7 @@
+@@ -6,5 +6,6 @@
+ #include "imgui_impl_opengl3.h"
  #include "imgui_impl_sdl2.h"
  #include "gui_internal.hpp"
  
 +#include "virtual_touch_controls.hpp"
  #include "ImGuiFileDialog.h"
- 
- namespace SIM::GUI {
-@@ -20,6 +21,108 @@
+@@ -23,6 +24,75 @@
+ static bool sShowImGuiDemo = false;
+ static bool sShowWindowPrjSpecific = false;
  
  static std::function<void(std::string)> sFileDialogCallback = nullptr;
  
@@ -304,11 +306,11 @@ diff --git a/libraries/sim/src/sim_gui.cpp b/libraries/sim/src/sim_gui.cpp
 +
 +static void DrawMobileTouchOverlay() {
 +#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)
-+    const auto visuals = sTouchControls.Visuals();
 +    if (!sTouchControls.IsConfigured()) {
 +        return;
 +    }
 +
++    const auto visuals = sTouchControls.Visuals();
 +    ImDrawList *drawList = ImGui::GetForegroundDrawList();
 +    const auto &dpad = visuals[0];
 +    const ImVec2 dpadCenter = ToImVec2(dpad.center);
@@ -349,15 +351,16 @@ diff --git a/libraries/sim/src/sim_gui.cpp b/libraries/sim/src/sim_gui.cpp
 +}
 +
  void PrjMain(bool *) __attribute__((weak));
-@@ -87,6 +190,7 @@
+@@ -95,5 +165,6 @@
+         ImGui::Checkbox("Pause Game Logic", &sPauseGameLogic);
+ 
          ImGui::End();
      }
-+
 +    DrawMobileTouchOverlay();
  }
- 
- void OpenFileDialog(std::function<void(std::string)> callback) {
-@@ -161,4 +265,49 @@
+@@ -155,6 +226,64 @@
+     if(*state) {
+         appFunc(state);
      }
  }
  
