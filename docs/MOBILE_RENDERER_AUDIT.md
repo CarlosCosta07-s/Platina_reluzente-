@@ -2,7 +2,7 @@
 
 **Base inspecionada:** cybervisi0n/libntr, commit 1555d911ac80c0190ac1c321f99f1323de8b3c09, usado pelo porte Desktop fixado em cybervisi0n/pokeplatinum commit 35067868f64f23d25d17ac3e536cfdd9a7f40523.
 
-**Estado:** quatro variantes GLSL ES 3.00 isoladas foram compiladas e linkadas no host com glslangValidator pelo workflow 41149162996. Elas ainda não são usadas pelo runtime, não passaram por comparação de pixels e não foram exercitadas em driver móvel. Não há build Android/iOS autorizado nesta fase.
+**Estado:** quatro variantes GLSL ES 3.00 isoladas foram compiladas e linkadas no host com glslangValidator; o workflow 41150452186 também aplicou o preparador source-only à revisão real de libntr `1555d911` e repetiu a execução sem alterações. O código ainda não está conectado a um runtime executável nem passou por comparação de pixels ou driver móvel. Não há build Android/iOS autorizado nesta fase.
 
 ## 1. Bloqueios encontrados na fonte exata
 
@@ -74,6 +74,7 @@ O Dear ImGui backend contém código condicional IMGUI_IMPL_OPENGL_ES3 que evita
 - [x] glslangValidator compila os quatro shaders como ESSL 3.00 no host.
 - [x] glslangValidator cria e linka os programas G2 e G3 (workflow host-only 41149162996).
 - [ ] Validar o comportamento dos uniforms e renderizar cenas com Mesa/llvmpipe ou EGL no host; esse é um teste gráfico host-side, não build Android/iOS.
+- [x] Aplicar o preparador fail-closed à revisão real libntr `1555d911` e confirmar que a segunda execução é idempotente (workflow host-only 41150452186).
 
 ### Gate de paridade visual
 - quatro BGs, prioridades, janelas OBJ, composição OBJ, alpha blend e backdrop;
