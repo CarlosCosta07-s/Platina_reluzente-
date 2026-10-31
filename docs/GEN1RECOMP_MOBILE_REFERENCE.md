@@ -65,6 +65,27 @@ Detalhes que valem como referência:
 
 Os testes existentes cobrem o overlay da terceira geração, input de gamepad, orientação, segundo ecrã, lifecycle Android e picker iOS. Eles são uma boa referência de como transformar falhas reais de dispositivos em regressões automatizadas, em vez de validar apenas se o projeto compila.
 
+## 3. Cruzamento com o input SDL atual do Platinum
+
+**Fonte fixada:** [libntr/libraries/sim/src/sim_main.cpp](https://github.com/cybervisi0n/libntr/blob/1555d911ac80c0190ac1c321f99f1323de8b3c09/libraries/sim/src/sim_main.cpp), commit 1555d911ac80c0190ac1c321f99f1323de8b3c09.
+
+O Platinum já tem a geometria do touchscreen DS. Em sim_main.cpp, s_TouchPanelCoords é recalculado conforme screenLayout, swapScreens e o viewport usado para desenhar as duas telas. O código converte as coordenadas do ponteiro para SIM_NDS_SCREEN_WIDTH × SIM_NDS_SCREEN_HEIGHT e atualiza s_tpData. Portanto, esse mapeamento de layouts deve ser preservado.
+
+O limite atual é o tipo de evento: o loop processa SDL_MOUSEBUTTONDOWN/UP e consulta SDL_GetMouseState a cada frame. A revisão inspecionada não tem tratamento explícito de SDL_FINGERDOWN, SDL_FINGERMOTION ou SDL_FINGERUP. Assim, o input touch atual é essencialmente um único ponteiro estilo mouse; não há IDs de dedos independentes disponíveis ao router do jogo.
+
+Isso ainda não prova que nenhum toque funcione em qualquer build SDL — SDL pode sintetizar eventos de mouse dependendo da configuração — mas não é suficiente para um overlay multi-touch robusto e para separar toque na tela inferior do DS.
+
+### Adaptador recomendado para o Platinum
+
+1. Criar um TouchInputRouter compartilhado no runtime SDL, sem JNI/Objective-C no caminho por frame.
+2. Alimentar o router com SDL_FINGERDOWN/MOTION/UP e manter o caminho SDL_MOUSEBUTTON* para Desktop. Ambos passam pelo mesmo contrato de entrada.
+3. Entregar cada novo dedo primeiro ao overlay virtual; se ele não o capturar, testar a região touchscreen DS calculada por s_TouchPanelCoords.
+4. Preservar a transformação existente para coordenadas DS e respeitar screenLayout/swapScreens. Não duplicar a geometria em Java, Swift ou no launcher.
+5. Manter os IDs de toque. O overlay pode ter vários dedos ativos; a tela DS tem um único stylus lógico, então o primeiro dedo aceito na região DS deve continuar proprietário até release/cancel, sem saltar para outro dedo.
+6. Permitir que um dedo segure um botão virtual enquanto outro controla o touchscreen DS, como no console físico.
+7. Tratar foco perdido, janela oculta, suspensão e cancelamento como cancelamento de todos os dedos ativos, soltando botões e stylus para não deixar estado preso.
+8. Adicionar testes para mouse Desktop inalterado, finger lifecycle, roteamento overlay-vs-DS, dois dedos em subsistemas distintos, cancelamento e todos os layouts/swapScreens.
+
 ## 3. Ciclo de vida: separar sessão de jogo e processo
 
 Fontes consultadas:
