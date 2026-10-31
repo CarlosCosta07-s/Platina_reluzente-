@@ -23,14 +23,17 @@ def main() -> int:
     source_path = root / "libraries" / "sim" / "src" / "sim_main.cpp"
     installed_header = root / "libraries" / "sim" / "src" / "touch_input_router.hpp"
     installed_overlay_header = root / "libraries" / "sim" / "src" / "virtual_touch_controls.hpp"
+    installed_imgui_overlay_header = root / "libraries" / "sim" / "src" / "imgui_touch_overlay.hpp"
     repo_root = Path(__file__).resolve().parents[2]
     tracked_header = repo_root / "mobile" / "input" / "touch_input_router.hpp"
     tracked_overlay_header = repo_root / "mobile" / "input" / "virtual_touch_controls.hpp"
+    tracked_imgui_overlay_header = repo_root / "mobile" / "input" / "imgui_touch_overlay.hpp"
 
     for path, label in (
         (source_path, "prepared sim_main.cpp"),
         (installed_header, "installed touch router header"),
         (installed_overlay_header, "installed virtual-control header"),
+        (installed_imgui_overlay_header, "installed ImGui overlay header"),
     ):
         if not path.is_file() or path.is_symlink():
             raise SystemExit(f"Missing or unsafe {label}: {path}")
@@ -39,6 +42,8 @@ def main() -> int:
         raise SystemExit("The prepared libntr router header differs from the tracked source.")
     if installed_overlay_header.read_bytes() != tracked_overlay_header.read_bytes():
         raise SystemExit("The prepared virtual-control header differs from the tracked source.")
+    if installed_imgui_overlay_header.read_bytes() != tracked_imgui_overlay_header.read_bytes():
+        raise SystemExit("The prepared ImGui overlay header differs from the tracked source.")
 
     source = source_path.read_text(encoding="utf-8")
     require_tokens(
@@ -47,7 +52,7 @@ def main() -> int:
             MARKER,
             '#include "touch_input_router.hpp"',
             '#include "virtual_touch_controls.hpp"',
-            '#include "simulator/imgui/imgui.hpp"',
+            '#include "imgui_touch_overlay.hpp"',
             "static Platina::MobileInput::TouchInputRouter s_TouchInputRouter;",
             "static Platina::MobileInput::VirtualTouchControls s_TouchControls;",
             "SIM_GetTouchPanel()",
@@ -93,20 +98,29 @@ def main() -> int:
     require_tokens(
         source,
         (
-            "static void SIM_DrawMobileTouchOverlay()",
+            "Platina::MobileInput::DrawVirtualTouchControls(s_TouchControls);",
+            "s_TouchControls.Configure(windowWidth, windowHeight, {});",
+            "#include \"imgui_touch_overlay.hpp\"",
+        ),
+        "Runtime ImGui overlay connection",
+    )
+    imgui_overlay = installed_imgui_overlay_header.read_text(encoding="utf-8")
+    require_tokens(
+        imgui_overlay,
+        (
+            "inline void DrawVirtualTouchControls(VirtualTouchControls &controls)",
             "ImGui::GetForegroundDrawList()",
             "ImGui::CalcTextSize(label)",
             "drawList->AddCircleFilled",
             "drawList->AddCircle",
             "drawList->AddText",
-            "SIM_DrawMobileTouchOverlay();",
             "VirtualButtonUp",
             "VirtualButtonDown",
             "VirtualButtonLeft",
             "VirtualButtonRight",
             "#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)",
         ),
-        "Runtime ImGui overlay",
+        "Shared ImGui overlay renderer",
     )
 
     if "SIM::GUI::TouchOverlay" in source:
