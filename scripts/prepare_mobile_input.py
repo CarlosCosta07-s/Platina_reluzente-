@@ -14,10 +14,12 @@ from pathlib import Path
 PINNED_LIBNTR_REVISION = "1555d911ac80c0190ac1c321f99f1323de8b3c09"
 SOURCE_RELATIVE_PATH = Path("libraries/sim/src/sim_main.cpp")
 HEADER_RELATIVE_PATH = Path("libraries/sim/src/touch_input_router.hpp")
+OVERLAY_HEADER_RELATIVE_PATH = Path("libraries/sim/src/virtual_touch_controls.hpp")
 PATCH_RELATIVE_PATH = Path(
     "mobile/input/patches/libntr-1555d911-touch-router.patch"
 )
 HEADER_SOURCE_RELATIVE_PATH = Path("mobile/input/touch_input_router.hpp")
+OVERLAY_HEADER_SOURCE_RELATIVE_PATH = Path("mobile/input/virtual_touch_controls.hpp")
 PATCH_MARKER = "PLATINA_MOBILE_TOUCH_INPUT_ROUTER_V1"
 
 
@@ -85,13 +87,14 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
     source_path = root / SOURCE_RELATIVE_PATH
     installed_header = root / HEADER_RELATIVE_PATH
     header_source = repository_root / HEADER_SOURCE_RELATIVE_PATH
+    overlay_header_source = repository_root / OVERLAY_HEADER_SOURCE_RELATIVE_PATH
     patch_path = repository_root / PATCH_RELATIVE_PATH
 
     source_bytes = read_regular_file(source_path)
     header_bytes = read_regular_file(header_source)
-    patch_bytes = read_regular_file(patch_path)
+    overlay_header_bytes = read_regular_file(overlay_header_source)
+    read_regular_file(patch_path)
     source_text = source_bytes.decode("utf-8")
-    header_text = header_bytes.decode("utf-8")
 
     if PATCH_MARKER in source_text:
         if '#include "touch_input_router.hpp"' not in source_text:
@@ -106,14 +109,29 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
             raise MobileInputPreparationError(
                 "The installed router header differs from the reviewed source header."
             )
+        installed_overlay_header = root / OVERLAY_HEADER_RELATIVE_PATH
+        if not installed_overlay_header.is_file() or installed_overlay_header.is_symlink():
+            raise MobileInputPreparationError(
+                "The overlay patch is applied but its virtual-control header is missing."
+            )
+        if installed_overlay_header.read_bytes() != overlay_header_bytes:
+            raise MobileInputPreparationError(
+                "The installed virtual-control header differs from the reviewed source header."
+            )
         run_git(root, "diff", "--check")
         print("Mobile SDL touch input patch is already applied.")
         return False
 
+    installed_overlay_header = root / OVERLAY_HEADER_RELATIVE_PATH
     if installed_header.exists() or installed_header.is_symlink():
         if installed_header.is_symlink() or installed_header.read_bytes() != header_bytes:
             raise MobileInputPreparationError(
                 "A different touch_input_router.hpp already exists in the libntr checkout."
+            )
+    if installed_overlay_header.exists() or installed_overlay_header.is_symlink():
+        if installed_overlay_header.is_symlink() or installed_overlay_header.read_bytes() != overlay_header_bytes:
+            raise MobileInputPreparationError(
+                "A different virtual_touch_controls.hpp already exists in the libntr checkout."
             )
 
     # The exact source revision, patch context, and header are validated before
@@ -130,11 +148,15 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
             + (check.stderr.strip() or check.stdout.strip())
         )
 
-    header_created = False
+    created_headers: list[Path] = []
     try:
-        if not installed_header.exists():
-            atomic_write(installed_header, header_bytes)
-            header_created = True
+        for destination, contents in (
+            (installed_header, header_bytes),
+            (installed_overlay_header, overlay_header_bytes),
+        ):
+            if not destination.exists():
+                atomic_write(destination, contents)
+                created_headers.append(destination)
 
         run_git(root, "apply", "--whitespace=error", str(patch_path))
         patched_source = read_regular_file(source_path).decode("utf-8")
@@ -146,10 +168,15 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
             raise MobileInputPreparationError(
                 "The installed router header failed content verification."
             )
+        if installed_overlay_header.read_bytes() != overlay_header_bytes:
+            raise MobileInputPreparationError(
+                "The installed virtual-control header failed content verification."
+            )
         run_git(root, "diff", "--check")
     except Exception:
-        if header_created and installed_header.exists():
-            installed_header.unlink()
+        for created in reversed(created_headers):
+            if created.exists():
+                created.unlink()
         raise
 
     print(
