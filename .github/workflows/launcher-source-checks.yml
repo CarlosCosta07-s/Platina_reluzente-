@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   launcher-tests:
-    name: Launcher syntax, tests and web bundle
+    name: Launcher syntax and source tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
