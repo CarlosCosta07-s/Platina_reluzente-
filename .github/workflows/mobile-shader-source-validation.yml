@@ -1,0 +1,43 @@
+name: Mobile renderer shader source validation (host only)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/renderer/gles300/**"
+      - "tools/validate_mobile_renderer_shaders.py"
+      - "tools/tests/test_mobile_renderer_sources.py"
+      - ".github/workflows/mobile-shader-source-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-shader-host-validation-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-glsl-validation:
+    name: GLSL ES 3.00 compile/link on Linux host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run ROM-free shader source contract tests
+        run: python tools/tests/test_mobile_renderer_sources.py
+
+      - name: Install host GLSL validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes glslang-tools
+
+      - name: Compile and link GLES shaders on host only
+        run: python tools/validate_mobile_renderer_shaders.py
