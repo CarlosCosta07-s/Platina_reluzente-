@@ -43,6 +43,8 @@ Não declarar essa emulação equivalente até as cenas de teste confirmarem os 
 
 A conversão não pode simplesmente substituir glProgramUniform por glUniform sem garantir o programa ativo correto. O Desktop escreve uniformes de G3 e G2 em momentos distintos, e glProgramUniform permite escrever em um programa que não está ativo.
 
+O helper inicial `mobile/renderer/gles300/program_uniform_compat.hpp` implementa a primeira estratégia com ScopedProgramBinding e cobre as chamadas 1i, 1f, 4f e 1fv. Um teste C++ de host usa uma API GLES simulada e confere restauração do programa. O header ainda não está incluído pelo submódulo pinado e não foi perfilado em GPU; é uma base de correção, não uma decisão final de desempenho.
+
 A solução móvel deve escolher e testar uma destas estratégias:
 - helpers que guardam GL_CURRENT_PROGRAM, ativam o programa-alvo, fazem glUniform* e restauram exatamente o programa anterior; ou
 - estabelecer explicitamente o programa-alvo nos limites de cada passe (G3, G2) e usar uniformes normais dentro do passe.
@@ -88,7 +90,7 @@ Cada cena precisa ser renderizada também no Desktop GL 4.2. Comparar imagens RG
 1. Fechar o inventário de headers GLAD e chamadas GL por todos os fontes comuns.
 2. Criar um patch versionado que liga as quatro variantes shader ao commit pinado, sem tocar no renderer Desktop.
 3. Implementar os uniforms de border clamp nos caminhos normais e deferred de G3.
-4. Implementar a estratégia de uniforms sem glProgramUniform e testar a preservação de GL_CURRENT_PROGRAM.
+4. Integrar o helper de uniforms existente no código pinado, testar a preservação de GL_CURRENT_PROGRAM com contexto real e reduzir as trocas de programa agrupando escritas quando isso não alterar o estado.
 5. Selecionar o backend OpenGL ES 3.0 e o modo IMGUI_IMPL_OPENGL_ES3 por macro de alvo, com loader correto.
 6. Adicionar cenas sintéticas e comparador de pixels.
 7. Só após aprovação visual iniciar o trabalho de API C lifecycle e integração com os shells.
