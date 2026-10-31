@@ -83,7 +83,9 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [x] Preparar helper GLES source-only para as quatro chamadas glProgramUniform, com teste C++ host usando GLES mock para verificar restauração de GL_CURRENT_PROGRAM.
 - [x] Criar preparador fail-closed, instalar variantes como raw string literals C++ e aplicá-lo duas vezes à revisão real libntr `1555d911` em host-only CI (workflow 41150619851).
 - [ ] Integrar as variantes e o helper ao runtime nativo móvel e validar os uniforms clamp-to-border no desenho normal e deferred.
-- [ ] Criar o comparador sintético GL 4.2 × GLES 3.0 e provar equivalência visual.
+- [x] Comparador sintético G3 host-only: dez cenas Desktop GL/GLES, diferença de pixels igual a zero (workflow 41151048626).
+- [ ] Estender a comparação a G2, incluindo priorities/windows/blending/backdrop/master brightness.
+- [ ] Aprovar ANGLE/Metal pelo mesmo comparador.
 - [ ] Criar o comparador sintético GL 4.2 × GLES 3.0 em host.
 - [ ] Aprovar ANGLE/Metal pelo mesmo comparador.
 - **Gate:** não avançar se houver discrepância visual sem explicação e limite aceito.
