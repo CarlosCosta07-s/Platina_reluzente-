@@ -98,8 +98,12 @@ public:
         TouchTarget target = TouchTarget::Ignored;
         if (overlayClaimsTouch) {
             target = TouchTarget::VirtualControls;
-        } else if (panel.IsValid() && panel.bounds.Contains(position)
-                   && !hasStylusOwner_) {
+        } else if (!hasStylusOwner_
+                   && (pointer.source == PointerSource::Mouse
+                       || (panel.IsValid() && panel.bounds.Contains(position)))) {
+            // Desktop mouse interaction historically began on any mouse-down,
+            // then became a DS touch whenever the pointer crossed the lower
+            // screen bounds. Preserve that drag-into-panel behavior.
             target = TouchTarget::DsStylus;
             stylusOwner_ = pointer;
             hasStylusOwner_ = true;
