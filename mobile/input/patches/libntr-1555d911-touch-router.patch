@@ -1,0 +1,220 @@
+diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -60,6 +60,8 @@
+ #endif
+ 
+ #include "sim_g2.h"
++// PLATINA_MOBILE_TOUCH_INPUT_ROUTER_V1
++#include "touch_input_router.hpp"
+ #include "git_info.h"
+ 
+ // Simulator configuration
+@@ -68,7 +70,60 @@
+ extern OSThreadInfo OSi_ThreadInfo;
+ 
+ static u32 s_TouchPanelCoords[4] = {}; // The bounding box of the touch screen
++static Platina::MobileInput::TouchInputRouter s_TouchInputRouter;
++
++static Platina::MobileInput::TouchPanel SIM_GetTouchPanel() {
++  return {
++      {
++          static_cast<int>(s_TouchPanelCoords[0]),
++          static_cast<int>(s_TouchPanelCoords[1]),
++          static_cast<int>(s_TouchPanelCoords[2]),
++          static_cast<int>(s_TouchPanelCoords[3]),
++      },
++      SIM_NDS_SCREEN_WIDTH,
++      SIM_NDS_SCREEN_HEIGHT,
++  };
++}
++
++static bool SIM_TouchOverlayClaims(
++    const Platina::MobileInput::Point &position) {
++  // The virtual-control overlay is a separate implementation step. Keep this
++  // hit-test hook ahead of DS routing so the overlay can claim a pointer later.
++  (void)position;
++  return false;
++}
++
++static int SIM_NormalizedTouchCoordinate(float normalized, int dimension) {
++  if (dimension <= 1) {
++    return 0;
++  }
++
++  int coordinate = static_cast<int>(normalized * static_cast<float>(dimension));
++  if (coordinate < 0) {
++    coordinate = 0;
++  } else if (coordinate >= dimension) {
++    coordinate = dimension - 1;
++  }
++  return coordinate;
++}
++
++static void SIM_ApplyTouchUpdate(
++    const Platina::MobileInput::TouchUpdate &update) {
++  if (update.target != Platina::MobileInput::TouchTarget::DsStylus) {
++    return;
++  }
++
++  if (update.ended || !update.dsTouchActive) {
++    s_tpData.validity = 0;
++    s_tpData.touch = 0;
++    return;
++  }
++
++  if (!s_tpData.touch) {
++    s_tpData.validity = 0;
++  }
++  s_tpData.x = static_cast<u16>(update.dsX);
++  s_tpData.y = static_cast<u16>(update.dsY);
++  s_tpData.touch = 1;
++}
++
++static void SIM_CancelTouchInput() {
++  const auto cancelled = s_TouchInputRouter.CancelAll(SIM_GetTouchPanel());
++  // The overlay will consume per-pointer cancellation notifications when it
++  // is connected. The native DS touch state must be released immediately.
++  (void)cancelled;
++  s_tpData.validity = 0;
++  s_tpData.touch = 0;
++}
+ 
+ // SND
+ #include <nitro/snd/common/work.h>
+@@ -211,8 +266,6 @@
+ 
+ u8 s_mosaicTable[16][256];
+ 
+-static u8 isMouseDown = 0;
+-
+ // Local Procedure Declarations
+ static void ConvertMsgParams(draw_msg_t *msg);
+ static u8 GetNumParamsFromCommandType(draw_command_type_t type);
+@@ -945,8 +998,6 @@
+ 
+   SDL_Event Event;
+   char c;
+-  int x;
+-  int y;
+   u8 r;
+   u8 g;
+   u8 b;
+@@ -1065,14 +1116,24 @@
+     }
+ 
+     while (SDL_PollEvent(&Event)) {
+       SIM::GUI::ProcessEvent(&Event);
++      const Platina::MobileInput::TouchPanel currentTouchPanel =
++          SIM_GetTouchPanel();
+ 
+       if (Event.type == SDL_WINDOWEVENT) {
+         switch (Event.window.event) {
+         case SDL_WINDOWEVENT_CLOSE:
+           exit(0);
+           break;
++        case SDL_WINDOWEVENT_FOCUS_LOST:
++        case SDL_WINDOWEVENT_HIDDEN:
++        case SDL_WINDOWEVENT_MINIMIZED:
++          SIM_CancelTouchInput();
++          break;
+         }
+       }
++      if (Event.type == SDL_APP_WILLENTERBACKGROUND
++          || Event.type == SDL_APP_TERMINATING) {
++        SIM_CancelTouchInput();
++      }
+       if (Event.type == SDL_KEYDOWN) {
+         int keyRead = Event.key.keysym.sym;
+         if (keyRead == s_SIM_config.padSettings.aKey) {
+@@ -1236,31 +1297,66 @@
+           HandleJoystickKeyUp(Event.jaxis.axis |
+                               SIM_CONFIG_JOY_AXIS_MINUS_MASK);
+         }
+       }
+-      if (Event.type == SDL_MOUSEBUTTONDOWN) {
+-        isMouseDown = 1;
+-        s_tpData.validity = 0;
+-        s_tpData.touch = 1;
++      if (Event.type == SDL_MOUSEBUTTONDOWN
++          && Event.button.which != SDL_TOUCH_MOUSEID) {
++        const Platina::MobileInput::PointerId pointer{
++            Platina::MobileInput::PointerSource::Mouse,
++            static_cast<std::int64_t>(Event.button.which), 0};
++        const Platina::MobileInput::Point position{
++            Event.button.x, Event.button.y};
++        SIM_ApplyTouchUpdate(s_TouchInputRouter.Begin(
++            pointer, position, currentTouchPanel,
++            SIM_TouchOverlayClaims(position)));
+       }
+-      if (Event.type == SDL_MOUSEBUTTONUP) {
+-        isMouseDown = 0;
+-        s_tpData.validity = 0;
+-        s_tpData.touch = 0;
++      if (Event.type == SDL_MOUSEMOTION
++          && Event.motion.which != SDL_TOUCH_MOUSEID) {
++        const Platina::MobileInput::PointerId pointer{
++            Platina::MobileInput::PointerSource::Mouse,
++            static_cast<std::int64_t>(Event.motion.which), 0};
++        const Platina::MobileInput::Point position{
++            Event.motion.x, Event.motion.y};
++        SIM_ApplyTouchUpdate(
++            s_TouchInputRouter.Move(pointer, position, currentTouchPanel));
++      }
++      if (Event.type == SDL_MOUSEBUTTONUP
++          && Event.button.which != SDL_TOUCH_MOUSEID) {
++        const Platina::MobileInput::PointerId pointer{
++            Platina::MobileInput::PointerSource::Mouse,
++            static_cast<std::int64_t>(Event.button.which), 0};
++        SIM_ApplyTouchUpdate(
++            s_TouchInputRouter.End(pointer, currentTouchPanel));
++      }
++      if (Event.type == SDL_FINGERDOWN) {
++        const Platina::MobileInput::Point position{
++            SIM_NormalizedTouchCoordinate(Event.tfinger.x, windowWidth),
++            SIM_NormalizedTouchCoordinate(Event.tfinger.y, windowHeight)};
++        const Platina::MobileInput::PointerId pointer{
++            Platina::MobileInput::PointerSource::Finger,
++            static_cast<std::int64_t>(Event.tfinger.touchId),
++            static_cast<std::int64_t>(Event.tfinger.fingerId)};
++        SIM_ApplyTouchUpdate(s_TouchInputRouter.Begin(
++            pointer, position, currentTouchPanel,
++            SIM_TouchOverlayClaims(position)));
++      }
++      if (Event.type == SDL_FINGERMOTION) {
++        const Platina::MobileInput::Point position{
++            SIM_NormalizedTouchCoordinate(Event.tfinger.x, windowWidth),
++            SIM_NormalizedTouchCoordinate(Event.tfinger.y, windowHeight)};
++        const Platina::MobileInput::PointerId pointer{
++            Platina::MobileInput::PointerSource::Finger,
++            static_cast<std::int64_t>(Event.tfinger.touchId),
++            static_cast<std::int64_t>(Event.tfinger.fingerId)};
++        SIM_ApplyTouchUpdate(
++            s_TouchInputRouter.Move(pointer, position, currentTouchPanel));
++      }
++      if (Event.type == SDL_FINGERUP) {
++        const Platina::MobileInput::PointerId pointer{
++            Platina::MobileInput::PointerSource::Finger,
++            static_cast<std::int64_t>(Event.tfinger.touchId),
++            static_cast<std::int64_t>(Event.tfinger.fingerId)};
++        SIM_ApplyTouchUpdate(
++            s_TouchInputRouter.End(pointer, currentTouchPanel));
+       }
+     }
+     s_reg_PAD_KEYINPUT = s_reg_PAD_KEYINPUT;
+ 
+-    SDL_GetMouseState(&x, &y);
+-
+-    // Convert touch coordinate to DS screen coordinates
+-    if (x >= s_TouchPanelCoords[0] && x <= s_TouchPanelCoords[2] &&
+-        y >= s_TouchPanelCoords[1] && y <= s_TouchPanelCoords[3]) {
+-      s_tpData.x = (u16)map(x, s_TouchPanelCoords[0], s_TouchPanelCoords[2], 0,
+-                            SIM_NDS_SCREEN_WIDTH);
+-      s_tpData.y = (u16)map(y, s_TouchPanelCoords[1], s_TouchPanelCoords[3], 0,
+-                            SIM_NDS_SCREEN_HEIGHT);
+-    } else {
+-      s_tpData.validity = 0;
+-      s_tpData.touch = 0;
+-    }
+-
+     SIM::GUI::NewFrame();
