@@ -12,10 +12,11 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  #include "git_info.h"
  
  // Simulator configuration
-@@ -69,5 +73,143 @@
+@@ -69,6 +73,144 @@
  extern OSThreadInfo OSi_ThreadInfo;
  
  static u32 s_TouchPanelCoords[4] = {}; // The bounding box of the touch screen
+ 
 +static Platina::MobileInput::TouchInputRouter s_TouchInputRouter;
 +static Platina::MobileInput::VirtualTouchControls s_TouchControls;
 +
