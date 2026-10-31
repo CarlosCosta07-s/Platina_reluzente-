@@ -100,8 +100,11 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 ### Fase 3 — serviços móveis e hosts SDL
 - [ ] Implementar Activity Android sobre SDL e adaptadores JNI para SAF, armazenamento privado, lifecycle, áudio, controles e safe area.
 - [ ] Implementar host iOS sobre SDL e bridges Objective-C/Objective-C++/Swift para Document Picker, security-scoped URLs, sandbox, lifecycle, áudio e safe area.
-- [ ] Implementar TouchInputRouter SDL_FINGER*/SDL_MOUSE*: preservar s_TouchPanelCoords, screenLayout e swapScreens; priorizar overlay e manter um stylus DS lógico com owner por touch ID.
+- [x] Criar o núcleo source-only `TouchInputRouter`: IDs por origem/dispositivo/ponteiro, prioridade do overlay, multitouch overlay + stylus, proprietário único do stylus e cancelamento global; seis cenários C++ host-only aprovados (workflow [41153036719](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153036719)).
+- [ ] Integrar `TouchInputRouter` ao loop SDL do `sim_main.cpp` para `SDL_FINGER*` e `SDL_MOUSE*`: preservar `s_TouchPanelCoords`, `screenLayout` e `swapScreens`; manter mouse Desktop inalterado e filtrar duplicação de eventos de toque.
 - [ ] Implementar o overlay tátil no runtime SDL, com multitouch, IDs por dedo, layout portrait/landscape, safe area e coexistência com gamepads.
+
+O desenho e o estado das lacunas da integração estão documentados em [MOBILE_INPUT_AUDIT.md](MOBILE_INPUT_AUDIT.md).
 - [ ] Implementar fluxos equivalentes de biblioteca/importação, idioma, progresso, diagnóstico e controles.
 - [ ] Não adicionar tarefas de build Android/iOS nesta fase.
 
