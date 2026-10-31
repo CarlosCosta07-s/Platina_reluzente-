@@ -41,9 +41,9 @@ A troca de backend será aplicada no próximo início do runtime. Não vamos pro
 | Windows | OpenGL 4.2 Core | Vulkan nativo |
 | Linux | OpenGL 4.2 Core | Vulkan nativo |
 | Android | OpenGL ES 3.0 | Vulkan nativo |
-| iOS | ANGLE sobre Metal, se validado | MoltenVK sobre Metal, se validado |
+| iOS | ANGLE com backend Metal, se validado | MoltenVK sobre Metal, se validado e após revisão do risco de manutenção |
 
-No iOS, OpenGL desktop não existe e OpenGL ES é legado/depreciado no ecossistema Apple. Por isso, a opção OpenGL exige uma implementação compatível como ANGLE sobre Metal. A opção Vulkan exigiria MoltenVK, que traduz Vulkan para Metal. Essas integrações serão tratadas como backends específicos e só serão expostas ao jogador após testes reais.
+No iOS, OpenGL desktop não existe e OpenGL ES é legado/depreciado no ecossistema Apple. Por isso, a opção OpenGL exige uma implementação compatível como ANGLE com backend Metal. A opção Vulkan pode usar MoltenVK para traduzir Vulkan para Metal. Há um risco de manutenção: o README atual do MoltenVK informa que a Khronos o depreciou e que o projeto passou a ser mantido pela comunidade em regime de melhor esforço; o próprio projeto ainda o recomenda para iOS. Antes de adotá-lo, precisamos avaliar manutenção, licença, atualizações, compatibilidade e suporte aos recursos que o renderer exige. Se o risco for inaceitável, uma implementação Metal nativa é a alternativa, mas não será chamada de Vulkan. As integrações só serão expostas ao jogador após testes reais.
 
 Não vamos incluir automaticamente Vulkan no iOS apenas porque Android/PC o suportam. A matriz por plataforma será baseada no que o runtime realmente compila, inicializa e valida.
 
@@ -142,6 +142,19 @@ Perfis automáticos serão sugestões conservadoras e atualizáveis. O jogador p
 7. Avaliar MoltenVK e ANGLE/Metal no iOS; expor cada opção apenas depois da validação correspondente.
 8. Implementar Auto / OpenGL / Vulkan na UI, persistência, diagnóstico e fallback testado.
 9. Revisar e documentar perfis de GPU com evidência reproduzível.
+10. Fazer uma decisão específica de iOS entre MoltenVK (com risco de manutenção documentado) e um backend Metal nativo; OpenGL será ANGLE/Metal, não OpenGL ES direto.
 
 **Regra permanente:** OpenGL não será removido quando Vulkan entrar. O jogador escolhe entre os backends realmente disponíveis, e Automático seleciona a opção compatível com melhor perfil conhecido.
 
+
+
+## 10. Notas atuais das dependências iOS
+
+- [ANGLE](https://github.com/google/angle) implementa OpenGL ES e pode direcioná-lo ao backend Metal no iOS. Isso permite preservar o contrato OpenGL do nosso renderer sem usar OpenGL ES legado diretamente.
+- [MoltenVK](https://github.com/KhronosGroup/MoltenVK) mapeia Vulkan para Metal e ainda é apontado pelo seu README como a opção recomendada para iOS. Entretanto, o mesmo README informa que a Khronos depreciou MoltenVK e que a manutenção passou a ser comunitária/em regime de melhor esforço. Esta condição muda o custo de manutenção e precisa entrar na decisão de dependência.
+- Uma alternativa Vulkan-on-Metal mais nova não será presumida como pronta para iOS: qualquer substituto precisa ser verificado em suporte de sistema, toolchain, API, licença e dispositivos antes de entrar na matriz.
+
+Fontes externas atualizadas em 30/10/2026:
+- [ANGLE — README e matriz de backends](https://github.com/google/angle/blob/main/README.md)
+- [MoltenVK — README e aviso de depreciação](https://github.com/KhronosGroup/MoltenVK/blob/main/README.md)
+- [Vulkan Docs — considerações de iOS](https://docs.vulkan.org/tutorial/latest/Building_a_Simple_Engine/Mobile_Development/02_platform_considerations.html)
