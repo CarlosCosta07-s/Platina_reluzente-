@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-shader-host-validation-\${{ github.ref }}
+  group: mobile-shader-host-validation-main
   cancel-in-progress: true
 
 jobs:
