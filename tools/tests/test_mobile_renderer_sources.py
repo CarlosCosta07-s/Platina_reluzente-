@@ -87,6 +87,16 @@ class MobileRendererSourceTests(unittest.TestCase):
         self.assertIn("fogDensity[foundIdx]", source)
         self.assertNotRegex(source, r"\btexture\s*\(\s*\w+\s*\[")
 
+    def test_g3_emulates_transparent_clamp_to_border(self):
+        source = without_glsl_comments(self.read_shader("g3_fragment.glsl"))
+        self.assertIn("uniform int clampToBorderS;", source)
+        self.assertIn("uniform int clampToBorderT;", source)
+        self.assertIn("vec4 sampleG3Texture()", source)
+        self.assertIn("fragTexCoord.s < 0.0 || fragTexCoord.s > 1.0", source)
+        self.assertIn("fragTexCoord.t < 0.0 || fragTexCoord.t > 1.0", source)
+        self.assertIn("return vec4(0.0);", source)
+        self.assertIn("vec4 texel = sampleG3Texture();", source)
+
     def test_variants_do_not_redefine_or_replace_the_desktop_renderer(self):
         self.assertTrue((ROOT / ".gitmodules").is_file())
         self.assertTrue((ROOT / "docs" / "MOBILE_PARITY_CONTRACT.md").is_file())
