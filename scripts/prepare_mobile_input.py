@@ -101,10 +101,15 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
     source_text = source_bytes.decode("utf-8")
 
     if PATCH_MARKER in source_text:
-        if '#include "touch_input_router.hpp"' not in source_text:
-            raise MobileInputPreparationError(
-                "The touch patch marker exists but its include is missing."
-            )
+        for required_include in (
+            '#include "touch_input_router.hpp"',
+            '#include "virtual_touch_controls.hpp"',
+            '#include "imgui_touch_overlay.hpp"',
+        ):
+            if required_include not in source_text:
+                raise MobileInputPreparationError(
+                    f"The touch patch marker exists but {required_include} is missing."
+                )
         if not installed_header.is_file() or installed_header.is_symlink():
             raise MobileInputPreparationError(
                 "The touch patch is applied but the router header is missing."
