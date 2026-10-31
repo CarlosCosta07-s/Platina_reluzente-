@@ -10,8 +10,8 @@ Não executar builds de alvo Android ou iOS, não gerar APK, AAB ou IPA, não pu
 
 É permitido durante esta etapa:
 - editar código C/C++ compartilhado e adaptadores de plataforma;
-- preparar os projetos Kotlin/Compose e Swift/SwiftUI como código-fonte, sem compilar os alvos móveis;
-- executar testes ROM-free de contratos e armazenamento no host;
+- preparar a Activity Android e sua ponte JNI, além das bridges iOS Objective-C/Objective-C++/Swift, apenas como código-fonte;
+- executar testes ROM-free de contratos, armazenamento, input e lifecycle no host;
 - validar shaders e renderizar cenas sintéticas em host desktop (Mesa/EGL/ANGLE), desde que isso não gere uma aplicação Android/iOS;
 - comparar imagens sintéticas com o renderer desktop de referência.
 
@@ -21,14 +21,15 @@ A primeira compilação Android/iOS só será autorizada quando **todas** as cap
 
 O jogo continua sendo o código C/C++ nativo já usado pelo porte desktop. Não introduzir emulador de DS, intérprete ARM, Unity ou Godot.
 
-- **Núcleo compartilhado:** C/C++ com API C estável para criar, iniciar, pausar, retomar, solicitar encerramento, consultar estado e destruir uma sessão.
-- **Android:** shell Kotlin/Jetpack Compose; ponte JNI para o núcleo; Storage Access Framework para seleção; cópia privada transacional; SDL2 para a superfície, áudio e entrada do runtime quando compatível com o ciclo de vida Android.
-- **iOS:** shell Swift/SwiftUI; ponte C/Objective-C++; Document Picker e acesso coordenado à URL; cópia para Application Support; camada gráfica validada para Metal.
+- **Núcleo compartilhado:** C/C++ com API C estável para criar, iniciar, pausar, retomar, solicitar encerramento, consultar estado e destruir uma sessão. A API não deve expor JNI, UIKit, Java ou Swift.
+- **Android:** Activity Java/Kotlin integrada ao host SDL do projeto; JNI delimitado para SAF, permissões, caminhos montados, áudio/foco, haptics e metadados de display. O SDL continua dono da janela, superfície e loop.
+- **iOS:** host Xcode/SDL com bridges Objective-C/Objective-C++ e Swift para Document Picker, URLs, safe area, haptics e áudio. O C++ comum fala com uma API C/Objective-C++ estável; não depende diretamente de tipos Swift.
+- **Interface de jogo:** continua renderizada na superfície SDL. O overlay tátil é desenhado como camada de interface do próprio runtime, sem exigir Compose ou SwiftUI para reconstruir a janela do jogo. Esses frameworks só serão considerados se houver uma tela nativa separada que realmente precise deles.
 - **Serviços de host:** adaptadores explícitos para caminhos privados, relógio, arquivos, armazenamento, progresso, logs, áudio, controles e ciclo de vida. O núcleo não deve depender de caminhos arbitrários herdados do processo.
 - **Renderer:** contrato mínimo GLES 3.0 / GLSL ES 3.00 como primeira hipótese comum. Android usa GLES nativo. Para iOS, avaliar ANGLE sobre Metal; não depender de OpenGL ES legado da Apple. Se a prova de equivalência falhar, avaliar um backend Metal próprio antes de continuar.
 - **Desktop permanece referência:** preservar o renderer GL 4.2 e o comportamento Desktop; não substituir a implementação atual por uma abstração mais fraca só para atender ao mobile.
 
-A escolha de shells nativos separados mantém o acesso às APIs específicas de armazenamento, ciclo de vida, controles e diagnósticos sem duplicar a lógica do jogo.
+O Gen1Recomp foi estudado como referência de fronteiras móveis: SDL continua proprietário da janela e do loop, enquanto Activity/JNI no Android e bridges Objective-C/Swift no iOS fornecem serviços do sistema. Não vamos copiar seu motor LÖVE nem sua divisão de versões Android/iOS. Consulte [GEN1RECOMP_MOBILE_REFERENCE.md](GEN1RECOMP_MOBILE_REFERENCE.md) para a análise e os limites de reutilização.
 
 ## 3. Matriz obrigatória de paridade
 
@@ -97,10 +98,11 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [ ] Separar explicitamente diretórios de ROM, extração, saves, configurações, localização e logs.
 - [ ] Testar em host todas as transições e erros sem ROM.
 
-### Fase 3 — serviços móveis e shells
-- [ ] Implementar camada Android para SAF, armazenamento privado, JNI, lifecycle e controles.
-- [ ] Implementar camada iOS para Document Picker, security-scoped URLs, Application Support, lifecycle e ponte C.
-- [ ] Implementar interface nativa de biblioteca, importação, idioma, progresso, diagnóstico e controles.
+### Fase 3 — serviços móveis e hosts SDL
+- [ ] Implementar Activity Android sobre SDL e adaptadores JNI para SAF, armazenamento privado, lifecycle, áudio, controles e safe area.
+- [ ] Implementar host iOS sobre SDL e bridges Objective-C/Objective-C++/Swift para Document Picker, security-scoped URLs, sandbox, lifecycle, áudio e safe area.
+- [ ] Implementar o overlay tátil no runtime SDL, com multitouch, IDs por dedo, layout portrait/landscape, safe area e coexistência com gamepads.
+- [ ] Implementar fluxos equivalentes de biblioteca/importação, idioma, progresso, diagnóstico e controles.
 - [ ] Não adicionar tarefas de build Android/iOS nesta fase.
 
 ### Fase 4 — paridade de ponta a ponta
