@@ -27,7 +27,7 @@ Os arrays de floats fogDepthBoundary[32] e fogDensity[32] no shader G3 não são
 - [x] Teste estático ROM-free impede indexação dinâmica de sampler arrays.
 - [x] GLSL ES 3.00 compile e program link com glslangValidator no workflow host-only 41150619851.
 - [x] Adaptador glProgramUniform C++ compila e passa teste de preservação de estado com GLES mock no host.
-- [x] G3: dez cenas sintéticas comparadas Desktop GL/GLES em Mesa/EGL; max channel delta 0 e zero pixels divergentes (workflow 41151048626).
+- [x] G3: dez cenas sintéticas em Mesa/EGL com Desktop GL 4.2 Core × OpenGL ES 3.0; max channel delta 0 e zero pixels divergentes (workflow 41152253802).
 - [ ] G2: prioridades BG, janelas OBJ, blending e master brightness.
 - [ ] Renderer GLES exercitado em driver Android real.
 - [ ] Mesmo conjunto de cenas aprovado em ANGLE/Metal para iOS.
