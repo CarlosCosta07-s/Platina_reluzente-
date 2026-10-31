@@ -436,7 +436,7 @@ def prepare_mobile_renderer(
             # sim_shaders.cpp includes GLSL files as C++ raw-string literals.
             # Keep repository shader assets pure GLSL for glslangValidator,
             # and wrap only the copies installed into the native source tree.
-            desired = 'R""(\\n' + asset_content.rstrip("\\n") + '\\n)""\\n'
+            desired = 'R""(\n' + asset_content.rstrip("\n") + '\n)""\n'
         else:
             desired = asset_content
 
