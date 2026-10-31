@@ -102,6 +102,19 @@ class MobileRendererSourceTests(unittest.TestCase):
         self.assertIn("? vec4(0.0) : texel;", source)
         self.assertIn("vec4 texel = sampleG3Texture();", source)
 
+    def test_gles_program_uniform_adapter_restores_the_previous_program(self):
+        adapter_path = SHADER_DIR / "program_uniform_compat.hpp"
+        self.assertTrue(adapter_path.is_file(), f"Missing GLES compatibility header: {adapter_path}")
+        source = adapter_path.read_text(encoding="utf-8")
+        self.assertIn("#include <GLES3/gl3.h>", source)
+        self.assertIn("glGetIntegerv(GL_CURRENT_PROGRAM, &previousProgram_);", source)
+        self.assertIn("glUseProgram(targetProgram);", source)
+        self.assertIn("glUseProgram(static_cast<GLuint>(previousProgram_));", source)
+        self.assertIn("ScopedProgramBinding(const ScopedProgramBinding &) = delete;", source)
+        for function in ("glUniform1i", "glUniform1f", "glUniform4f", "glUniform1fv"):
+            with self.subTest(function=function):
+                self.assertIn(function, source)
+
     def test_variants_do_not_redefine_or_replace_the_desktop_renderer(self):
         self.assertTrue((ROOT / ".gitmodules").is_file())
         self.assertTrue((ROOT / "docs" / "MOBILE_PARITY_CONTRACT.md").is_file())
