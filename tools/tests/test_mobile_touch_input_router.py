@@ -26,7 +26,7 @@ class MobileTouchInputRouterTests(unittest.TestCase):
             compile_result = subprocess.run(
                 [
                     compiler,
-                    "-std=c++17",
+                    "-std=c++20",
                     "-Wall",
                     "-Wextra",
                     "-Wpedantic",
@@ -59,6 +59,7 @@ class MobileTouchInputRouterTests(unittest.TestCase):
                 run_result.stdout + run_result.stderr,
             )
             self.assertIn("6 scenarios", run_result.stdout)
+            print(run_result.stdout, end="")
 
 
 if __name__ == "__main__":
