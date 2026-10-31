@@ -85,8 +85,15 @@ class MobileRendererPreparationTests(unittest.TestCase):
             self.assertIn("SDL_GL_CONTEXT_PROFILE_ES", main)
             self.assertIn("SDL_GL_CONTEXT_PROFILE_CORE", main)
             self.assertIn("#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_IOS)", main)
-            self.assertIn("Desktop-only GL debug callback", main)
-            self.assertIn("void GLAPIENTRY MessageCallback", main)
+            callback_start = main.index("void GLAPIENTRY MessageCallback")
+            callback_guard_start = main.rfind(
+                "#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_IOS)",
+                0,
+                callback_start,
+            )
+            callback_guard_end = main.index("#endif", callback_start)
+            self.assertGreaterEqual(callback_guard_start, 0)
+            self.assertGreater(callback_guard_end, callback_start)
             self.assertIn("gladLoadGLLoader(SDL_GL_GetProcAddress);", main)
             self.assertIn("glDebugMessageCallback(MessageCallback, 0);", main)
 
