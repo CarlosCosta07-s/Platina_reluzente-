@@ -128,4 +128,4 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [ANGLE — matriz de suporte OpenGL ES / Metal / iOS](https://github.com/google/angle)
 - [Apple — OpenGL ES deprecated e migração para Metal](https://developer.apple.com/documentation/metal/migrating-opengl-code-to-metal)
 
-Este documento é o contrato vigente para a trilha móvel. A auditoria MOBILE_PORT_AUDIT.md é o registro histórico das falhas e hipóteses avaliadas antes da reativação.
+A auditoria do renderer fixado, as variantes GLSL ES 3.00 e os bloqueios de integração estão em [MOBILE_RENDERER_AUDIT.md](MOBILE_RENDERER_AUDIT.md). A auditoria MOBILE_PORT_AUDIT.md é o registro histórico das falhas e hipóteses avaliadas antes da reativação.
