@@ -1,6 +1,10 @@
-# Porte móvel (Android e iOS) — análise de viabilidade
+# Porte móvel (Android e iOS) — arquitetura e execução por gates
 
-**Estado:** pesquisa. O suporte Android foi encerrado em 29/10/2026 após falhas recorrentes no pipeline ARM64 (ver README) e **não há alvo móvel em desenvolvimento**. Este documento registra o que um retorno exigiria, para que a decisão seja informada. Nada aqui foi compilado em um dispositivo. Consulte também a [auditoria de viabilidade e o plano por gates](MOBILE_PORT_AUDIT.md), atualizados em 30/10/2026.
+**Estado atual:** desenvolvimento reaberto em modo source-only. O projeto pode avançar com arquitetura, código compartilhado, shells de plataforma como fonte, testes ROM-free e provas gráficas em host. **Nenhuma compilação de alvo Android/iOS, APK, AAB ou IPA será feita até existir paridade funcional 1:1 com o Desktop.** O contrato vinculante está em [MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md).
+
+O Desktop continua sendo a referência de funcionalidades e comportamento. O mantenedor informou que Windows x64 e Linux x86-64 compilaram; a validação manual com ROM ainda depende de acesso a um PC. Não considerar uma build ou smoke test sem ROM como prova de gameplay.
+
+O escopo desta trilha é Pokémon Platinum USA Rev. 1. Pokémon Black continua bloqueado para mobile até que a situação jurídica do código reconstruído e sua distribuição esteja resolvida.
 
 ## Meta
 
