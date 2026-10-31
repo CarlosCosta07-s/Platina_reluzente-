@@ -2,21 +2,22 @@
 
 O foco é concluir e estabilizar a base nativa de **Windows x64 e Linux x86-64**, sem otimização prematura. Cada marco só muda para concluído com evidência reproduzível.
 
-## Ordem obrigatória de plataformas
+## Ordem de plataformas e gate de paridade
 
-Até o porte de Pokémon Platinum para PC estar pronto e validado, **todo o desenvolvimento ativo de Platinum fica restrito a Windows x64 e Linux x86-64**. Android e iOS permanecem pausados: não iniciar backend gráfico móvel, shell mobile, builds ARM64/Xcode, workflows ou tarefas de paridade móvel neste período. A documentação móvel existente é apenas registro de pesquisa e não altera essa prioridade.
+Windows x64 e Linux x86-64 continuam sendo a referência de comportamento e a baseline desktop. O mantenedor informou que os dois alvos compilaram; o teste manual com ROM ainda aguarda acesso a um PC. A trilha Android/iOS foi reaberta para **desenvolvimento de código-fonte, arquitetura, contratos e provas em host**, sem gerar builds móveis.
 
-O retorno ao desenvolvimento móvel fica condicionado a todos estes critérios no PC:
+A regra solicitada para a etapa móvel é obrigatória: **Android e iOS só poderão ser compilados depois de alcançarem paridade funcional 1:1 com o Desktop**. Até esse gate, não criar APK/AAB/IPA, não executar builds NDK/Xcode, não publicar artefatos móveis e não adicionar workflows que compilem os apps móveis.
 
-- builds limpos e empacotados de Windows e Linux aprovados na CI atual, com testes ROM-free verdes;
-- importação local da ROM Pokémon Platinum USA Rev. 1, preparação dos dados e chegada reproduzível à tela de título;
-- sessão de jogo real com movimentação, menus, transições, batalha, áudio e entradas validadas;
-- salvamento, encerramento, retomada e carregamento de progresso confirmados sem corrupção;
-- launcher, logs e mensagens de erro validados nos dois sistemas; idioma original e pacote PT-BR testados sem regressão.
+O trabalho source-only pode incluir:
+- auditoria e adaptação do renderer com provas sintéticas executadas em host;
+- API C/C++ compartilhada de ciclo de vida e serviços de plataforma;
+- adaptadores de armazenamento, importação, preparação, saves, idioma e logs;
+- shells Kotlin/Compose e Swift/SwiftUI como código-fonte, sem build dos alvos;
+- testes ROM-free e comparadores de pixels com dados sintéticos.
 
-Compilação, smoke test sem ROM ou aprovação isolada de uma plataforma não satisfazem esse gate. Só depois da validação conjunta de Windows e Linux a trilha Android/iOS será reaberta.
+O contrato de funcionalidades, as provas obrigatórias e o gate de primeira compilação estão em [docs/MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md). A matriz precisa estar 100% implementada e aprovada antes do primeiro build Android/iOS. A compilação do Desktop, por si só, não substitui a validação manual de gameplay com ROM.
 
-O alvo Android foi encerrado em 29/10/2026 após falhas recorrentes na validação do pipeline ARM64; essa decisão histórica não muda a prioridade acima.
+O projeto continua sem usar ROMs ou dados extraídos na CI. Os workflows Desktop devem permanecer independentes dos trabalhos móveis e não podem ser alterados para suportar builds móveis.
 
 ## Trilha paralela — Pokémon Black Version
 
