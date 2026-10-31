@@ -80,7 +80,8 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [ ] Fechar o inventário de todos os usos GL no commit fixado de libntr.
 - [x] Criar quatro variantes GLSL ES 3.00 separadas; testes ROM-free confirmam que os sampler arrays do G2 usam somente índices literais.
 - [x] Compilar e linkar os programas G2 e G3 com glslangValidator em Linux host-only (workflow 41149162996).
-- [ ] Integrar as variantes ao commit fixado e implementar wrappers GLES para glProgramUniform e clamp-to-border.
+- [x] Preparar helper GLES source-only para as quatro chamadas glProgramUniform, com teste C++ host usando GLES mock para verificar restauração de GL_CURRENT_PROGRAM.
+- [ ] Integrar as variantes e o helper ao commit fixado; ligar uniforms clamp-to-border e preservar o estado no desenho normal e deferred.
 - [ ] Criar o comparador sintético GL 4.2 × GLES 3.0 em host.
 - [ ] Aprovar ANGLE/Metal pelo mesmo comparador.
 - **Gate:** não avançar se houver discrepância visual sem explicação e limite aceito.
