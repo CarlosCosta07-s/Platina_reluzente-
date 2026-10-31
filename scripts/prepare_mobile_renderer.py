@@ -82,8 +82,7 @@ DEBUG_OUTPUT_PATCHED = """#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_
   glDebugMessageCallback(MessageCallback, 0);
 #endif"""
 
-GLAD_SOURCE_ORIGINAL = "libsim_srcs += files('glad.c')"
-GLAD_SOURCE_PATCHED = """if build_target != 'android' and build_target != 'ios'
+GLAD_SOURCE_GUARD = """if(build_target == 'linux' or build_target == 'win64')
 libsim_srcs += files('glad.c')
 endif"""
 
@@ -221,6 +220,7 @@ REQUIRED_SOURCE_PATHS = (
     "libraries/sim/src/sim_g3_Texture.cpp",
     "libraries/sim/src/sim_shaders.cpp",
     "libraries/sim/src/meson.build",
+    "libraries/sim/meson.build",
     "include/simulator/g3_draw.h",
 )
 
@@ -338,24 +338,26 @@ def _prepare_g3_draw(source: str) -> tuple[str, bool]:
     return current, changed or item_changed
 
 
-def _prepare_meson(source: str) -> tuple[str, bool]:
-    current, changed = _replace_once(
-        source, GLAD_SOURCE_ORIGINAL, GLAD_SOURCE_PATCHED, "Desktop GLAD source selection"
+def _prepare_meson_sources(source: str) -> tuple[str, bool]:
+    # The pinned source already compiles glad.c only for Desktop Linux/Windows.
+    # Keep this file unchanged and fail closed if that reviewed guard drifts.
+    if source.count(GLAD_SOURCE_GUARD) != 1:
+        raise MobileRendererPreparationError(
+            "Expected the pinned Linux/Windows-only glad.c source guard in libraries/sim/src/meson.build."
+        )
+    return source, False
+
+
+def _prepare_meson_parent(source: str) -> tuple[str, bool]:
+    # The parent Meson file owns libsim_args. Add only compile defines here;
+    # this does not add build_target choices or create app build targets.
+    patched = "libsim_args = [ ]\n\n" + MOBILE_MESON_DEFINES
+    return _replace_once(
+        source,
+        "libsim_args = [ ]",
+        patched,
+        "mobile-only compile definitions in libraries/sim/meson.build",
     )
-    # The future mobile target names are reserved here; no target is created and
-    # no app build is invoked by this preparer.
-    mobile_args = current.count(MOBILE_MESON_DEFINES)
-    if mobile_args == 0:
-        anchor = "libsim_args = [ ]"
-        if current.count(anchor) != 1:
-            raise MobileRendererPreparationError(
-                "Expected exactly one libsim_args declaration before adding mobile-only compile flags."
-            )
-        current = current.replace(anchor, anchor + "\n\n" + MOBILE_MESON_DEFINES, 1)
-        changed = True
-    elif mobile_args != 1:
-        raise MobileRendererPreparationError("Duplicate mobile-only ImGui/GLES compile flag block.")
-    return current, changed
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -402,7 +404,8 @@ def prepare_mobile_renderer(
         "libraries/sim/src/g3_draw.cpp": _prepare_g3_draw,
         "libraries/sim/src/sim_g3_Texture.cpp": _prepare_texture_source,
         "libraries/sim/src/sim_shaders.cpp": _prepare_shader_source,
-        "libraries/sim/src/meson.build": _prepare_meson,
+        "libraries/sim/src/meson.build": _prepare_meson_sources,
+        "libraries/sim/meson.build": _prepare_meson_parent,
         "include/simulator/g3_draw.h": _prepare_g3_header,
     }
     for relative, transform in transforms.items():
