@@ -431,17 +431,25 @@ def prepare_mobile_renderer(
         if not asset_path.is_file() or asset_path.is_symlink():
             raise MobileRendererPreparationError(f"Required GLES source asset is missing: {asset_path}")
         destination = root / destination_relative
+        asset_content = asset_path.read_text(encoding="utf-8")
+        if destination_relative.endswith(".glsl"):
+            # sim_shaders.cpp includes GLSL files as C++ raw-string literals.
+            # Keep repository shader assets pure GLSL for glslangValidator,
+            # and wrap only the copies installed into the native source tree.
+            desired = 'R""(\\n' + asset_content.rstrip("\\n") + '\\n)""\\n'
+        else:
+            desired = asset_content
+
         if destination.exists() or destination.is_symlink():
             if destination.is_symlink() or not destination.is_file():
                 raise MobileRendererPreparationError(f"Unsafe existing GLES destination: {destination}")
             existing = destination.read_text(encoding="utf-8")
-            desired = asset_path.read_text(encoding="utf-8")
             if existing != desired:
                 raise MobileRendererPreparationError(
                     f"Existing GLES source differs from the reviewed asset; refusing overwrite: {destination}"
                 )
             continue
-        planned[destination] = asset_path.read_text(encoding="utf-8")
+        planned[destination] = desired
         changed = True
 
     # Include the GLES compatibility macros only in C++ translation units;
