@@ -105,6 +105,24 @@ class MobileRendererSourceTests(unittest.TestCase):
         self.assertIn("? vec4(0.0) : texel;", source)
         self.assertIn("vec4 texel = sampleG3Texture();", source)
 
+    def test_gles_compat_header_is_mobile_only_and_maps_program_uniform_calls(self):
+        path = SHADER_DIR / "sim_gles3_compat.h"
+        self.assertTrue(path.is_file(), f"Missing mobile GLES API header: {path}")
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("defined(SDK_BUILD_ANDROID)", source)
+        self.assertIn("defined(SDK_BUILD_IOS)", source)
+        self.assertIn("#include <GLES3/gl3.h>", source)
+        self.assertIn("#include <GLES3/gl3ext.h>", source)
+        for function in (
+            "glProgramUniform1i",
+            "glProgramUniform1f",
+            "glProgramUniform4f",
+            "glProgramUniform1fv",
+        ):
+            with self.subTest(function=function):
+                self.assertIn("#define " + function, source)
+                self.assertIn("SIM::GLES3Compat::ProgramUniform", source)
+
     def test_gles_program_uniform_adapter_restores_the_previous_program(self):
         adapter_path = SHADER_DIR / "program_uniform_compat.hpp"
         self.assertTrue(adapter_path.is_file(), f"Missing GLES compatibility header: {adapter_path}")
