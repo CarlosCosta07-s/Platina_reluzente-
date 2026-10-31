@@ -2,7 +2,7 @@
 
 **Base inspecionada:** cybervisi0n/libntr, commit 1555d911ac80c0190ac1c321f99f1323de8b3c09, usado pelo porte Desktop fixado em cybervisi0n/pokeplatinum commit 35067868f64f23d25d17ac3e536cfdd9a7f40523.
 
-**Estado:** quatro variantes GLSL ES 3.00 isoladas foram compiladas e linkadas no host com glslangValidator; o workflow 41150452186 também aplicou o preparador source-only à revisão real de libntr `1555d911` e repetiu a execução sem alterações. O código ainda não está conectado a um runtime executável nem passou por comparação de pixels ou driver móvel. Não há build Android/iOS autorizado nesta fase.
+**Estado:** quatro variantes GLSL ES 3.00 isoladas foram compiladas e linkadas no host com glslangValidator; o workflow 41150452186 também aplicou o preparador source-only à revisão real de libntr `1555d911` e repetiu a execução sem alterações. O preparador instala os quatro shaders como literais raw C++ na árvore nativa para que `sim_shaders.cpp` os inclua corretamente. O patcher foi exercitado no commit fixado e é idempotente. O código ainda não está conectado a um runtime executável nem passou por comparação de pixels ou driver móvel. Não há build Android/iOS autorizado nesta fase.
 
 ## 1. Bloqueios encontrados na fonte exata
 
