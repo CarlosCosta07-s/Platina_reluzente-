@@ -56,6 +56,25 @@ GLAD_LOADER_PATCHED = """#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_I
   gladLoadGLLoader(SDL_GL_GetProcAddress);
 #endif"""
 
+MESSAGE_CALLBACK_ORIGINAL = r'''void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id,
+                                GLenum severity, GLsizei length,
+                                const GLchar *message, const void *userParam) {
+  // fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message =
+  // %s\\n",
+  //          ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+  //           type, severity, message );
+}'''
+MESSAGE_CALLBACK_PATCHED = r'''#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_IOS)
+void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id,
+                                GLenum severity, GLsizei length,
+                                const GLchar *message, const void *userParam) {
+  // fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message =
+  // %s\\n",
+  //          ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+  //           type, severity, message );
+}
+#endif'''
+
 DEBUG_OUTPUT_ORIGINAL = """  glEnable(GL_DEBUG_OUTPUT);
   glDebugMessageCallback(MessageCallback, 0);"""
 DEBUG_OUTPUT_PATCHED = """#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_IOS)
@@ -274,6 +293,11 @@ def _prepare_sim_main(source: str) -> tuple[str, bool]:
     changed = changed or item_changed
     current, item_changed = _replace_once(
         current, GLAD_LOADER_ORIGINAL, GLAD_LOADER_PATCHED, "Desktop GLAD initialization"
+    )
+    changed = changed or item_changed
+    current, item_changed = _replace_once(
+        current, MESSAGE_CALLBACK_ORIGINAL, MESSAGE_CALLBACK_PATCHED,
+        "Desktop-only GL debug callback",
     )
     changed = changed or item_changed
     current, item_changed = _replace_once(
