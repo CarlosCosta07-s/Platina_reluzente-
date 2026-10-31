@@ -92,6 +92,11 @@ class MobileRendererSourceTests(unittest.TestCase):
         self.assertIn("uniform int clampToBorderS;", source)
         self.assertIn("uniform int clampToBorderT;", source)
         self.assertIn("vec4 sampleG3Texture()", source)
+        self.assertIn("vec4 texel = texture(myTexture, fragTexCoord);", source)
+        self.assertLess(
+            source.index("vec4 texel = texture(myTexture, fragTexCoord);"),
+            source.index("bool outsideS = clampToBorderS == 1"),
+        )
         self.assertIn("fragTexCoord.s < 0.0 || fragTexCoord.s > 1.0", source)
         self.assertIn("fragTexCoord.t < 0.0 || fragTexCoord.t > 1.0", source)
         self.assertIn("return vec4(0.0);", source)
