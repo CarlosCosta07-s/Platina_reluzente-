@@ -129,9 +129,16 @@ class MobileRendererPreparationTests(unittest.TestCase):
             self.assertIn("-DIMGUI_IMPL_OPENGL_ES3", parent_meson)
 
             for name in mobile.ASSET_NAMES:
-                self.assertTrue((libntr / "include/simulator" / name).is_file()
-                                if name.endswith((".h", ".hpp"))
-                                else (libntr / "libraries/sim/src/shaders/gles300" / name).is_file())
+                destination = (
+                    libntr / "include/simulator" / name
+                    if name.endswith((".h", ".hpp"))
+                    else libntr / "libraries/sim/src/shaders/gles300" / name
+                )
+                self.assertTrue(destination.is_file())
+                if name.endswith(".glsl"):
+                    installed_shader = destination.read_text(encoding="utf-8")
+                    self.assertTrue(installed_shader.startswith('R""(\\n'))
+                    self.assertTrue(installed_shader.endswith('\\n)""\\n'))
 
     def test_patcher_is_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
