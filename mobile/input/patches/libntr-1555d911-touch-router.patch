@@ -82,13 +82,22 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  
  // SND
  #include <nitro/snd/common/work.h>
-@@ -219,5 +286,4 @@
+@@ -211,8 +278,6 @@
+ 
+ u8 s_mosaicTable[16][256];
+ 
+-static u8 isMouseDown = 0;
+-
+ // Local Procedure Declarations
+ static void ConvertMsgParams(draw_msg_t *msg);
+ static u8 GetNumParamsFromCommandType(draw_command_type_t type);
+@@ -219,5 +284,4 @@
  static u8 GetParamSizeFromCommandType(draw_command_type_t type);
  static u8 isParamSigned(draw_command_type_t type);
 -static u64 map(u64 x, u64 in_min, u64 in_max, u64 out_min, u64 out_max);
  static void process_nibble(unsigned char data4bit, int *Index, int *Pcm16bit);
  static void DrawScreenQuad();
-@@ -261,9 +327,5 @@
+@@ -261,9 +325,5 @@
  SIM_config_type *SIM_GetConfigPtr() { return &s_SIM_config; }
  
  SDL_Window * SIM_GetSDLWindow() {return window;}
@@ -98,15 +107,6 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -}
 -
  void SIM_u16ToRGB(u16 in, u8 *r, u8 *g, u8 *b) {
-@@ -211,8 +273,6 @@
- 
- u8 s_mosaicTable[16][256];
- 
--static u8 isMouseDown = 0;
--
- // Local Procedure Declarations
- static void ConvertMsgParams(draw_msg_t *msg);
- static u8 GetNumParamsFromCommandType(draw_command_type_t type);
 @@ -945,8 +1005,6 @@
  
    SDL_Event Event;
