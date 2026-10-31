@@ -7,6 +7,8 @@ uniform sampler2D myTexture;
 uniform int useTexture;
 uniform int polygonMode;
 uniform int useFog;
+uniform int clampToBorderS;
+uniform int clampToBorderT;
 uniform vec4 fogColor;
 uniform float fogDepthBoundary[32];
 uniform float fogDensity[32];
@@ -16,10 +18,21 @@ smooth in vec4 fragInColor;
 smooth in vec4 coords;
 out vec4 color;
 
+vec4 sampleG3Texture() {
+    // Desktop GL_CLAMP_TO_BORDER uses transparent black by default.
+    // GLES 3.0 has no core border-clamp mode; the host adapter must set
+    // these flags together with GL_CLAMP_TO_EDGE on the texture object.
+    if ((clampToBorderS == 1 && (fragTexCoord.s < 0.0 || fragTexCoord.s > 1.0))
+        || (clampToBorderT == 1 && (fragTexCoord.t < 0.0 || fragTexCoord.t > 1.0))) {
+        return vec4(0.0);
+    }
+    return texture(myTexture, fragTexCoord);
+}
+
 void main() {
     vec4 shadedColor;
     if (useTexture == 1) {
-        vec4 texel = texture(myTexture, fragTexCoord);
+        vec4 texel = sampleG3Texture();
         if (polygonMode == 0) {
             shadedColor = texel * fragInColor;
         } else {
