@@ -1,6 +1,6 @@
 # Porte móvel (Android e iOS) — arquitetura e execução por gates
 
-**Estado atual:** desenvolvimento reaberto em modo source-only. O projeto pode avançar com arquitetura, código compartilhado, shells de plataforma como fonte, testes ROM-free e provas gráficas em host. **Nenhuma compilação de alvo Android/iOS, APK, AAB ou IPA será feita até existir paridade funcional 1:1 com o Desktop.** O contrato vinculante está em [MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md).
+**Estado atual:** desenvolvimento reaberto em modo source-only. O projeto pode avançar com arquitetura, código compartilhado, shells de plataforma como fonte, testes ROM-free e provas gráficas em host. **Nenhuma compilação de alvo Android/iOS, APK, AAB ou IPA será feita até existir paridade funcional 1:1 com o Desktop.** O contrato vinculante está em [MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md). A auditoria atual do renderer está em [MOBILE_RENDERER_AUDIT.md](MOBILE_RENDERER_AUDIT.md).
 
 O Desktop continua sendo a referência de funcionalidades e comportamento. O mantenedor informou que Windows x64 e Linux x86-64 compilaram; a validação manual com ROM ainda depende de acesso a um PC. Não considerar uma build ou smoke test sem ROM como prova de gameplay.
 
@@ -30,13 +30,13 @@ Paridade com o desktop: importar a ROM USA Rev. 1, preparar os dados localmente,
 - **Android:** distribuição por APK/AAB fora da Play Store é uma opção técnica; distribuir pela Play Store exige uma análise separada de suas políticas.
 - Esta documentação não é aconselhamento jurídico; é necessária revisão por advogado.
 
-## Marcos sugeridos
+## Marcos source-only e gate de compilação
 
-1. **Renderizador:** protótipo OpenGL ES 3.x (Android) rodando a tela de título com dados de teste sintéticos, e decisão sobre iOS (ANGLE/Metal ou backend próprio).
-2. **Biblioteca nativa:** build ARM64 como `.so` (Android) e framework estático (iOS) com smoke test sem ROM.
-3. **App móvel mínimo:** importar ROM, validar identidade, preparar dados com progresso, iniciar o jogo.
-4. **Paridade:** entrada por toque e controle, saves seguros, seletor de idioma, logs, tela de diagnóstico.
-5. **Desempenho e estabilidade:** medições em aparelhos de referência (baixo, médio e alto desempenho).
-6. **CI:** build ARM64 Android e iOS em runners próprios, com os mesmos testes ROM-free do desktop.
+1. **Renderer portátil:** variantes GLSL ES 3.00 separadas, wrappers de API GL e emulação verificada das capacidades ausentes; provas de compilação/link e comparação de pixels no host. A [auditoria do renderer](MOBILE_RENDERER_AUDIT.md) descreve o estado atual.
+2. **Núcleo compartilhado:** API C/C++ de ciclo de vida, serviços de armazenamento e diagnóstico injetáveis, sem depender de caminhos herdados do Desktop.
+3. **Serviços móveis:** código-fonte Kotlin/Compose e Swift/SwiftUI para importação, sandbox, lifecycle, controles, áudio, idioma, progresso e logs.
+4. **Paridade completa:** cada linha de MOBILE_PARITY_CONTRACT.md implementada e coberta por testes ROM-free; revisão de segurança, licenças, privacidade e preservação de saves.
+5. **Gate de compilação móvel:** somente depois da paridade 1:1 aprovada, autorizar builds Android ARM64 e iOS/Xcode. A primeira compilação será uma fase de validação de plataforma, não evidência automática de paridade final.
+6. **Validação em aparelhos:** testar em aparelhos reais, corrigir divergências e só depois considerar os alvos móveis estáveis.
 
 Cada marco só é concluído com evidência reproduzível, como no restante do projeto.
