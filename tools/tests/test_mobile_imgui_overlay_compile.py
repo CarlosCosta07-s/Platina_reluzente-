@@ -20,7 +20,10 @@ class MobileImGuiOverlayCompileTests(unittest.TestCase):
             self.skipTest("A host C++ compiler is not available.")
 
         if LIBNTR_ROOT is None:
-            self.fail("Expected the prepared pinned libntr checkout path as an argument.")
+            self.skipTest(
+                "Requires a prepared pinned libntr checkout; the dedicated mobile "
+                "host-validation workflow supplies it."
+            )
 
         libntr_root = LIBNTR_ROOT
         include_root = libntr_root / "include"
