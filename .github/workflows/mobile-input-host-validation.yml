@@ -1,0 +1,35 @@
+name: Mobile touch input contract validation (host only)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/input/**"
+      - "tools/tests/cpp/touch_input_router_test.cpp"
+      - "tools/tests/test_mobile_touch_input_router.py"
+      - ".github/workflows/mobile-input-host-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-input-host-validation-main
+  cancel-in-progress: true
+
+jobs:
+  touch-router-contract:
+    name: Multi-touch router C++ contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Compile and run source-only touch router tests
+        run: python tools/tests/test_mobile_touch_input_router.py
