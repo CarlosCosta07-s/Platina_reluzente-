@@ -412,7 +412,6 @@ def prepare_mobile_renderer(
                     f"Existing GLES source differs from the reviewed asset; refusing overwrite: {destination}"
                 )
             continue
-        destination.parent.mkdir(parents=True, exist_ok=True)
         planned[destination] = asset_path.read_text(encoding="utf-8")
         changed = True
 
