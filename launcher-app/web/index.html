@@ -7,9 +7,24 @@
   <meta name="description" content="Biblioteca unificada de portes nativos: Pokémon Platinum e Pokémon Black.">
   <title>Platina Reluzente — Biblioteca</title>
   <link rel="stylesheet" href="./styles.css">
+  <script>
+    // Show the intro only when scripting works; never leave the UI hidden if life.js fails.
+    document.documentElement.classList.add('js-life');
+    setTimeout(function () { document.documentElement.classList.add('is-ready'); }, 5000);
+  </script>
   <script src="./app.js" defer></script>
+  <script src="./life.js" defer></script>
 </head>
 <body>
+  <div id="splash" class="splash" aria-hidden="true">
+    <div class="splash-core">
+      <span class="splash-mark"><i></i><i></i><i></i></span>
+      <div class="splash-title"><span>PLATINA</span><span>REL<b>U</b>ZENTE</span></div>
+      <p class="splash-tag">Biblioteca de portes nativos</p>
+      <span class="splash-line"></span>
+    </div>
+    <p class="splash-skip">Clique ou pressione qualquer tecla para pular</p>
+  </div>
   <div class="app-shell" id="app-shell">
 
     <main class="main-content">
@@ -99,6 +114,7 @@
             <button id="rom-button" class="secondary-button" type="button">Importar / trocar ROM</button>
           </div>
           <p id="launch-status" class="inline-status" role="status" aria-live="polite">Importe uma cópia compatível USA Rev. 1 (.nds) para começar.</p>
+          <p id="session-stats" class="session-stats" hidden></p>
           <div class="detail-actions diagnostic-actions">
             <button id="startup-log-button" class="secondary-button" type="button">Abrir log de inicialização</button>
           </div>

@@ -17,5 +17,14 @@ esbuild.buildSync({
   format: 'iife',
   target: ['es2020']
 });
+esbuild.buildSync({
+  entryPoints: [path.join(source, 'life.js')],
+  outfile: path.join(output, 'life.js'),
+  bundle: false,
+  platform: 'browser',
+  format: 'iife',
+  target: ['es2020']
+});
+if (!fs.statSync(path.join(output, 'life.js')).size) throw new Error('Launcher life layer bundle is empty.');
 if (!fs.statSync(path.join(output, 'app.js')).size) throw new Error('Launcher web bundle is empty.');
 console.log('Built launcher web bundle with Capacitor Filesystem support.');

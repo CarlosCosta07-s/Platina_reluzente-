@@ -220,6 +220,7 @@
     setStatus('Iniciando Pokémon Platinum pelo launcher…');
     try {
       const result = await window.platina.launchGame();
+      window.dispatchEvent(new CustomEvent('platina:launched', { detail: { ok: Boolean(result && result.ok) } }));
       setStatus(result.message || 'O processo nativo foi iniciado.', !result.ok);
     } catch (error) {
       setStatus('Falha ao iniciar o jogo: ' + error.message, true);

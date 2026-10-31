@@ -382,3 +382,62 @@ html, body {
   .language-controls { align-items: stretch; flex-direction: column; }
   .language-controls select, .language-controls .secondary-button { width: 100%; }
 }
+
+/* ===== Life layer: intro, sparkles, reveal, tilt, toast, easter egg ===== */
+.sparkles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.app-shell { position: relative; z-index: 1; }
+.splash {
+  position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(900px 560px at 50% 42%, #17356f 0, #070b14 72%); cursor: pointer;
+}
+html.js-life:not(.is-ready) .splash { display: flex; }
+.splash.leaving { display: flex; pointer-events: none; animation: splash-out .6s ease forwards; }
+.splash-core { display: grid; justify-items: center; gap: 18px; }
+.splash-mark {
+  width: 84px; height: 84px; display: flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1px solid #8fb6e6; border-radius: 22px; background: linear-gradient(145deg, #2f5280, #14213a);
+  box-shadow: 0 0 0 0 #5ea8ff55, 0 0 60px #5ea8ff55; transform: rotate(-7deg);
+  animation: mark-in .8s cubic-bezier(.2, 1.3, .4, 1) both, mark-pulse 2.2s ease-in-out .8s infinite;
+}
+.splash-mark i { display: block; width: 9px; border-radius: 6px; background: #d9ecff; }
+.splash-mark i:nth-child(1) { height: 28px; opacity: .66; animation: bar-up .6s .35s ease both; }
+.splash-mark i:nth-child(2) { height: 48px; animation: bar-up .6s .5s ease both; }
+.splash-mark i:nth-child(3) { height: 37px; opacity: .82; animation: bar-up .6s .65s ease both; }
+.splash-title { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.splash-title span:first-child {
+  font-size: clamp(30px, 6vw, 54px); font-weight: 950; letter-spacing: 8px; line-height: 1; color: transparent;
+  background: linear-gradient(100deg, #7fa6d8 20%, #fff 45%, #7fa6d8 70%) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text;
+  animation: track-in 1s .3s ease both, shimmer 2.4s .6s linear infinite;
+}
+.splash-title span:last-child { color: #a7b9d0; font-size: clamp(12px, 2vw, 17px); font-weight: 750; letter-spacing: 7px; animation: fade-up .7s .7s ease both; }
+.splash-title b { color: #9bc5ff; }
+.splash-tag { margin: 0; color: #8ea6c6; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; animation: fade-up .7s 1s ease both; }
+.splash-line { width: 0; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #9bc5ff, transparent); box-shadow: 0 0 14px #5ea8ff; animation: line-grow 1.5s .6s ease forwards; }
+.splash-skip { position: absolute; bottom: 24px; margin: 0; color: #5f7391; font-size: 12px; animation: fade-up .6s 1.4s ease both; }
+html.js-life:not(.is-ready) [data-reveal] { opacity: 0; }
+html.js-life.is-ready [data-reveal] { animation: reveal .65s calc(var(--i, 0) * 90ms) cubic-bezier(.2, .8, .2, 1) both; }
+.game-card { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(.955); }
+.game-card:hover { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(.975); }
+.game-card.selected { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1); }
+.sound-toggle { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid #ffffff1f; border-radius: 50%; background: #ffffff0d; color: #dfe9fa; font-size: 16px; }
+.sound-toggle:hover { background: #ffffff1c; }
+.session-stats { margin: 6px 0 0; color: #7f93b0; font-size: 12px; }
+.toast {
+  position: fixed; top: 22px; left: 50%; z-index: 120; max-width: min(92vw, 420px); padding: 12px 20px; border: 1px solid #ffffff30;
+  border-radius: 999px; background: #0c1426f2; color: #eaf2ff; font-size: 14px; font-weight: 700; text-align: center;
+  box-shadow: 0 12px 40px #00000080; opacity: 0; transform: translate(-50%, -16px); pointer-events: none; transition: opacity .3s ease, transform .3s ease;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+body.chrome-mode .brand-mark, body.chrome-mode .primary-button, body.chrome-mode .status-dot, body.chrome-mode .battery-fill { animation: chrome-hue 2.4s linear infinite; }
+body.chrome-mode .clock { text-shadow: 0 0 16px #9bc5ff; }
+@keyframes splash-out { to { opacity: 0; transform: scale(1.06); } }
+@keyframes mark-in { from { opacity: 0; transform: scale(.35) rotate(-40deg); } to { opacity: 1; transform: scale(1) rotate(-7deg); } }
+@keyframes mark-pulse { 0%, 100% { box-shadow: 0 0 0 0 #5ea8ff55, 0 0 50px #5ea8ff44; } 50% { box-shadow: 0 0 0 14px #5ea8ff00, 0 0 78px #5ea8ff77; } }
+@keyframes bar-up { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes track-in { from { opacity: 0; letter-spacing: 22px; } to { opacity: 1; letter-spacing: 8px; } }
+@keyframes shimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes line-grow { to { width: min(260px, 60vw); } }
+@keyframes reveal { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes chrome-hue { to { filter: hue-rotate(360deg); } }
+@media (max-width: 850px) { .sound-toggle { width: 34px; height: 34px; } }
