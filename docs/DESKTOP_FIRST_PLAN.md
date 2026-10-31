@@ -8,6 +8,59 @@ Concluir uma versão nativa de Pokémon Platinum que funcione de forma reproduz�
 
 A ROM e os recursos do jogo continuam sendo fornecidos e mantidos localmente pelo usuário. Nenhuma ROM, firmware, arquivo extraído, save ou patch com conteúdo protegido deve entrar no Git, nos workflows ou nos artefatos públicos.
 
+## Como aproveitamos as três referências
+
+As referências são guias de arquitetura e critérios de qualidade. Não copiamos código, assets, decompilações ou dependências de terceiros sem uma licença compatível. Cada ideia é adaptada ao formato NDS, ao runtime C/C++ e à nossa versão Desktop.
+
+### Gen1Recomp — importação, armazenamento e ciclo de vida
+
+Aplicar os seguintes padrões também no Desktop:
+
+- Importar a ROM selecionada pelo usuário para uma área privada do aplicativo, com metadados de identidade SHA-1/SHA-256.
+- Fazer a substituição por staging, validação, backup e recuperação de transações interrompidas; nunca apagar a cópia anterior antes de validar a nova.
+- Preparar os arquivos antes de iniciar a janela e o loop SDL/OpenGL, exibindo progresso e erros no launcher.
+- Vincular o cache de extração à identidade completa da ROM e ao build ID do runtime; verificar manifesto, tamanhos e integridade dos arquivos antes do boot.
+- Preservar saves, configurações e dados do usuário durante a atualização do runtime.
+- Encerrar/retomar processos e limpar entradas presas ao perder foco ou fechar a janela; registrar diagnóstico em log persistente.
+
+**O que não adotamos:** o motor Lua/LÖVE do Gen1Recomp. O núcleo do jogo continua sendo o código C/C++ nativo recompilado.
+
+Referências internas: [Gen1Recomp — Desktop](GEN1RECOMP_REFERENCE.md) e [Gen1Recomp — mobile](GEN1RECOMP_MOBILE_REFERENCE.md). A segunda fica preservada para a futura retomada mobile, mas não abre trabalho móvel nesta fase.
+
+### Black Xbox — identidade do executável, boot e sincronização
+
+Aplicar os princípios de confiança do boot, ajustados ao NDS:
+
+- Validar versão/revisão e hash integral da ROM importada, além do cabeçalho NDS; não confiar apenas em extensão, nome ou tamanho.
+- Validar o pacote nativo e as bibliotecas antes da execução; executar apenas o runtime que corresponde ao build ID aprovado.
+- Fazer extração em staging e só promover os dados quando manifesto, arquivos obrigatórios, tamanhos e checksums estiverem corretos.
+- Nunca extrair recursos de forma síncrona durante o loop de jogo nem marcar uma preparação parcial como concluída.
+- Tratar sincronização entre preparação, boot, renderização, salvamento e encerramento com limites claros; medir antes de introduzir threads adicionais.
+
+**Diferença importante:** Black Xbox monta uma imagem de disco Xbox para o runtime acessar os dados do XBE. Pokémon Platinum é NDS e atualmente usa um pipeline de extração para arquivos locais. Não devemos copiar XISO, parser de XBE nem o modelo de montagem de disco do Xbox.
+
+Referência interna: [Black Xbox port reference](BLACK_XBOX_PORT_REFERENCE.md).
+
+### BT3 Decomp — dois renderers, GPU/driver e desempenho medido
+
+Depois de estabilizar OpenGL no Desktop:
+
+- Manter OpenGL 4.2 Core e implementar Vulkan como backend verdadeiramente independente.
+- Expor Automático, OpenGL e Vulkan; persistir a preferência do jogador e informar qual backend está realmente ativo.
+- Identificar GPU, driver e versão da API. Perfis automáticos só podem ser criados a partir de resultados reproduzidos, nunca de uma regra fixa por marca.
+- Em falha Vulkan, destruir device/surface/swapchain e todos os recursos parciais antes do fallback para OpenGL; registrar motivo e resultado.
+- Comparar os dois renderers com as mesmas cenas sintéticas e exigir equivalência visual antes de aceitar ganhos de FPS.
+- Medir frametime p50/p95/p99, CPU/GPU, memória e comportamento após sessões longas; não assumir que Vulkan é sempre mais rápido.
+
+**Adaptação Desktop:** os benchmarks e perfis serão coletados em PCs Windows/Linux e GPUs/driver reais dessas plataformas. Os aparelhos e resultados Android do BT3 são evidência metodológica, não valores que possamos transportar diretamente para o Desktop.
+
+Referência interna: [BT3 Decomp port reference](BT3_PORT_REFERENCE.md).
+
+### Síntese da arquitetura
+
+O fluxo esperado é: importar e identificar a ROM → preparar e verificar dados locais → validar o runtime e sua integridade → iniciar o jogo nativo → monitorar boot/renderização/saves → encerrar com estado consistente. OpenGL permanece como baseline; Vulkan entra depois como backend selecionável. Nenhuma dessas decisões autoriza builds móveis enquanto a pausa estiver vigente.
+
+
 ## Ordem obrigatória de execução
 
 ### Gate 0 — baseline Desktop reproduzível
