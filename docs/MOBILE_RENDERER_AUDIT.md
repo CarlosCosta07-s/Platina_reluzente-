@@ -34,7 +34,7 @@ O shader G3 móvel declara clampToBorderS/clampToBorderT e sampleG3Texture. Fora
 1. definir as duas flags por textura/desenho;
 2. selecionar GL_CLAMP_TO_EDGE no objeto quando a flag de border estiver ativa;
 3. manter GL_REPEAT e GL_MIRRORED_REPEAT para as outras combinações;
-4. aplicar a mesma lógica também ao caminho de desenhos translúcidos adiados em G3SIM_DrawItems;
+4. preservar a diferença já existente no Desktop: o caminho de desenhos translúcidos adiados em G3SIM_DrawItems aplica REPEAT/MIRRORED_REPEAT conforme flipS/flipT e ignora repeatS/repeatT. Para paridade 1:1, manter clampToBorderS/T em zero nesse caminho até uma decisão separada sobre o comportamento Desktop;
 5. comprovar a semântica nas coordenadas 0, 1, imediatamente dentro e imediatamente fora da borda.
 
 Não declarar essa emulação equivalente até as cenas de teste confirmarem os pixels. Os filtros das texturas G3 fixadas são nearest; qualquer alteração para linear exige nova matriz de bordas.
