@@ -157,7 +157,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1235,31 +1314,124 @@
+@@ -1235,32 +1314,125 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
@@ -258,6 +258,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        }
      }
      s_reg_PAD_KEYINPUT = s_reg_PAD_KEYINPUT;
+ 
 +    touchOverlayBasePadKeys = s_reg_PAD_KEYINPUT;
 +    touchOverlayBaseXy = *(vu16 *)HW_BUTTON_XY_BUF;
 +    touchOverlayBaseValid = true;
@@ -316,7 +317,7 @@ diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
  #include <nitro/types.h>
  #include <SDL2/SDL.h>
  #include <functional>
-@@ -18,7 +19,18 @@
+@@ -18,8 +19,19 @@
  void OpenFileDialog(std::function<void(std::string)> callback);
  bool IsGameLogicPaused();
  void AppButton(const char * label, bool * state, void (*aInitFunc)(void), void (*aAppFunc)(bool *));
@@ -334,6 +335,7 @@ diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
 +std::uint16_t TouchOverlayPressedMask();
  
  
+ }
  
 diff --git a/libraries/sim/src/sim_gui.cpp b/libraries/sim/src/sim_gui.cpp
 --- a/libraries/sim/src/sim_gui.cpp
