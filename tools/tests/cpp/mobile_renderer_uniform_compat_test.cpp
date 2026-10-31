@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cstddef>
-#include "mobile/renderer/gles300/program_uniform_compat.hpp"
+#include "mobile/renderer/gles300/sim_gles3_compat.h"
 
 static GLint currentProgram = 7;
 static GLuint expectedProgram = 0;
@@ -31,7 +31,7 @@ void glUniform1fv(GLint, GLsizei, const GLfloat *) { checkProgram(); }
 
 int main() {
     expectedProgram = 42;
-    SIM::GLES3Compat::ProgramUniform1i(42, 1, 9);
+    glProgramUniform1i(42, 1, 9);
     assert(currentProgram == 7);
     assert(bindCalls == 2);
     assert(uniformCalls == 1);
@@ -39,16 +39,16 @@ int main() {
     // The helper must not rebind when its target is already active.
     currentProgram = 42;
     bindCalls = 0;
-    SIM::GLES3Compat::ProgramUniform1f(42, 2, 0.5f);
+    glProgramUniform1f(42, 2, 0.5f);
     assert(currentProgram == 42);
     assert(bindCalls == 0);
     assert(uniformCalls == 2);
 
     // Verify the remaining wrapper signatures and restoration to program zero.
     currentProgram = 0;
-    SIM::GLES3Compat::ProgramUniform4f(42, 3, 1.0f, 2.0f, 3.0f, 4.0f);
+    glProgramUniform4f(42, 3, 1.0f, 2.0f, 3.0f, 4.0f);
     const GLfloat values[2] = {0.25f, 0.75f};
-    SIM::GLES3Compat::ProgramUniform1fv(42, 4, 2, values);
+    glProgramUniform1fv(42, 4, 2, values);
     assert(currentProgram == 0);
     assert(uniformCalls == 4);
     assert(bindCalls == 4);
