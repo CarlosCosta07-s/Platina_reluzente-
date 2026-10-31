@@ -5,8 +5,11 @@ on:
     branches: [main]
     paths:
       - "mobile/input/**"
+      - "scripts/prepare_mobile_renderer.py"
+      - "scripts/prepare_mobile_input.py"
       - "tools/tests/cpp/touch_input_router_test.cpp"
       - "tools/tests/test_mobile_touch_input_router.py"
+      - "tools/tests/test_mobile_input_source.py"
       - ".github/workflows/mobile-input-host-validation.yml"
   workflow_dispatch:
 
@@ -19,9 +22,9 @@ concurrency:
 
 jobs:
   touch-router-contract:
-    name: Multi-touch router C++ contract
+    name: Multi-touch router and pinned SDL integration contract
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -30,6 +33,31 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
+      - name: Fetch the exact pinned libntr source revision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/cybervisi0n/libntr.git "$RUNNER_TEMP/libntr-mobile-input"
+          git -C "$RUNNER_TEMP/libntr-mobile-input" checkout --detach 1555d911ac80c0190ac1c321f99f1323de8b3c09
+
+      - name: Apply the existing GLES renderer preparation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python scripts/prepare_mobile_renderer.py "$RUNNER_TEMP/libntr-mobile-input"
+          python scripts/prepare_mobile_renderer.py "$RUNNER_TEMP/libntr-mobile-input"
+
+      - name: Apply the pinned SDL touch input patch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python scripts/prepare_mobile_input.py "$RUNNER_TEMP/libntr-mobile-input"
+          python scripts/prepare_mobile_input.py "$RUNNER_TEMP/libntr-mobile-input"
+          git -C "$RUNNER_TEMP/libntr-mobile-input" diff --check
+
+      - name: Verify the prepared SDL event path and preserved DS geometry
+        run: python tools/tests/test_mobile_input_source.py "$RUNNER_TEMP/libntr-mobile-input"
 
       - name: Compile and run source-only touch router tests
         run: python tools/tests/test_mobile_touch_input_router.py
