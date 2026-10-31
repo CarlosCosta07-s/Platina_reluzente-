@@ -138,6 +138,7 @@ O desenvolvimento será feito diretamente na branch main; não serão criadas br
 - [Arquitetura técnica](docs/PORTING_ARCHITECTURE.md)
 - [Contrato de paridade Android/iOS](docs/MOBILE_PARITY_CONTRACT.md)
 - [Auditoria do renderer móvel](docs/MOBILE_RENDERER_AUDIT.md)
+- [Referência de arquitetura móvel — Gen1Recomp](docs/GEN1RECOMP_MOBILE_REFERENCE.md)
 - [Roteiro e critérios de aceite](docs/ROADMAP.md)
 - [Compatibilidade PT-BR e original](docs/LOCALIZATION.md)
 - [Preservação, direitos e distribuição](docs/LEGAL.md)
