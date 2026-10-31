@@ -2,7 +2,7 @@
 
 Estas quatro fontes são variantes móveis do renderer da revisão de libntr 1555d911ac80c0190ac1c321f99f1323de8b3c09. Elas não substituem nem editam as fontes Desktop do submódulo.
 
-O arquivo `program_uniform_compat.hpp` é um helper GLES source-only para as quatro chamadas glProgramUniform usadas no renderer fixado. Ele preserva o programa ativo com um binding temporário. O teste de host usa uma API GLES simulada; o helper ainda não foi incluído no `libntr` e não passou por profiling em GPU.
+O arquivo `program_uniform_compat.hpp` é um helper GLES source-only para as quatro chamadas glProgramUniform usadas no renderer fixado. Ele preserva o programa ativo com um binding temporário. O teste de host usa uma API GLES simulada; o helper ainda não foi incluído no `libntr` e não passou por profiling em GPU. O header `sim_gles3_compat.h` reúne os includes GLES3 e mapeia essas quatro chamadas para os wrappers, mas também ainda não está integrado ao submódulo.
 
 **Importante:** os arquivos ainda não estão ligados a um alvo de build Android/iOS e não constituem um renderer aprovado. São o primeiro passo source-only para avaliar a portabilidade GLSL ES 3.00.
 
