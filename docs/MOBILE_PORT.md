@@ -32,7 +32,7 @@ Paridade com o desktop: importar a ROM USA Rev. 1, preparar os dados localmente,
 
 ## Marcos source-only e gate de compilação
 
-1. **Renderer portátil:** variantes GLSL ES 3.00 separadas, wrappers de API GL e emulação verificada das capacidades ausentes; provas de compilação/link e comparação de pixels no host. A [auditoria do renderer](MOBILE_RENDERER_AUDIT.md) descreve o estado atual.
+1. **Renderer portátil:** variantes GLSL ES 3.00, wrappers de API GL e emulação das capacidades ausentes; o G3 já passou 10/10 cenas em Desktop GL 4.2 Core × GLES 3.0 no host. O G2, ANGLE/Metal e drivers de aparelhos continuam pendentes. Consulte a [auditoria do renderer](MOBILE_RENDERER_AUDIT.md).
 2. **Núcleo compartilhado:** API C/C++ de ciclo de vida, serviços de armazenamento e diagnóstico injetáveis, sem depender de caminhos herdados do Desktop.
 3. **Serviços móveis:** Activity Android sobre SDL/JNI e bridges iOS Objective-C/Swift para importação, sandbox, lifecycle, controles, áudio, idioma, progresso e logs. O runtime e a camada de jogo continuam no SDL.
 4. **Paridade completa:** cada linha de MOBILE_PARITY_CONTRACT.md implementada e coberta por testes ROM-free; revisão de segurança, licenças, privacidade e preservação de saves.
