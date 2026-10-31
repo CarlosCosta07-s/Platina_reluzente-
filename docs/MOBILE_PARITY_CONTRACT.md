@@ -101,7 +101,8 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [ ] Implementar Activity Android sobre SDL e adaptadores JNI para SAF, armazenamento privado, lifecycle, áudio, controles e safe area.
 - [ ] Implementar host iOS sobre SDL e bridges Objective-C/Objective-C++/Swift para Document Picker, security-scoped URLs, sandbox, lifecycle, áudio e safe area.
 - [x] Criar o núcleo source-only `TouchInputRouter`: IDs por origem/dispositivo/ponteiro, prioridade do overlay, multitouch overlay + stylus, proprietário único do stylus e cancelamento global; seis cenários C++ host-only aprovados (workflow [41153036719](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153036719)).
-- [ ] Integrar `TouchInputRouter` ao loop SDL do `sim_main.cpp` para `SDL_FINGER*` e `SDL_MOUSE*`: preservar `s_TouchPanelCoords`, `screenLayout` e `swapScreens`; manter mouse Desktop inalterado e filtrar duplicação de eventos de toque.
+- [x] Criar e aplicar no checkout de preparação o patch SDL do `sim_main.cpp` para `SDL_FINGER*` e `SDL_MOUSE*`; preservar `s_TouchPanelCoords`/layouts, filtrar `SDL_TOUCH_MOUSEID` e cancelar contatos em perda de foco/background. Aplicação ao commit fixado, idempotência e contrato estático aprovados (workflow [41153508188](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153508188)).
+- [ ] Compilar e executar o `sim_main.cpp` preparado; validar regressão do mouse Desktop e o ciclo real de input antes de ativar a preparação em um alvo móvel.
 - [ ] Implementar o overlay tátil no runtime SDL, com multitouch, IDs por dedo, layout portrait/landscape, safe area e coexistência com gamepads.
 
 O desenho e o estado das lacunas da integração estão documentados em [MOBILE_INPUT_AUDIT.md](MOBILE_INPUT_AUDIT.md).
