@@ -15,7 +15,7 @@ O trabalho source-only pode incluir:
 - shells Kotlin/Compose e Swift/SwiftUI como código-fonte, sem build dos alvos;
 - testes ROM-free e comparadores de pixels com dados sintéticos.
 
-O contrato de funcionalidades, as provas obrigatórias e o gate de primeira compilação estão em [docs/MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md). A matriz precisa estar 100% implementada e aprovada antes do primeiro build Android/iOS. A compilação do Desktop, por si só, não substitui a validação manual de gameplay com ROM.
+O contrato de funcionalidades, as provas obrigatórias e o gate de primeira compilação estão em [docs/MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md). A matriz precisa estar 100% implementada e aprovada antes do primeiro build Android/iOS. A compilação do Desktop, por si só, não substitui a validação manual de gameplay com ROM. A auditoria do primeiro bloqueio técnico, o renderer, está em [docs/MOBILE_RENDERER_AUDIT.md](MOBILE_RENDERER_AUDIT.md).
 
 O projeto continua sem usar ROMs ou dados extraídos na CI. Os workflows Desktop devem permanecer independentes dos trabalhos móveis e não podem ser alterados para suportar builds móveis.
 
