@@ -12,7 +12,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  #include "git_info.h"
  
  // Simulator configuration
-@@ -69,6 +73,78 @@
+@@ -69,6 +73,75 @@
  extern OSThreadInfo OSi_ThreadInfo;
  
  static u32 s_TouchPanelCoords[4] = {}; // The bounding box of the touch screen
@@ -35,9 +35,6 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +
 +static bool SIM_TouchOverlayClaims(
 +    const Platina::MobileInput::Point &position) {
-+  // The virtual-control overlay is a separate implementation step. Keep this
-+  // hit-test hook ahead of DS routing so the overlay can claim a pointer later.
-+  (void)position;
 +#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)
 +  return s_TouchControls.Claims(position);
 +#else
@@ -91,7 +88,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +
  // SND
  #include <nitro/snd/common/work.h>
-@@ -211,8 +287,6 @@
+@@ -211,8 +284,6 @@
  
  u8 s_mosaicTable[16][256];
  
@@ -100,13 +97,13 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  // Local Procedure Declarations
  static void ConvertMsgParams(draw_msg_t *msg);
  static u8 GetNumParamsFromCommandType(draw_command_type_t type);
-@@ -219,5 +293,4 @@
+@@ -219,5 +290,4 @@
  static u8 GetParamSizeFromCommandType(draw_command_type_t type);
  static u8 isParamSigned(draw_command_type_t type);
 -static u64 map(u64 x, u64 in_min, u64 in_max, u64 out_min, u64 out_max);
  static void process_nibble(unsigned char data4bit, int *Index, int *Pcm16bit);
  static void DrawScreenQuad();
-@@ -261,9 +334,5 @@
+@@ -261,9 +331,5 @@
  SIM_config_type *SIM_GetConfigPtr() { return &s_SIM_config; }
  
  SDL_Window * SIM_GetSDLWindow() {return window;}
@@ -116,7 +113,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -}
 -
  void SIM_u16ToRGB(u16 in, u8 *r, u8 *g, u8 *b) {
-@@ -945,12 +1014,13 @@
+@@ -945,12 +1011,13 @@
  
    SDL_Event Event;
    char c;
@@ -132,7 +129,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +  static u16 touchOverlayBasePadKeys = 0xFFFF;
 +  static u16 touchOverlayBaseXy = 0xFFFF;
    G3SIM_FlushArray();
-@@ -1065,15 +1135,32 @@
+@@ -1065,15 +1132,32 @@
      }
  
 +    s_TouchControls.Configure(windowWidth, windowHeight, {});
@@ -165,7 +162,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1235,34 +1322,124 @@
+@@ -1235,34 +1319,124 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
