@@ -42,7 +42,7 @@ O Gen1Recomp foi estudado como referência de fronteiras móveis: SDL continua p
 | Preparação dos dados | Extração para diretório privado, manifesto de caminhos, validação CRC/tamanho, staging, promoção e recuperação | Testes de interrupção, cache incompatível e preservação de dados locais |
 | Progresso de primeira execução | Estados claros para importação, extração, validação, inicialização e primeiro frame | Testes de sequência, erro, cancelamento e retomada do estado |
 | Renderer e duas telas | Mesma ordem, proporção, composição, transparência, prioridades, brilho, fog e resultado visual; layout móvel adaptável sem mudar o conteúdo | Comparador de pixels GL 4.2 × GLES 3.0 para cenas sintéticas; ANGLE/Metal precisa passar pela mesma suíte |
-| Controles | Todos os comandos aceitos pelo Desktop; overlay tátil D-pad/A/B/X/Y/L/R/Start/Select, toque DS na tela inferior e controles Bluetooth/USB/teclado físico. O router decide no início de cada toque se ele pertence ao overlay ou à tela DS e mantém a captura por touch ID até a liberação. | Testes de multi-touch, primeira recusa do overlay, coordenadas da tela inferior, repetição, foco, desconexão, cancelamento e coexistência de fontes |
+| Controles | Todos os comandos aceitos pelo Desktop; overlay tátil D-pad/A/B/X/Y/L/R/Start/Select, toque DS na tela inferior e controles Bluetooth/USB/teclado físico. Um TouchInputRouter recebe SDL_FINGER* e SDL_MOUSE*, prioriza o overlay, preserva s_TouchPanelCoords/screenLayout/swapScreens e mantém IDs de dedos; um dedo pode controlar o overlay enquanto outro é o stylus DS. | Testes de mouse Desktop inalterado, multi-touch, primeira recusa do overlay, coordenadas da tela inferior, stylus owner, repetição, foco, desconexão, cancelamento e coexistência de fontes |
 | Áudio | Mesmos eventos/canais e comportamento de pausa/retomada, usando saída do dispositivo | Testes de inicialização, perda/retorno de dispositivo e silêncio de fallback |
 | Saves | Mesmo formato e semântica de save.bin; escrita atômica, flush, backup e recuperação; nunca apagar save em atualização | Testes de interrupção durante escrita, restauração e round-trip sintético |
 | Configurações | Persistir idioma e preferências equivalentes a sim_config.ini; não sobrescrever valores do usuário | Testes de leitura, migração, corrupção e preservação |
@@ -101,6 +101,7 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 ### Fase 3 — serviços móveis e hosts SDL
 - [ ] Implementar Activity Android sobre SDL e adaptadores JNI para SAF, armazenamento privado, lifecycle, áudio, controles e safe area.
 - [ ] Implementar host iOS sobre SDL e bridges Objective-C/Objective-C++/Swift para Document Picker, security-scoped URLs, sandbox, lifecycle, áudio e safe area.
+- [ ] Implementar TouchInputRouter SDL_FINGER*/SDL_MOUSE*: preservar s_TouchPanelCoords, screenLayout e swapScreens; priorizar overlay e manter um stylus DS lógico com owner por touch ID.
 - [ ] Implementar o overlay tátil no runtime SDL, com multitouch, IDs por dedo, layout portrait/landscape, safe area e coexistência com gamepads.
 - [ ] Implementar fluxos equivalentes de biblioteca/importação, idioma, progresso, diagnóstico e controles.
 - [ ] Não adicionar tarefas de build Android/iOS nesta fase.
