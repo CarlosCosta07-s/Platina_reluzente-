@@ -73,7 +73,8 @@ O Dear ImGui backend contém código condicional IMGUI_IMPL_OPENGL_ES3 que evita
 ### Gate de compilação/link em host
 - [x] glslangValidator compila os quatro shaders como ESSL 3.00 no host.
 - [x] glslangValidator cria e linka os programas G2 e G3 (workflow host-only 41149162996).
-- [ ] Validar o comportamento dos uniforms e renderizar cenas com Mesa/llvmpipe ou EGL no host; esse é um teste gráfico host-side, não build Android/iOS.
+- [x] Comparação G3 host-only: dez cenas sintéticas renderizadas em Desktop GL 4.5 (mínimo 4.2) e GLES 3.2 (mínimo 3.0), todas com `max_delta=0` e zero pixels divergentes, workflow 41151048626.
+- [ ] Expandir a comparação para o pipeline G2 com BG priorities, OBJ windows, alpha blending, backdrop e master brightness.
 - [x] Aplicar o preparador fail-closed à revisão real libntr `1555d911` e confirmar que a segunda execução é idempotente (workflow host-only 41150452186).
 
 ### Gate de paridade visual
