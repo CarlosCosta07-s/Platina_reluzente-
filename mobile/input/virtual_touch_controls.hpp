@@ -65,6 +65,13 @@ struct VirtualControlLayout {
 };
 
 class VirtualTouchControls {
+private:
+    struct ActivePointer {
+        PointerId id;
+        VirtualControl control = VirtualControl::A;
+        Point position;
+    };
+
 public:
     void Configure(int width, int height, SafeAreaInsets insets = {}) {
         layout_ = {};
@@ -259,12 +266,6 @@ public:
     }
 
 private:
-    struct ActivePointer {
-        PointerId id;
-        VirtualControl control = VirtualControl::A;
-        Point position;
-    };
-
     static SafeAreaInsets NormalizeInsets(
         int width, int height, SafeAreaInsets insets) noexcept {
         insets.left = std::clamp(insets.left, 0, std::max(0, width));
@@ -344,7 +345,7 @@ private:
         };
     }
 
-    auto Find(const PointerId &pointer) noexcept {
+    std::vector<ActivePointer>::iterator Find(const PointerId &pointer) noexcept {
         return std::find_if(activePointers_.begin(), activePointers_.end(),
             [&pointer](const ActivePointer &active) { return active.id == pointer; });
     }
