@@ -77,8 +77,10 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [ ] Registrar os resultados de gameplay Desktop com ROM quando o mantenedor voltar a ter acesso a um PC. A compilação, por si só, não substitui essa validação.
 
 ### Fase 1 — renderer portátil
-- [ ] Auditar todos os usos GL no commit fixado de libntr.
-- [ ] Criar variantes GLES e wrappers portáveis.
+- [ ] Fechar o inventário de todos os usos GL no commit fixado de libntr.
+- [x] Criar quatro variantes GLSL ES 3.00 separadas; testes ROM-free confirmam que os sampler arrays do G2 usam somente índices literais.
+- [x] Compilar e linkar os programas G2 e G3 com glslangValidator em Linux host-only (workflow 41149162996).
+- [ ] Integrar as variantes ao commit fixado e implementar wrappers GLES para glProgramUniform e clamp-to-border.
 - [ ] Criar o comparador sintético GL 4.2 × GLES 3.0 em host.
 - [ ] Aprovar ANGLE/Metal pelo mesmo comparador.
 - **Gate:** não avançar se houver discrepância visual sem explicação e limite aceito.
