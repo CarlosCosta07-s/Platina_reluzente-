@@ -1,16 +1,17 @@
 diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 --- a/libraries/sim/src/sim_main.cpp
 +++ b/libraries/sim/src/sim_main.cpp
-@@ -60,6 +60,8 @@
+@@ -60,6 +60,9 @@
  #endif
  
  #include "sim_g2.h"
 +// PLATINA_MOBILE_TOUCH_INPUT_ROUTER_V1
 +#include "touch_input_router.hpp"
++#include "virtual_touch_controls.hpp"
  #include "git_info.h"
  
  // Simulator configuration
-@@ -68,6 +70,71 @@
+@@ -68,6 +71,71 @@
  extern OSThreadInfo OSi_ThreadInfo;
  
  static u32 s_TouchPanelCoords[4] = {}; // The bounding box of the touch screen
@@ -34,7 +35,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +  // The virtual-control overlay is a separate implementation step. Keep this
 +  // hit-test hook ahead of DS routing so the overlay can claim a pointer later.
 +  (void)position;
-+  return false;
++  return SIM::GUI::TouchOverlayHitTest(position.x, position.y);
 +}
 +
 +static int SIM_NormalizedTouchCoordinate(float normalized, int dimension) {
@@ -73,16 +74,16 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +
 +static void SIM_CancelTouchInput() {
 +  const auto cancelled = s_TouchInputRouter.CancelAll(SIM_GetTouchPanel());
-+  // The overlay will consume per-pointer cancellation notifications when it
-+  // is connected. The native DS touch state must be released immediately.
++  // Cancel all overlay pointers on the same lifecycle boundary as the DS stylus.
 +  (void)cancelled;
++  SIM::GUI::TouchOverlayCancelAll();
 +  s_tpData.validity = 0;
 +  s_tpData.touch = 0;
 +}
  
  // SND
  #include <nitro/snd/common/work.h>
-@@ -211,8 +278,6 @@
+@@ -211,8 +279,6 @@
  
  u8 s_mosaicTable[16][256];
  
@@ -91,13 +92,13 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  // Local Procedure Declarations
  static void ConvertMsgParams(draw_msg_t *msg);
  static u8 GetNumParamsFromCommandType(draw_command_type_t type);
-@@ -219,5 +284,4 @@
+@@ -219,5 +285,4 @@
  static u8 GetParamSizeFromCommandType(draw_command_type_t type);
  static u8 isParamSigned(draw_command_type_t type);
 -static u64 map(u64 x, u64 in_min, u64 in_max, u64 out_min, u64 out_max);
  static void process_nibble(unsigned char data4bit, int *Index, int *Pcm16bit);
  static void DrawScreenQuad();
-@@ -261,9 +325,5 @@
+@@ -261,9 +326,5 @@
  SIM_config_type *SIM_GetConfigPtr() { return &s_SIM_config; }
  
  SDL_Window * SIM_GetSDLWindow() {return window;}
@@ -107,7 +108,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -}
 -
  void SIM_u16ToRGB(u16 in, u8 *r, u8 *g, u8 *b) {
-@@ -945,8 +1005,6 @@
+@@ -945,9 +1006,7 @@
  
    SDL_Event Event;
    char c;
@@ -116,9 +117,24 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
    u8 r;
    u8 g;
    u8 b;
-@@ -1065,15 +1123,26 @@
+ 
+@@ -953,4 +1012,7 @@
+   u16 keys;
+   u32 i;
+ 
++  static bool touchOverlayBaseValid = false;
++  static u16 touchOverlayBasePadKeys = 0xFFFF;
++  static u16 touchOverlayBaseXy = 0xFFFF;
+   G3SIM_FlushArray();
+@@ -1065,15 +1127,32 @@
      }
  
++    SIM::GUI::ConfigureTouchOverlay(windowWidth, windowHeight, 0, 0, 0, 0);
++    if (touchOverlayBaseValid) {
++      s_reg_PAD_KEYINPUT = touchOverlayBasePadKeys;
++      *(vu16 *)HW_BUTTON_XY_BUF = touchOverlayBaseXy;
++    }
++
      while (SDL_PollEvent(&Event)) {
        SIM::GUI::ProcessEvent(&Event);
 +      const Platina::MobileInput::TouchPanel currentTouchPanel =
@@ -143,7 +159,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1236,32 +1305,68 @@
+@@ -1236,31 +1315,124 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
@@ -159,9 +175,14 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +            static_cast<std::int64_t>(Event.button.which), 0};
 +        const Platina::MobileInput::Point position{
 +            Event.button.x, Event.button.y};
-+        SIM_ApplyTouchUpdate(s_TouchInputRouter.Begin(
++        const auto update = s_TouchInputRouter.Begin(
 +            pointer, position, currentTouchPanel,
-+            SIM_TouchOverlayClaims(position)));
++            SIM_TouchOverlayClaims(position));
++        if (update.target == Platina::MobileInput::TouchTarget::VirtualControls) {
++          SIM::GUI::TouchOverlayBegin(false, pointer.deviceId, pointer.pointerId,
++                                      position.x, position.y);
++        }
++        SIM_ApplyTouchUpdate(update);
        }
 -      if (Event.type == SDL_MOUSEBUTTONUP) {
 -        isMouseDown = 0;
@@ -174,16 +195,24 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +            static_cast<std::int64_t>(Event.motion.which), 0};
 +        const Platina::MobileInput::Point position{
 +            Event.motion.x, Event.motion.y};
-+        SIM_ApplyTouchUpdate(
-+            s_TouchInputRouter.Move(pointer, position, currentTouchPanel));
++        const auto update =
++            s_TouchInputRouter.Move(pointer, position, currentTouchPanel);
++        if (update.target == Platina::MobileInput::TouchTarget::VirtualControls) {
++          SIM::GUI::TouchOverlayMove(false, pointer.deviceId, pointer.pointerId,
++                                     position.x, position.y);
++        }
++        SIM_ApplyTouchUpdate(update);
 +      }
 +      if (Event.type == SDL_MOUSEBUTTONUP
 +          && Event.button.which != SDL_TOUCH_MOUSEID) {
 +        const Platina::MobileInput::PointerId pointer{
 +            Platina::MobileInput::PointerSource::Mouse,
 +            static_cast<std::int64_t>(Event.button.which), 0};
-+        SIM_ApplyTouchUpdate(
-+            s_TouchInputRouter.End(pointer, currentTouchPanel));
++        const auto update = s_TouchInputRouter.End(pointer, currentTouchPanel);
++        if (update.target == Platina::MobileInput::TouchTarget::VirtualControls) {
++          SIM::GUI::TouchOverlayEnd(false, pointer.deviceId, pointer.pointerId);
++        }
++        SIM_ApplyTouchUpdate(update);
 +      }
 +      if (Event.type == SDL_FINGERDOWN) {
 +        const Platina::MobileInput::Point position{
@@ -193,9 +222,14 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +            Platina::MobileInput::PointerSource::Finger,
 +            static_cast<std::int64_t>(Event.tfinger.touchId),
 +            static_cast<std::int64_t>(Event.tfinger.fingerId)};
-+        SIM_ApplyTouchUpdate(s_TouchInputRouter.Begin(
++        const auto update = s_TouchInputRouter.Begin(
 +            pointer, position, currentTouchPanel,
-+            SIM_TouchOverlayClaims(position)));
++            SIM_TouchOverlayClaims(position));
++        if (update.target == Platina::MobileInput::TouchTarget::VirtualControls) {
++          SIM::GUI::TouchOverlayBegin(true, pointer.deviceId, pointer.pointerId,
++                                      position.x, position.y);
++        }
++        SIM_ApplyTouchUpdate(update);
 +      }
 +      if (Event.type == SDL_FINGERMOTION) {
 +        const Platina::MobileInput::Point position{
@@ -205,20 +239,58 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +            Platina::MobileInput::PointerSource::Finger,
 +            static_cast<std::int64_t>(Event.tfinger.touchId),
 +            static_cast<std::int64_t>(Event.tfinger.fingerId)};
-+        SIM_ApplyTouchUpdate(
-+            s_TouchInputRouter.Move(pointer, position, currentTouchPanel));
++        const auto update =
++            s_TouchInputRouter.Move(pointer, position, currentTouchPanel);
++        if (update.target == Platina::MobileInput::TouchTarget::VirtualControls) {
++          SIM::GUI::TouchOverlayMove(true, pointer.deviceId, pointer.pointerId,
++                                     position.x, position.y);
++        }
++        SIM_ApplyTouchUpdate(update);
 +      }
 +      if (Event.type == SDL_FINGERUP) {
 +        const Platina::MobileInput::PointerId pointer{
 +            Platina::MobileInput::PointerSource::Finger,
 +            static_cast<std::int64_t>(Event.tfinger.touchId),
 +            static_cast<std::int64_t>(Event.tfinger.fingerId)};
-+        SIM_ApplyTouchUpdate(
-+            s_TouchInputRouter.End(pointer, currentTouchPanel));
++        const auto update = s_TouchInputRouter.End(pointer, currentTouchPanel);
++        if (update.target == Platina::MobileInput::TouchTarget::VirtualControls) {
++          SIM::GUI::TouchOverlayEnd(true, pointer.deviceId, pointer.pointerId);
++        }
++        SIM_ApplyTouchUpdate(update);
        }
      }
      s_reg_PAD_KEYINPUT = s_reg_PAD_KEYINPUT;
- 
++    touchOverlayBasePadKeys = s_reg_PAD_KEYINPUT;
++    touchOverlayBaseXy = *(vu16 *)HW_BUTTON_XY_BUF;
++    touchOverlayBaseValid = true;
++    const std::uint16_t virtualButtons = SIM::GUI::TouchOverlayPressedMask();
++    if (virtualButtons & Platina::MobileInput::VirtualButtonA)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0001u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonB)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0002u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonSelect)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0004u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonStart)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0008u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonRight)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0010u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonLeft)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0020u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonUp)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0040u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonDown)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0080u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonR)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0100u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonL)
++      s_reg_PAD_KEYINPUT &= static_cast<u16>(~0x0200u);
++    if (virtualButtons & Platina::MobileInput::VirtualButtonX)
++      *(vu16 *)HW_BUTTON_XY_BUF =
++          *(vu16 *)HW_BUTTON_XY_BUF & 0b1111100000000000;
++    if (virtualButtons & Platina::MobileInput::VirtualButtonY)
++      *(vu16 *)HW_BUTTON_XY_BUF =
++          *(vu16 *)HW_BUTTON_XY_BUF & 0b1111010000000000;
++ 
 -    SDL_GetMouseState(&x, &y);
 -
 -    // Convert touch coordinate to DS screen coordinates
