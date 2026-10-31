@@ -58,7 +58,7 @@ class MobileTouchInputRouterTests(unittest.TestCase):
                 0,
                 run_result.stdout + run_result.stderr,
             )
-            self.assertIn("6 scenarios", run_result.stdout)
+            self.assertIn("7 scenarios", run_result.stdout)
             print(run_result.stdout, end="")
 
 
