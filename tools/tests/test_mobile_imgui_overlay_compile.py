@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "tools" / "tests" / "cpp" / "imgui_touch_overlay_compile_test.cpp"
 TRACKED_HEADER = ROOT / "mobile" / "input" / "imgui_touch_overlay.hpp"
+LIBNTR_ROOT: Path | None = None
 
 
 class MobileImGuiOverlayCompileTests(unittest.TestCase):
@@ -18,11 +19,10 @@ class MobileImGuiOverlayCompileTests(unittest.TestCase):
         if compiler is None:
             self.skipTest("A host C++ compiler is not available.")
 
-        import sys
-        if len(sys.argv) < 2:
+        if LIBNTR_ROOT is None:
             self.fail("Expected the prepared pinned libntr checkout path as an argument.")
 
-        libntr_root = Path(sys.argv[1]).resolve()
+        libntr_root = LIBNTR_ROOT
         include_root = libntr_root / "include"
         simulator_source = libntr_root / "libraries" / "sim" / "src"
         installed_header = simulator_source / "imgui_touch_overlay.hpp"
@@ -69,4 +69,8 @@ class MobileImGuiOverlayCompileTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        raise SystemExit("Usage: test_mobile_imgui_overlay_compile.py <pinned-libntr-root>")
+    LIBNTR_ROOT = Path(sys.argv.pop(1)).resolve()
     unittest.main()
