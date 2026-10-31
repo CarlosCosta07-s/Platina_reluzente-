@@ -2,7 +2,7 @@
 
 **Base inspecionada:** cybervisi0n/libntr, commit 1555d911ac80c0190ac1c321f99f1323de8b3c09, usado pelo porte Desktop fixado em cybervisi0n/pokeplatinum commit 35067868f64f23d25d17ac3e536cfdd9a7f40523.
 
-**Estado:** quatro variantes GLSL ES 3.00 foram compiladas/linkadas no host; o preparador source-only foi aplicado duas vezes com sucesso à revisão real libntr `1555d911`; e o G3 passou por comparação de pixels em Mesa/EGL com contextos forçados a Desktop GL 4.2 Core e OpenGL ES 3.0. Dez cenas sintéticas G3 tiveram max channel delta 0 e zero pixels divergentes no workflow 41152253802. O G2 ainda não passou pelo comparador; o renderer não está integrado a um app móvel e não foi exercitado em driver de aparelho. Não há build Android/iOS autorizado nesta fase.
+**Estado:** quatro variantes GLSL ES 3.00 foram compiladas/linkadas no host; o preparador source-only foi aplicado duas vezes com sucesso à revisão real libntr `1555d911`; e os comparadores G3 (10 cenas) e G2 (14 cenas) passaram em Mesa/EGL com contextos forçados a Desktop GL 4.2 Core e OpenGL ES 3.0. As 24 cenas tiveram `max_delta=0` e zero pixels divergentes no workflow host-only [41152745126](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41152745126). A comparação usa fixtures sintéticas ROM-free: não valida gameplay nem substitui testes com drivers Android reais ou ANGLE/Metal no iOS. O renderer ainda não está integrado a um app móvel e não há build Android/iOS autorizado nesta fase.
 
 ## 1. Bloqueios encontrados na fonte exata
 
@@ -74,12 +74,12 @@ O Dear ImGui backend contém código condicional IMGUI_IMPL_OPENGL_ES3 que evita
 - [x] glslangValidator compila os quatro shaders como ESSL 3.00 no host.
 - [x] glslangValidator cria e linka os programas G2 e G3 (workflow host-only 41149162996).
 - [x] Comparação G3 host-only em Mesa/EGL com versões mínimas forçadas: Desktop GL 4.2 Core × OpenGL ES 3.0; dez cenas, todas com `max_delta=0` e zero pixels divergentes (workflow 41152253802).
-- [ ] Expandir a comparação para o pipeline G2 com BG priorities, OBJ windows, alpha blending, backdrop e master brightness.
+- [x] Comparação sintética G2 Desktop GL 4.2 × GLES 3.0 em Mesa/EGL: 14 cenas de backdrop, ordem/prioridade BG, blending, brilho, OBJ windows e composição 3D; igualdade exata em todas (workflow 41152745126).
 - [x] Aplicar o preparador fail-closed à revisão real libntr `1555d911` e confirmar que a segunda execução é idempotente (workflow host-only 41150452186).
 
 ### Gate de paridade visual
 - [x] G3 sintético: textura, cor de vértice, alpha discard, fog, transparent border S/T/S+T, repeat e mirror; 10/10 cenas com igualdade exata em Mesa GL 4.2 Core × ES 3.0 (workflow 41152253802).
-- [ ] G2: quatro BGs, prioridades, janelas OBJ, composição OBJ, alpha blend, backdrop e master brightness up/down.
+- [x] G2: 14 cenas ROM-free cobrindo backdrop/top-bottom, ordem e prioridades BG, blending BG/backdrop/OBJ, brightness increase/decrease, master brightness, OBJ priorities/windows e BG0 3D alpha; igualdade exata em GL 4.2 Core × GLES 3.0 no host (workflow 41152745126).
 - [ ] Coordenadas de borda dentro, fora e exatamente em 0 e 1 no G2; cena em que bgOrder muda entre pixels vizinhos.
 - [ ] Dois layouts de tela e seleção superior/inferior com a composição real das duas telas.
 - [ ] Repetir o conjunto no ANGLE/Metal para a rota iOS e em drivers de aparelho.
@@ -93,7 +93,7 @@ Cada cena precisa ser renderizada também no Desktop GL 4.2. Comparar imagens RG
 3. Implementar os uniforms de border clamp nos caminhos normais e deferred de G3.
 4. Integrar o helper de uniforms existente no código pinado, testar a preservação de GL_CURRENT_PROGRAM com contexto real e reduzir as trocas de programa agrupando escritas quando isso não alterar o estado.
 5. Selecionar o backend OpenGL ES 3.0 e o modo IMGUI_IMPL_OPENGL_ES3 por macro de alvo, com loader correto.
-6. Completar o probe sintético G2; o comparador G3 já está aprovado em GL 4.2 Core × ES 3.0.
+6. [x] Completar e executar o probe sintético G2: 14/14 cenas com igualdade exata em GL 4.2 Core × ES 3.0 no host (workflow 41152745126).
 7. Só após aprovação visual iniciar o trabalho de API C lifecycle e integração com os shells.
 
 O contrato completo de plataformas e o bloqueio dos builds móveis permanecem em docs/MOBILE_PARITY_CONTRACT.md.
