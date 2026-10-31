@@ -81,7 +81,7 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [x] Criar quatro variantes GLSL ES 3.00 separadas; testes ROM-free confirmam que os sampler arrays do G2 usam somente índices literais.
 - [x] Compilar e linkar os programas G2 e G3 com glslangValidator em Linux host-only (workflow 41149162996).
 - [x] Preparar helper GLES source-only para as quatro chamadas glProgramUniform, com teste C++ host usando GLES mock para verificar restauração de GL_CURRENT_PROGRAM.
-- [x] Criar preparador fail-closed e aplicá-lo duas vezes à revisão real libntr `1555d911` em host-only CI (workflow 41150452186).
+- [x] Criar preparador fail-closed, instalar variantes como raw string literals C++ e aplicá-lo duas vezes à revisão real libntr `1555d911` em host-only CI (workflow 41150619851).
 - [ ] Integrar as variantes e o helper ao runtime nativo móvel e validar os uniforms clamp-to-border no desenho normal e deferred.
 - [ ] Criar o comparador sintético GL 4.2 × GLES 3.0 e provar equivalência visual.
 - [ ] Criar o comparador sintético GL 4.2 × GLES 3.0 em host.
