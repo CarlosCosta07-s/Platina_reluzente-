@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -114,6 +117,45 @@ class MobileRendererSourceTests(unittest.TestCase):
         for function in ("glUniform1i", "glUniform1f", "glUniform4f", "glUniform1fv"):
             with self.subTest(function=function):
                 self.assertIn(function, source)
+
+    def test_gles_uniform_adapter_compiles_and_restores_program_state(self):
+        compiler = shutil.which("c++")
+        if compiler is None:
+            self.skipTest("A host C++ compiler is not available.")
+
+        source = ROOT / "tools" / "tests" / "cpp" / "mobile_renderer_uniform_compat_test.cpp"
+        mock_include = ROOT / "tools" / "tests" / "cpp" / "mock_gles"
+        self.assertTrue(source.is_file())
+        self.assertTrue((mock_include / "GLES3" / "gl3.h").is_file())
+
+        with tempfile.TemporaryDirectory(prefix="platina-gles3-uniform-test-") as directory:
+            executable = Path(directory) / "uniform-compat-test"
+            compile_result = subprocess.run(
+                [
+                    compiler,
+                    "-std=c++17",
+                    "-DSDK_BUILD_ANDROID",
+                    "-I", str(mock_include),
+                    "-I", str(ROOT),
+                    str(source),
+                    "-o", str(executable),
+                ],
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(
+                compile_result.returncode,
+                0,
+                compile_result.stdout + compile_result.stderr,
+            )
+            run_result = subprocess.run(
+                [str(executable)],
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(run_result.returncode, 0, run_result.stdout + run_result.stderr)
 
     def test_variants_do_not_redefine_or_replace_the_desktop_renderer(self):
         self.assertTrue((ROOT / ".gitmodules").is_file())
