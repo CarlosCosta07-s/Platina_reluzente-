@@ -5,11 +5,13 @@ concurrency:
   cancel-in-progress: false
 
 on:
-  workflow_run:
-    workflows: ["Native desktop build and localization checks"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      authorize_final_packaging:
+        description: "Autoriza o empacotamento final do launcher após a conclusão dos testes e do build nativo aprovado."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -17,7 +19,7 @@ permissions:
 
 jobs:
   package-windows:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_packaging == true }}
     name: Build integrated Windows x64 launcher
     runs-on: windows-latest
     timeout-minutes: 35

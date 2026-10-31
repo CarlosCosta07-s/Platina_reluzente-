@@ -36,14 +36,65 @@ function createWindow() {
   });
   window.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
 }
-let lastLaunchProgress = '';
-function sendLaunchProgress(message) {
-  lastLaunchProgress = String(message);
+let lastLaunchProgress = null;
+function sendLaunchProgress(message, gameId = 'platinum') {
+  lastLaunchProgress = { gameId, message: String(message) };
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed() && !window.webContents.isLoadingMainFrame()) {
       window.webContents.send('platina:launch-progress', lastLaunchProgress);
     }
   }
+}
+function restoreLauncherWindow() {
+  let windows = BrowserWindow.getAllWindows();
+  if (windows.length === 0) {
+    createWindow();
+    windows = BrowserWindow.getAllWindows();
+  }
+  for (const window of windows) {
+    if (window.isDestroyed()) continue;
+    window.restore();
+    window.setFullScreen(true);
+    window.focus();
+  }
+}
+function minimizeLauncherWindow() {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.minimize();
+  }
+}
+function createNativeLaunchLifecycle(gameId) {
+  const gameName = gameId === 'black' ? 'Pokémon Black' : 'Pokémon Platinum';
+  const send = (message) => sendLaunchProgress(message, gameId);
+  return {
+    restoreLauncher: restoreLauncherWindow,
+    callbacks: {
+      onProgress(stage) {
+        if (stage === 'native-boot-start') {
+          send('Runtime nativo de ' + gameName + ' iniciado. Preparando o renderizador…');
+        } else if (stage === 'renderer-ready') {
+          send('Renderizador nativo de ' + gameName + ' inicializado. Aguardando a primeira imagem…');
+        }
+      },
+      onWindowReady() {
+        send('Primeiro frame de ' + gameName + ' apresentado. Abrindo o jogo…');
+        minimizeLauncherWindow();
+      },
+      onStall({ silentForMs, lastHeartbeatFrame }) {
+        restoreLauncherWindow();
+        const frameDetail = Number.isSafeInteger(lastHeartbeatFrame)
+          ? ' Último frame confirmado: #' + lastHeartbeatFrame + '.'
+          : '';
+        send(gameName + ' não apresentou novos frames há '
+          + Math.ceil(silentForMs / 1000) + ' segundos.' + frameDetail
+          + ' O launcher foi reaberto para diagnóstico e não encerrará o processo automaticamente. Consulte o log antes de fechar o jogo.');
+      },
+      onRecovered() {
+        send('O ciclo de renderização de ' + gameName
+          + ' voltou a apresentar frames. O launcher permaneceu aberto; volte à janela do jogo quando estiver pronto.');
+      }
+    }
+  };
 }
 const PREPARE_PROGRESS_TEXT = {
   verifying: 'Verificando os dados do jogo…',
@@ -378,15 +429,21 @@ ipcMain.handle('platina:launch-black-game', async () => {
       platform: process.platform,
       env: process.env
     });
+    sendLaunchProgress('Iniciando Pokémon Black pelo launcher…', 'black');
+    const lifecycle = createNativeLaunchLifecycle('black');
     const result = await launchNativeProcess({
       ...spec,
       platform: process.platform,
-      romSha256: rom.sha256
+      romSha256: rom.sha256,
+      ...lifecycle.callbacks
     });
+    if (result.ok || hasActiveNativeProcess()) {
+      onNativeProcessIdle(lifecycle.restoreLauncher);
+    }
     if (result.ok) {
       return {
         ...result,
-        message: 'O processo nativo de Pokémon Black foi iniciado. Isso ainda não confirma a tela de título; consulte o log se a janela não aparecer: ' + result.logPath
+        message: 'Pokémon Black apresentou a primeira imagem. O jogo foi iniciado pelo launcher integrado. Log: ' + result.logPath
       };
     }
     return result;
@@ -489,56 +546,14 @@ ipcMain.handle('platina:launch-game', async () => {
       onProgress: (stage) => sendLaunchProgress(PREPARE_PROGRESS_TEXT[stage] || stage)
     });
     if (!prepared.ok) return { ok: false, message: prepared.message, logPath };
-    // Phase 2: keep SDL hidden until the native runtime presents a complete frame.
-    const restoreLauncher = () => {
-      let windows = BrowserWindow.getAllWindows();
-      if (windows.length === 0) {
-        createWindow();
-        windows = BrowserWindow.getAllWindows();
-      }
-      for (const window of windows) {
-        if (window.isDestroyed()) continue;
-        window.restore();
-        window.setFullScreen(true);
-        window.focus();
-      }
-    };
+    // Phase 2: the shared launcher stays hidden until Platinum presents a complete frame.
+    const lifecycle = createNativeLaunchLifecycle('platinum');
     const launched = await launchNativeProcess({
       ...createPreparedPlatinumLaunchSpec(launchSpec),
-      onProgress: (stage) => {
-        if (stage === 'native-boot-start') {
-          sendLaunchProgress('Runtime nativo iniciado. Preparando o renderizador…');
-        } else if (stage === 'renderer-ready') {
-          sendLaunchProgress('Renderizador nativo inicializado. Aguardando a primeira imagem…');
-        }
-      },
-      onWindowReady: () => {
-        sendLaunchProgress('Primeira imagem apresentada. Abrindo o jogo…');
-        for (const window of BrowserWindow.getAllWindows()) {
-          if (!window.isDestroyed()) window.minimize();
-        }
-      },
-      onStall: ({ silentForMs, lastHeartbeatFrame }) => {
-        restoreLauncher();
-        const frameDetail = Number.isSafeInteger(lastHeartbeatFrame)
-          ? ' Último frame confirmado: #' + lastHeartbeatFrame + '.'
-          : '';
-        sendLaunchProgress(
-          'O runtime não apresentou novos frames há '
-          + Math.ceil(silentForMs / 1000)
-          + ' segundos.'
-          + frameDetail
-          + ' O launcher ainda não recebeu o encerramento do processo e não o finalizará automaticamente; a interface foi reaberta para diagnóstico. Consulte o log antes de encerrar o jogo.'
-        );
-      },
-      onRecovered: () => {
-        sendLaunchProgress(
-          'O ciclo de renderização voltou a apresentar frames. O launcher permaneceu aberto; volte à janela do jogo quando estiver pronto.'
-        );
-      }
+      ...lifecycle.callbacks
     });
     if (launched.ok || hasActiveNativeProcess()) {
-      onNativeProcessIdle(restoreLauncher);
+      onNativeProcessIdle(lifecycle.restoreLauncher);
     }
     return launched;
   } catch (error) {

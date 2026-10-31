@@ -8,6 +8,14 @@ Concluir uma versão nativa de Pokémon Platinum que funcione de forma reproduz�
 
 A ROM e os recursos do jogo continuam sendo fornecidos e mantidos localmente pelo usuário. Nenhuma ROM, firmware, arquivo extraído, save ou patch com conteúdo protegido deve entrar no Git, nos workflows ou nos artefatos públicos.
 
+## Aplicativo unificado e launcher central
+
+O launcher não é um utilitário externo nem uma etapa descartável: launcher-app é a aplicação Desktop que contém e integra os dois jogos. A biblioteca reúne **Pokémon Platinum** e **Pokémon Black Version** na mesma janela Electron. PT-BR é uma localização de Platinum, não um terceiro título. Cada jogo mantém ROM, cache, saves, configurações e logs isolados, enquanto compartilha a biblioteca, o gerenciamento de sessões, a importação segura, o diagnóstico, o protocolo de primeiro frame, o watchdog e a recuperação da interface.
+
+O runtime nativo é componente interno do aplicativo: o usuário não escolhe nem abre outro executável. O launcher mantém uma única sessão ativa, minimiza depois do primeiro frame realmente apresentado, restaura sua própria janela em falhas de renderização e no término do processo, e encaminha o progresso ao painel do título correto. O contrato completo está em [LAUNCHER_INTEGRATION_CONTRACT.md](LAUNCHER_INTEGRATION_CONTRACT.md).
+
+**Regra de build:** pushes normais executam apenas verificações e testes de fonte. Os builds completos dos runtimes e o empacotamento integrado Windows/Linux ficam bloqueados por padrão e só poderão ser despachados manualmente com autorização explícita na fase final, depois da implementação e dos testes concluídos.
+
 ## Auditoria atual do runtime
 
 O ciclo de vida de encerramento e os dados de identificação OpenGL foram auditados em [DESKTOP_RUNTIME_AUDIT.md](DESKTOP_RUNTIME_AUDIT.md). O upstream encerra com `exit(0)` dentro de `SIM_Render`, acionado no caminho de VBlank, enquanto `NitroMain` tem loop infinito. Não fazer uma substituição superficial por `return`; primeiro mapear o estado de saves e a parada das threads. O diagnóstico OpenGL deverá registrar vendor, renderer, versão da API e GLSL antes do primeiro frame, com tratamento para strings nulas. Esta auditoria não marca o shutdown como implementado.
@@ -62,7 +70,7 @@ Referência interna: [BT3 Decomp port reference](BT3_PORT_REFERENCE.md).
 
 ### Síntese da arquitetura
 
-O fluxo esperado é: importar e identificar a ROM → preparar e verificar dados locais → validar o runtime e sua integridade → iniciar o jogo nativo → monitorar boot/renderização/saves → encerrar com estado consistente. OpenGL permanece como baseline; Vulkan entra depois como backend selecionável. Nenhuma dessas decisões autoriza builds móveis enquanto a pausa estiver vigente.
+O fluxo esperado para cada título é: selecionar na biblioteca única → importar e identificar a ROM → preparar e verificar os dados privados daquele jogo → validar o runtime interno correspondente → iniciar a sessão pelo gerenciador compartilhado → confirmar o primeiro frame → monitorar renderização/saves → restaurar o launcher e encerrar com estado consistente. OpenGL permanece como baseline; Vulkan entra depois como backend selecionável. Nenhuma dessas decisões autoriza builds móveis enquanto a pausa estiver vigente.
 
 
 ## Ordem obrigatória de execução

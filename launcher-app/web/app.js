@@ -417,7 +417,17 @@
     card.addEventListener('click', () => selectGame(card.dataset.gameSelect));
   });
   if (window.platina && typeof window.platina.onLaunchProgress === 'function') {
-    window.platina.onLaunchProgress((message) => setStatus(message));
+    window.platina.onLaunchProgress((progress) => {
+      const gameId = progress && progress.gameId === 'black' ? 'black' : 'platinum';
+      const message = progress && typeof progress.message === 'string'
+        ? progress.message
+        : String(progress);
+      if (gameId === 'black') {
+        blackLaunchStatus.textContent = message;
+      } else {
+        setStatus(message);
+      }
+    });
   }
 
   // Console-style dashboard: live clock and keyboard / gamepad-like navigation.

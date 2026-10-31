@@ -16,6 +16,12 @@ on:
       - "vendor/**"
       - "launcher-app/**"
   workflow_dispatch:
+    inputs:
+      authorize_final_desktop_build:
+        description: "Autoriza o build completo integrado Windows/Linux somente após todos os recursos e testes estarem concluídos."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,7 +43,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python files
-        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py scripts/stage_black_runtime.py tools/tests/test_prepare_native_runtime.py tools/tests/test_stage_black_runtime.py scripts/test.py
+        run: python -m py_compile tools/localization_manifest.py tools/import_localization.py tools/check_runtime_data.py scripts/pin_native_dependencies.py scripts/verify_native_package.py tools/tests/test_import_localization.py tools/tests/test_check_runtime_data.py tools/tests/test_pin_native_dependencies.py tools/tests/test_verify_native_package.py scripts/prepare_native_runtime.py scripts/prepare_eidos_launcher_protocol.py scripts/stage_black_runtime.py tools/tests/test_prepare_native_runtime.py tools/tests/test_prepare_eidos_launcher_protocol.py tools/tests/test_stage_black_runtime.py scripts/test.py
 
       - name: Run ROM-free Python test suite
         run: python scripts/test.py --full
@@ -51,6 +57,8 @@ jobs:
           done
 
   linux:
+    needs: localization-importer
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_desktop_build == true }}
     name: Linux x86-64 compile
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -211,6 +219,8 @@ jobs:
 
 
   windows:
+    needs: localization-importer
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_desktop_build == true }}
     name: Windows x64 compile
     runs-on: windows-latest
     timeout-minutes: 90

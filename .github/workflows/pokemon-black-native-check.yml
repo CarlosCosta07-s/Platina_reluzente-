@@ -5,19 +5,27 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/pokemon-black-native-check.yml"
+      - "scripts/prepare_eidos_launcher_protocol.py"
+      - "tools/tests/test_prepare_eidos_launcher_protocol.py"
       - "docs/POKEMON_BLACK_PORT.md"
       - "docs/ROADMAP.md"
       - "scripts/stage_black_runtime.py"
       - "tools/tests/test_stage_black_runtime.py"
   workflow_dispatch:
+    inputs:
+      authorize_final_desktop_build:
+        description: "Autoriza compilar e preparar o runtime nativo completo de Black somente na fase final."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: pokemon-black-native-check-${{ github.ref }}
-  # Upstream toolchain builds are expensive; keep the active validation and coalesce newer commits into the pending run.
-  cancel-in-progress: false
+  # A new source-validation commit must supersede any stale full-runtime build.
+  cancel-in-progress: true
 
 env:
   ALETHEIA_COMMIT: 6c2aae879f123bcbc028cf6a8b7f8df614402ac8
@@ -50,6 +58,10 @@ jobs:
           test "$(git -C .black-ci/aletheia rev-parse HEAD)" = "$ALETHEIA_COMMIT"
           grep -Fq "set(EIDOS_ALETHEIA_PIN \"$ALETHEIA_COMMIT\")" .black-ci/eidos/cmake/aletheia_pin.cmake
           echo "Pinned upstream checkouts match eidos' recorded aletheia pin."
+
+      - name: Prepare the Eidos first-frame protocol for the unified launcher
+        working-directory: .black-ci/eidos
+        run: python3 "$GITHUB_WORKSPACE/scripts/prepare_eidos_launcher_protocol.py" --source-dir .
 
       - name: Install host and SDL3 build dependencies
         run: |
@@ -90,6 +102,7 @@ jobs:
           ctest --test-dir build --output-on-failure --parallel 2
 
       - name: Compile the x86-64 native port without game data
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_desktop_build == true }}
         working-directory: .black-ci/eidos
         shell: bash
         run: |
@@ -104,6 +117,7 @@ jobs:
           file build64/host/eidos
 
       - name: Validate staged Linux runtime dependencies without game data
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_desktop_build == true }}
         working-directory: .black-ci/eidos
         shell: bash
         run: |
@@ -156,6 +170,10 @@ jobs:
           test "$(git -C .black-ci/aletheia rev-parse HEAD)" = "$ALETHEIA_COMMIT"
           grep -Fq "set(EIDOS_ALETHEIA_PIN \"$ALETHEIA_COMMIT\")" .black-ci/eidos/cmake/aletheia_pin.cmake
           echo "Pinned upstream checkouts match eidos' recorded aletheia pin."
+
+      - name: Prepare the Eidos first-frame protocol for the unified launcher
+        working-directory: .black-ci/eidos
+        run: python "$GITHUB_WORKSPACE/scripts/prepare_eidos_launcher_protocol.py" --source-dir .
 
       - name: Install MinGW x64 build tools
         uses: msys2/setup-msys2@v2
@@ -218,6 +236,7 @@ jobs:
           ctest --test-dir build --output-on-failure --parallel 2
 
       - name: Compile the x86-64 native port without game data
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_desktop_build == true }}
         working-directory: .black-ci/eidos
         shell: msys2 {0}
         run: |
@@ -232,6 +251,7 @@ jobs:
           file build64/host/eidos.exe
 
       - name: Validate staged Windows runtime dependencies without game data
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_final_desktop_build == true }}
         working-directory: .black-ci/eidos
         shell: msys2 {0}
         run: |

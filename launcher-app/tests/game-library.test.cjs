@@ -106,3 +106,16 @@ test('Platinum PT-BR package controls are validated and keep English assets unto
   assert.match(preload, /setLanguage:/);
   assert.match(preload, /importLocalizationPackage:/);
 });
+
+test('Platinum and Black share one launcher lifecycle with game-specific progress routing', () => {
+  assert.match(electronMain, /function createNativeLaunchLifecycle\(gameId\)/);
+  assert.match(electronMain, /createNativeLaunchLifecycle\('black'\)/);
+  assert.match(electronMain, /createNativeLaunchLifecycle\('platinum'\)/);
+  assert.match(electronMain, /onNativeProcessIdle\(lifecycle\.restoreLauncher\)/);
+  assert.match(electronMain, /onWindowReady\(\)/);
+  assert.match(electronMain, /onStall\(/);
+  assert.match(electronMain, /onRecovered\(/);
+  assert.match(preload, /progress\.gameId === 'black' \? 'black' : 'platinum'/);
+  assert.match(appJs, /if \(gameId === 'black'\) \{\s*blackLaunchStatus\.textContent = message;/);
+});
+
