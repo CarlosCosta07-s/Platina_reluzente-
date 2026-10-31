@@ -23,7 +23,7 @@ Os arrays de floats fogDepthBoundary[32] e fogDensity[32] no shader G3 não são
 
 - [x] Variantes separadas das fontes Desktop.
 - [x] Teste estático ROM-free impede indexação dinâmica de sampler arrays.
-- [ ] GLSL ES 3.00 compile e program link em um validador de host.
+- [x] GLSL ES 3.00 compile e program link com glslangValidator no workflow host-only 41149162996.
 - [ ] Comparação pixel a pixel contra o Desktop GL 4.2.
 - [ ] Renderer GLES exercitado em driver Android real.
 - [ ] Mesmo conjunto de cenas aprovado em ANGLE/Metal para iOS.
