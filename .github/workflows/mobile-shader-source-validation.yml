@@ -6,6 +6,7 @@ on:
     paths:
       - "mobile/renderer/gles300/**"
       - "tools/validate_mobile_renderer_shaders.py"
+      - "tools/tests/run_mobile_renderer_pixel_comparison.py"
       - "scripts/prepare_mobile_renderer.py"
       - "tools/tests/test_mobile_renderer_sources.py"
       - "tools/tests/test_prepare_mobile_renderer.py"
@@ -57,7 +58,10 @@ jobs:
       - name: Install host GLSL validator
         run: |
           sudo apt-get update
-          sudo apt-get install --yes glslang-tools
+          sudo apt-get install --yes glslang-tools libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev
 
       - name: Compile and link GLES shaders on host only
         run: python tools/validate_mobile_renderer_shaders.py
+
+      - name: Compare Desktop GL 4.2 and GLES 3.0 G3 pixels on host
+        run: python tools/tests/run_mobile_renderer_pixel_comparison.py "$RUNNER_TEMP/libntr-mobile-source"
