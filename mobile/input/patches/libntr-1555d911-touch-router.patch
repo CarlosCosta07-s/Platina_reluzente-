@@ -11,7 +11,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  #include "git_info.h"
  
  // Simulator configuration
-@@ -68,6 +71,71 @@
+@@ -69,6 +72,71 @@
  extern OSThreadInfo OSi_ThreadInfo;
  
  static u32 s_TouchPanelCoords[4] = {}; // The bounding box of the touch screen
@@ -157,7 +157,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1236,31 +1315,124 @@
+@@ -1235,31 +1314,124 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
@@ -288,7 +288,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +    if (virtualButtons & Platina::MobileInput::VirtualButtonY)
 +      *(vu16 *)HW_BUTTON_XY_BUF =
 +          *(vu16 *)HW_BUTTON_XY_BUF & 0b1111010000000000;
-+ 
++
 -    SDL_GetMouseState(&x, &y);
 -
 -    // Convert touch coordinate to DS screen coordinates
@@ -316,7 +316,7 @@ diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
  #include <nitro/types.h>
  #include <SDL2/SDL.h>
  #include <functional>
-@@ -17,7 +18,18 @@
+@@ -18,7 +19,18 @@
  void OpenFileDialog(std::function<void(std::string)> callback);
  bool IsGameLogicPaused();
  void AppButton(const char * label, bool * state, void (*aInitFunc)(void), void (*aAppFunc)(bool *));
