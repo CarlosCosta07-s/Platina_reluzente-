@@ -26,7 +26,7 @@ O jogo continua sendo o código C/C++ nativo já usado pelo porte desktop. Não 
 - **iOS:** host Xcode/SDL com bridges Objective-C/Objective-C++ e Swift para Document Picker, URLs, safe area, haptics e áudio. O C++ comum fala com uma API C/Objective-C++ estável; não depende diretamente de tipos Swift.
 - **Interface de jogo:** continua renderizada na superfície SDL. O overlay tátil é desenhado como camada de interface do próprio runtime, sem exigir Compose ou SwiftUI para reconstruir a janela do jogo. Esses frameworks só serão considerados se houver uma tela nativa separada que realmente precise deles.
 - **Serviços de host:** adaptadores explícitos para caminhos privados, relógio, arquivos, armazenamento, progresso, logs, áudio, controles e ciclo de vida. O núcleo não deve depender de caminhos arbitrários herdados do processo.
-- **Renderer:** contrato mínimo GLES 3.0 / GLSL ES 3.00 como primeira hipótese comum. Android usa GLES nativo. Para iOS, avaliar ANGLE sobre Metal; não depender de OpenGL ES legado da Apple. Se a prova de equivalência falhar, avaliar um backend Metal próprio antes de continuar.
+- **Renderer:** manter dois backends independentes e selecionáveis: OpenGL (Desktop GL 4.2; Android GLES 3.0; iOS via ANGLE/Metal, se validado) e Vulkan (Windows/Linux/Android nativo; iOS via MoltenVK, se validado). Preferência persistida: Automático / OpenGL / Vulkan. Auto considera capacidades e perfis medidos; fallback só depois de destruir completamente recursos parciais. O usuário vê backend preferido, backend ativo e razão de fallback. Nenhum backend é oferecido numa plataforma até passar a mesma suíte de equivalência visual e lifecycle. Ver [MOBILE_RENDERER_BACKENDS.md](MOBILE_RENDERER_BACKENDS.md).
 - **Desktop permanece referência:** preservar o renderer GL 4.2 e o comportamento Desktop; não substituir a implementação atual por uma abstração mais fraca só para atender ao mobile.
 
 O Gen1Recomp foi estudado como referência de fronteiras móveis: SDL continua proprietário da janela e do loop, enquanto Activity/JNI no Android e bridges Objective-C/Swift no iOS fornecem serviços do sistema. Não vamos copiar seu motor LÖVE nem sua divisão de versões Android/iOS. Consulte [GEN1RECOMP_MOBILE_REFERENCE.md](GEN1RECOMP_MOBILE_REFERENCE.md) para a análise e os limites de reutilização.
@@ -41,7 +41,7 @@ O Gen1Recomp foi estudado como referência de fronteiras móveis: SDL continua p
 | Integridade do runtime | Manifesto, hashes, build ID, rejeição de links/arquivos inesperados e atualização segura | Testes ROM-free para manifesto adulterado, arquivo ausente e atualização |
 | Preparação dos dados | Extração para diretório privado, manifesto de caminhos, validação CRC/tamanho, staging, promoção e recuperação | Testes de interrupção, cache incompatível e preservação de dados locais |
 | Progresso de primeira execução | Estados claros para importação, extração, validação, inicialização e primeiro frame | Testes de sequência, erro, cancelamento e retomada do estado |
-| Renderer e duas telas | Mesma ordem, proporção, composição, transparência, prioridades, brilho, fog e resultado visual; layout móvel adaptável sem mudar o conteúdo | Comparador de pixels GL 4.2 × GLES 3.0 para cenas sintéticas; ANGLE/Metal precisa passar pela mesma suíte |
+| Renderer e duas telas | Mesma ordem, proporção, composição, transparência, prioridades, brilho, fog e resultado visual; OpenGL e Vulkan selecionáveis; layout móvel adaptável sem mudar o conteúdo | Comparador de pixels OpenGL × Vulkan para cenas sintéticas; suite de EGL/GLES já passou no host; ANGLE/Metal e MoltenVK precisam passar pela mesma suíte antes de aparecer como opções iOS |
 | Controles | Todos os comandos aceitos pelo Desktop; overlay tátil D-pad/A/B/X/Y/L/R/Start/Select, toque DS na tela inferior e controles Bluetooth/USB/teclado físico. O patch SDL recebe SDL_FINGER* e SDL_MOUSE*, prioriza o overlay, preserva s_TouchPanelCoords/layouts e IDs de dedos; um dedo pode controlar o overlay enquanto outro é o stylus DS. Modelo portrait/landscape, safe-area insets configuráveis e desenho ImGui source-only já implementados. | 7 cenários do roteador (incluindo drag do mouse Desktop para a tela DS), 9 cenários do overlay, aplicação idempotente do patch e compilação syntax-only do overlay contra o ImGui 1.93 fixado. Permanecem os testes no runtime completo, insets reais, gamepads e aparelhos |
 | Áudio | Mesmos eventos/canais e comportamento de pausa/retomada, usando saída do dispositivo | Testes de inicialização, perda/retorno de dispositivo e silêncio de fallback |
 | Saves | Mesmo formato e semântica de save.bin; escrita atômica, flush, backup e recuperação; nunca apagar save em atualização | Testes de interrupção durante escrita, restauração e round-trip sintético |
@@ -55,7 +55,7 @@ A paridade funcional não exige que a interface do launcher seja visualmente id�
 
 ## 4. Prova gráfica — primeiro gate técnico
 
-O renderer atual foi escrito para OpenGL 4.2 Core: usa GLAD desktop, GLSL #version 420 core, funções glProgramUniform*, debug output e GL_CLAMP_TO_BORDER. Uma simples troca de versão de shader não resolve essas diferenças.
+O renderer existente foi escrito para OpenGL 4.2 Core: usa GLAD desktop, GLSL #version 420 core, funções glProgramUniform*, debug output e GL_CLAMP_TO_BORDER. A rota GLES mantém shaders/wrappers separados e não pode substituir o renderer desktop. Vulkan será outra implementação de backend, não um wrapper de OpenGL. A estratégia completa de seleção, fallback e equivalência está em [MOBILE_RENDERER_BACKENDS.md](MOBILE_RENDERER_BACKENDS.md).
 
 A primeira etapa técnica deve:
 1. Criar arquivos de shader ES separados e um patch versionado para o commit fixado de libntr; nunca substituir o renderer desktop.
@@ -65,7 +65,8 @@ A primeira etapa técnica deve:
 5. Tratar debug output como capacidade opcional.
 6. Criar cenas sintéticas ROM-free para BGs/prioridades, OBJ/windows, alpha, master brightness, backdrop, texturas 3D, fog, repeat/mirror/clamp e coordenadas na borda.
 7. Renderizar exatamente os mesmos casos no desktop GL 4.2 e no GLES 3.0 em host, ler os pixels e comparar. Qualquer tolerância deve ser documentada por canal e por limite de pixels divergentes.
-8. Executar a mesma suíte no ANGLE/Metal antes de considerar a rota iOS aprovada.
+8. Executar a mesma suíte no ANGLE/Metal e, caso MoltenVK seja adotado, no MoltenVK antes de considerar as opções gráficas iOS aprovadas.
+9. Criar a implementação Vulkan host-only, executar as mesmas fixtures e comparar OpenGL × Vulkan; testar também teardown/recreate e fallback Vulkan → OpenGL em falhas simuladas.
 
 Não copiar o antigo script experimental de substituição textual como arquitetura final. Patches e variantes gráficas devem ser arquivos versionados, revisáveis e testáveis.
 
