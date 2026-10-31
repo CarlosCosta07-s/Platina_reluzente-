@@ -232,11 +232,6 @@ void setInt(GLuint program, const char *name, GLint value) {
     if (location >= 0) glUniform1i(location, value);
 }
 
-void setFloat(GLuint program, const char *name, GLfloat value) {
-    const GLint location = uniformLocation(program, name);
-    if (location >= 0) glUniform1f(location, value);
-}
-
 void setVec4(GLuint program, const char *name, const GLfloat *value) {
     const GLint location = uniformLocation(program, name);
     if (location >= 0) glUniform4fv(location, 1, value);
@@ -269,8 +264,8 @@ GLuint createTexture() {
                  0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    const GLfloat transparentBorder[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 #if !defined(PLATINA_USE_GLES3)
+    const GLfloat transparentBorder[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, transparentBorder);
 #endif
     return texture;
