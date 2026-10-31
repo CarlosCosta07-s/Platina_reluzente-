@@ -172,16 +172,27 @@ def main() -> int:
         compile_probe(compiler, args.probe_source.resolve(), desktop_binary, gles=False)
         compile_probe(compiler, args.probe_source.resolve(), gles_binary, gles=True)
 
-        env = os.environ.copy()
-        env["EGL_PLATFORM"] = "surfaceless"
-        env["LIBGL_ALWAYS_SOFTWARE"] = "1"
-        env["MESA_LOADER_DRIVER_OVERRIDE"] = "llvmpipe"
+        base_env = os.environ.copy()
+        base_env["EGL_PLATFORM"] = "surfaceless"
+        base_env["LIBGL_ALWAYS_SOFTWARE"] = "1"
+        base_env["MESA_LOADER_DRIVER_OVERRIDE"] = "llvmpipe"
 
-        print("Rendering pinned Desktop GL 4.2 scenes on Mesa/EGL...", flush=True)
-        run([str(desktop_binary), str(desktop_vert), str(desktop_frag), str(desktop_output)], env=env)
+        # Do not let Mesa silently select its newest API version. Exercise the
+        # minimum renderer contracts requested by the port: Desktop 4.2 Core
+        # and OpenGL ES 3.0. The probe prints the actual GL_VERSION each time.
+        desktop_env = base_env.copy()
+        desktop_env["MESA_GL_VERSION_OVERRIDE"] = "4.2"
+        desktop_env.pop("MESA_GLES_VERSION_OVERRIDE", None)
+
+        gles_env = base_env.copy()
+        gles_env["MESA_GLES_VERSION_OVERRIDE"] = "3.0"
+        gles_env.pop("MESA_GL_VERSION_OVERRIDE", None)
+
+        print("Rendering pinned Desktop GL 4.2 Core scenes on Mesa/EGL...", flush=True)
+        run([str(desktop_binary), str(desktop_vert), str(desktop_frag), str(desktop_output)], env=desktop_env)
 
         print("Rendering GLES 3.0 scenes on Mesa/EGL...", flush=True)
-        run([str(gles_binary), str(mobile_vert), str(mobile_frag), str(gles_output)], env=env)
+        run([str(gles_binary), str(mobile_vert), str(mobile_frag), str(gles_output)], env=gles_env)
 
         desktop_bytes = desktop_output.read_bytes()
         gles_bytes = gles_output.read_bytes()
