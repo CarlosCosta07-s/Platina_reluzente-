@@ -24,6 +24,7 @@ class MobileRendererPreparationTests(unittest.TestCase):
                 (
                     mobile.GLAD_INCLUDE_BLOCK,
                     "#include <SDL2/SDL.h>",
+                    mobile.MESSAGE_CALLBACK_ORIGINAL,
                     "void *SIM_RenderInit(void *arg) {",
                     mobile.SIM_GL_ATTRIBUTES_ORIGINAL,
                     "  context = SDL_GL_CreateContext(window);",
@@ -84,6 +85,8 @@ class MobileRendererPreparationTests(unittest.TestCase):
             self.assertIn("SDL_GL_CONTEXT_PROFILE_ES", main)
             self.assertIn("SDL_GL_CONTEXT_PROFILE_CORE", main)
             self.assertIn("#if !defined(SDK_BUILD_ANDROID) && !defined(SDK_BUILD_IOS)", main)
+            self.assertIn("Desktop-only GL debug callback", main)
+            self.assertIn("void GLAPIENTRY MessageCallback", main)
             self.assertIn("gladLoadGLLoader(SDL_GL_GetProcAddress);", main)
             self.assertIn("glDebugMessageCallback(MessageCallback, 0);", main)
 
