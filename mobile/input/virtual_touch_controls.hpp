@@ -225,7 +225,9 @@ public:
         std::uint16_t result = VirtualButtonNone;
         for (const auto &active : activePointers_) {
             if (active.control == VirtualControl::DPad) {
-                result = static_cast<std::uint16_t>(result | DPadMask(active.position));
+                if (InsideCircle(active.position, layout_.dpadCenter, layout_.dpadRadius)) {
+                    result = static_cast<std::uint16_t>(result | DPadMask(active.position));
+                }
                 continue;
             }
 
