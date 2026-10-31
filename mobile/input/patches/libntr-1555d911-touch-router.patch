@@ -230,7 +230,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1235,33 +1388,123 @@
+@@ -1235,34 +1388,124 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
@@ -374,6 +374,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -    }
 -
      SIM::GUI::NewFrame();
+     SIM::GUI::Main();
 +    SIM_DrawMobileTouchOverlay();
-     
+ 
 
