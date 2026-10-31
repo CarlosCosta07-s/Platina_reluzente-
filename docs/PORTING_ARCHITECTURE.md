@@ -53,6 +53,14 @@ A integração futura deve separar, por identificador de jogo, o hash de ROM ace
 
 Para Black, as bases públicas [Project-Holon/aletheia](https://github.com/Project-Holon/aletheia) e [Project-Holon/eidos](https://github.com/Project-Holon/eidos) serão auditadas antes da adoção. O processo deve registrar commits exatos, licenças e dependências, e resolver a compatibilidade de 32/64 bits antes de incorporar código. Os detalhes e critérios de aceite ficam em [POKEMON_BLACK_PORT.md](POKEMON_BLACK_PORT.md).
 
+## Trilha Android/iOS — source-only
+
+O Desktop continua sendo a referência funcional. A trilha móvel pode preparar código e contratos, mas não pode compilar alvos Android/iOS ou gerar APK/AAB/IPA até cumprir o gate 1:1 definido em [MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md).
+
+A arquitetura prevista usa um núcleo C/C++ compartilhado com API C de lifecycle e serviços injetáveis, mais dois shells nativos finos: Kotlin/Compose no Android e Swift/SwiftUI no iOS. O renderer deve manter a versão Desktop e adicionar uma rota compatível GLES 3.0; iOS precisa validar ANGLE/Metal ou, se necessário, um backend Metal próprio. A prova gráfica será feita primeiro com cenas sintéticas e comparador em host, sem construir aplicativo móvel.
+
+A antiga auditoria [MOBILE_PORT_AUDIT.md](MOBILE_PORT_AUDIT.md) registra as falhas históricas do Android ARM64, inclusive o allocator customizado e o alinhamento ELF de 16 KiB. Esses bloqueios não serão ignorados nem contornados por stubs ou mudanças sem teste.
+
 ## Gestão de dados do jogo
 
 ROM, conteúdo extraído, bancos NARC, save files e demais dados proprietários ficam fora do Git. Os testes devem receber caminhos locais e falhar com mensagens claras quando a cópia necessária não estiver disponível. Artefatos de CI serão usados para validar a compilação, não para distribuir conteúdo do jogo.
