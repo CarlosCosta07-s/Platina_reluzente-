@@ -2,7 +2,7 @@
 
 **Base inspecionada:** `cybervisi0n/libntr` no commit `1555d911ac80c0190ac1c321f99f1323de8b3c09`.
 
-**Estado:** o núcleo source-only `mobile/input/touch_input_router.hpp` passou seis cenários C++ host-only. Um patch versionado adapta o `sim_main.cpp` fixado para `SDL_FINGER*` e `SDL_MOUSE*`; o preparador `scripts/prepare_mobile_input.py` aplica a mudança de forma fail-closed e idempotente. A CI aplicou primeiro a preparação GLES, depois o patch de input, repetiu ambos e aprovou a validação da fonte e os seis cenários no workflow [41153508188](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153508188).
+**Estado:** o núcleo source-only `mobile/input/touch_input_router.hpp` passou seis cenários C++ host-only. Um patch versionado adapta o `sim_main.cpp` fixado para `SDL_FINGER*` e `SDL_MOUSE*`; o preparador `scripts/prepare_mobile_input.py` aplica a mudança de forma fail-closed e idempotente. A CI aplicou primeiro a preparação GLES, depois o patch de input, repetiu ambos e aprovou a validação da fonte e os seis cenários no workflow [41153744631](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153744631).
 
 **Limite atual:** o patch foi validado em um checkout temporário do commit fixado. Não há ainda um alvo de build móvel que o consuma, o `sim_main.cpp` do upstream não é alterado diretamente, e o loop SDL modificado ainda não foi compilado/executado no jogo nem em aparelho. O hit-test do overlay continua intencionalmente como stub `false`; não há overlay visual funcional.
 
@@ -45,7 +45,7 @@ O hook `SIM_TouchOverlayClaims` atualmente retorna `false`, de propósito. A pri
 
 ## 4. Evidência host-only
 
-O workflow [41153508188](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153508188) executou, em sequência:
+O workflow [41153744631](https://github.com/CarlosCosta07-s/Platina_reluzente-/actions/runs/41153744631) executou, em sequência:
 
 1. checkout do commit fixado `1555d911ac80c0190ac1c321f99f1323de8b3c09`;
 2. preparação do renderer GLES, duas vezes;
