@@ -82,7 +82,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  
  // SND
  #include <nitro/snd/common/work.h>
-@@ -211,8 +266,6 @@
+@@ -211,8 +278,6 @@
  
  u8 s_mosaicTable[16][256];
  
@@ -91,7 +91,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  // Local Procedure Declarations
  static void ConvertMsgParams(draw_msg_t *msg);
  static u8 GetNumParamsFromCommandType(draw_command_type_t type);
-@@ -945,8 +998,6 @@
+@@ -945,8 +1010,6 @@
  
    SDL_Event Event;
    char c;
@@ -100,7 +100,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
    u8 r;
    u8 g;
    u8 b;
-@@ -1065,15 +1116,26 @@
+@@ -1065,15 +1128,26 @@
      }
  
      while (SDL_PollEvent(&Event)) {
@@ -127,7 +127,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1236,32 +1297,68 @@
+@@ -1236,32 +1310,68 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
