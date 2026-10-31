@@ -86,7 +86,7 @@ Isso ainda não prova que nenhum toque funcione em qualquer build SDL — SDL po
 7. Tratar foco perdido, janela oculta, suspensão e cancelamento como cancelamento de todos os dedos ativos, soltando botões e stylus para não deixar estado preso.
 8. Adicionar testes para mouse Desktop inalterado, finger lifecycle, roteamento overlay-vs-DS, dois dedos em subsistemas distintos, cancelamento e todos os layouts/swapScreens.
 
-## 3. Ciclo de vida: separar sessão de jogo e processo
+## 4. Ciclo de vida: separar sessão de jogo e processo
 
 Fontes consultadas:
 - [SessionLifecycle.lua](https://github.com/bryanthaboi/gen1recomp/blob/dev/src/core/SessionLifecycle.lua)
@@ -108,7 +108,7 @@ Para Platinum, a adaptação deve cobrir explicitamente:
 - preservação de saves, configurações e estado de importação;
 - encerramento cooperativo do núcleo sem fechar o processo host quando o sistema apenas suspende a aplicação.
 
-## 4. O que podemos reaproveitar no Platina Reluzente
+## 5. O que podemos reaproveitar no Platina Reluzente
 
 | Padrão observado | Aplicação recomendada no Platinum |
 |---|---|
@@ -134,7 +134,7 @@ O desenho recomendado para este repositório é:
 - **Serviços comuns:** o núcleo pergunta por capacidades disponíveis em vez de espalhar condicionais de sistema operacional pelo código de jogo.
 - **Persistência:** os arquivos selecionados entram por SAF/Document Picker e são copiados de forma segura para o sandbox privado do app. O caminho recebido pelo importador deve ser o diretório que o runtime realmente montou, não uma suposição recalculada pela camada Java/Swift.
 
-## 5. Diferenças que não devemos copiar literalmente
+## 6. Diferenças que não devemos copiar literalmente
 
 1. **Motores e versões:** o Gen1Recomp examinado usa LÖVE 11.5a/SDL2 no Android e LÖVE 12.0/SDL3 no iOS. Isso é uma particularidade do projeto LÖVE e não é uma razão para introduzir duas versões de SDL ou duas bases de runtime no Platinum. O nosso porte deve continuar ancorado no libntr e nas dependências fixadas que já pertencem ao projeto.
 2. **Toolchain Android:** o Gen1Recomp documenta NDK 25.2.9519653. Não vamos copiar esse pin: a trilha Android do Platinum já exige compatibilidade com ELF/alinhamento de página de 16 KiB e precisa de NDK/dependências que cumpram esse requisito.
@@ -142,11 +142,11 @@ O desenho recomendado para este repositório é:
 4. **Launcher:** o launcher do Gen1Recomp não é uma base para reutilizar. O contrato deste projeto é reaproveitar padrões arquiteturais, não transplantar o frontend.
 5. **Renderer:** o fato de Gen1Recomp funcionar em SDL/LÖVE no telemóvel não resolve os usos OpenGL 4.2 específicos do renderer libntr. A prova GL 4.2 × GLES/ANGLE/Metal permanece obrigatória.
 
-## 6. Licença e limites de reutilização
+## 7. Licença e limites de reutilização
 
 A licença do Gen1Recomp em LICENSE.MD é GPLv3 com termos adicionais de atribuição; ela declara explicitamente que o launcher é proprietário e não pode ser copiado/reutilizado em forks. Por isso, esta pesquisa registra padrões e referências, mas **não copia código, imagens, fontes de controle ou launcher**. Qualquer reutilização futura de código do upstream exige revisão de licença, atribuição e compatibilidade com a licença do Platina Reluzente.
 
-## 7. Ordem de trabalho resultante
+## 8. Ordem de trabalho resultante
 
 1. Concluir a prova visual do renderer GLES/ANGLE/Metal contra o Desktop.
 2. Projetar a API C de lifecycle e o contrato de serviços nativos do núcleo.
