@@ -19,14 +19,17 @@ smooth in vec4 coords;
 out vec4 color;
 
 vec4 sampleG3Texture() {
+    // Sample before the per-fragment border test so implicit texture
+    // derivatives are evaluated outside divergent control flow.
+    vec4 texel = texture(myTexture, fragTexCoord);
     // Desktop GL_CLAMP_TO_BORDER uses transparent black by default.
     // GLES 3.0 has no core border-clamp mode; the host adapter must set
     // these flags together with GL_CLAMP_TO_EDGE on the texture object.
-    if ((clampToBorderS == 1 && (fragTexCoord.s < 0.0 || fragTexCoord.s > 1.0))
-        || (clampToBorderT == 1 && (fragTexCoord.t < 0.0 || fragTexCoord.t > 1.0))) {
-        return vec4(0.0);
-    }
-    return texture(myTexture, fragTexCoord);
+    bool outsideS = clampToBorderS == 1
+        && (fragTexCoord.s < 0.0 || fragTexCoord.s > 1.0);
+    bool outsideT = clampToBorderT == 1
+        && (fragTexCoord.t < 0.0 || fragTexCoord.t > 1.0);
+    return (outsideS || outsideT) ? vec4(0.0) : texel;
 }
 
 void main() {
