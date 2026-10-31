@@ -40,6 +40,20 @@ jobs:
       - name: Test fail-closed mobile renderer source preparation
         run: python tools/tests/test_prepare_mobile_renderer.py
 
+      - name: Fetch the exact pinned libntr source revision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/cybervisi0n/libntr.git "$RUNNER_TEMP/libntr-mobile-source"
+          git -C "$RUNNER_TEMP/libntr-mobile-source" checkout --detach 1555d911ac80c0190ac1c321f99f1323de8b3c09
+
+      - name: Apply mobile renderer source patch to pinned libntr (host-only)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python scripts/prepare_mobile_renderer.py "$RUNNER_TEMP/libntr-mobile-source"
+          python scripts/prepare_mobile_renderer.py "$RUNNER_TEMP/libntr-mobile-source"
+
       - name: Install host GLSL validator
         run: |
           sudo apt-get update
