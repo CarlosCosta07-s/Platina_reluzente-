@@ -146,6 +146,36 @@ void TestPointerIdsIncludeSourceAndTouchDevice() {
             "Mouse pointer state collided with a finger ID.");
 }
 
+void TestDesktopMouseCanDragIntoDsPanel() {
+    TouchInputRouter router;
+    const TouchPanel panel = DefaultPanel();
+    const PointerId mouse = Mouse(0);
+
+    const auto downOutside = router.Begin(mouse, {20, 20}, panel, false);
+    Require(downOutside.target == TouchTarget::DsStylus,
+            "Desktop mouse-down outside the DS panel did not retain stylus ownership.");
+    Require(!downOutside.dsTouchActive,
+            "Desktop mouse-down outside the DS panel activated a DS coordinate.");
+    Require(router.HasStylusOwner(),
+            "Desktop mouse-down outside the panel did not retain the pointer.");
+
+    const auto draggedIntoPanel = router.Move(mouse, {228, 146}, panel);
+    Require(draggedIntoPanel.target == TouchTarget::DsStylus
+                && draggedIntoPanel.dsTouchActive,
+            "Desktop mouse drag into the DS panel no longer activates touch.");
+    Require(draggedIntoPanel.dsX == 128 && draggedIntoPanel.dsY == 96,
+            "Desktop mouse drag did not map into DS screen coordinates.");
+
+    const auto draggedOut = router.Move(mouse, {20, 20}, panel);
+    Require(draggedOut.target == TouchTarget::DsStylus
+                && !draggedOut.dsTouchActive,
+            "Desktop mouse drag out of the DS panel did not release the DS contact.");
+    Require(router.End(mouse, panel).ended,
+            "Desktop mouse-up did not release its pointer capture.");
+    Require(!router.HasStylusOwner(),
+            "Desktop mouse-up did not clear stylus ownership.");
+}
+
 void TestPanelMappingClampsInclusiveEdges() {
     TouchInputRouter router;
     const TouchPanel panel{{0, 0, 256, 192}, 256, 192};
@@ -208,6 +238,7 @@ int main() {
         TestOverlayAndDsStylusCanBeUsedTogether();
         TestStylusOwnershipIsStableAndExclusive();
         TestPointerIdsIncludeSourceAndTouchDevice();
+        TestDesktopMouseCanDragIntoDsPanel();
         TestPanelMappingClampsInclusiveEdges();
         TestCancellationReleasesEveryCapturedPointer();
     } catch (const std::exception &error) {
@@ -215,6 +246,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "TouchInputRouter host contract tests passed (6 scenarios).\n";
+    std::cout << "TouchInputRouter host contract tests passed (7 scenarios).\n";
     return 0;
 }
