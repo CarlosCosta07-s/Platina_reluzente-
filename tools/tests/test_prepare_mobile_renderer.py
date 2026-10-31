@@ -137,8 +137,8 @@ class MobileRendererPreparationTests(unittest.TestCase):
                 self.assertTrue(destination.is_file())
                 if name.endswith(".glsl"):
                     installed_shader = destination.read_text(encoding="utf-8")
-                    self.assertTrue(installed_shader.startswith('R""(\\n'))
-                    self.assertTrue(installed_shader.endswith('\\n)""\\n'))
+                    self.assertTrue(installed_shader.startswith('R""(\n'))
+                    self.assertTrue(installed_shader.endswith('\n)""\n'))
 
     def test_patcher_is_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
