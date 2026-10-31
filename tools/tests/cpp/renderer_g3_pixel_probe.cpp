@@ -111,6 +111,19 @@ struct EglContext {
         if (!version) {
             throw std::runtime_error("GL_VERSION is unavailable after EGL context creation");
         }
+        GLint actualMajor = 0;
+        GLint actualMinor = 0;
+        glGetIntegerv(GL_MAJOR_VERSION, &actualMajor);
+        glGetIntegerv(GL_MINOR_VERSION, &actualMinor);
+#if defined(PLATINA_USE_GLES3)
+        if (actualMajor < 3) {
+            throw std::runtime_error("The host GLES context is older than OpenGL ES 3.0");
+        }
+#else
+        if (actualMajor < 4 || (actualMajor == 4 && actualMinor < 2)) {
+            throw std::runtime_error("The host Desktop context is older than OpenGL 4.2");
+        }
+#endif
         std::cout << "GL_VERSION=" << version << "\n";
     }
 
