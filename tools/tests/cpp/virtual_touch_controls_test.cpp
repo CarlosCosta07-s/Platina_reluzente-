@@ -160,8 +160,8 @@ void TestDPadSupportsEightDirectionsAndDeadZone() {
                    | VirtualButtonLeft | VirtualButtonRight)) == 0,
             "D-pad dead zone generated a direction.");
 
-    controls.Move(finger, {center.x + static_cast<int>(radius * 0.8f),
-                           center.y - static_cast<int>(radius * 0.8f)});
+    controls.Move(finger, {center.x + static_cast<int>(radius * 0.5f),
+                           center.y - static_cast<int>(radius * 0.5f)});
     Require((controls.PressedMask() & (VirtualButtonUp | VirtualButtonRight))
                 == (VirtualButtonUp | VirtualButtonRight),
             "D-pad did not generate a diagonal direction.");
