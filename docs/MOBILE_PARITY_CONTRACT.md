@@ -84,8 +84,9 @@ Não copiar o antigo script experimental de substituição textual como arquitet
 - [x] Preparar helper GLES source-only para as quatro chamadas glProgramUniform, com teste C++ host usando GLES mock para verificar restauração de GL_CURRENT_PROGRAM.
 - [x] Criar preparador fail-closed, instalar variantes como raw string literals C++ e aplicá-lo duas vezes à revisão real libntr `1555d911` em host-only CI (workflow 41150619851).
 - [ ] Integrar as variantes e o helper ao runtime nativo móvel e validar os uniforms clamp-to-border no desenho normal e deferred.
-- [x] Comparador sintético G3 host-only: dez cenas em Mesa/EGL com Desktop GL 4.2 Core e OpenGL ES 3.0 forçados; todas tiveram max_delta=0 e zero pixels divergentes (workflow 41152253802).
-- [ ] Estender a comparação ao pipeline G2: BG priorities, OBJ windows, alpha blending, backdrop, master brightness e composição das duas telas.
+- [x] Comparador sintético G3 host-only: dez cenas em Mesa/EGL com Desktop GL 4.2 Core e OpenGL ES 3.0 forçados; todas tiveram `max_delta=0` e zero pixels divergentes (workflow 41152253802).
+- [x] Comparador sintético G2 host-only: 14 cenas cobrindo seleção top/bottom, backdrop, ordem/prioridades BG, blending BG/backdrop/OBJ, brightness increase/decrease, master brightness, pilha/janelas OBJ e BG0 3D alpha; todas tiveram `max_delta=0` e zero pixels divergentes (workflow 41152745126).
+- [ ] Expandir as provas para a composição simultânea das duas telas e layouts vertical/horizontal/large; os probes atuais exercitam as cenas G2 por seleção de tela, mas não validam ainda todo o arranjo composto do runtime.
 - [ ] Aprovar ANGLE/Metal pelo mesmo comparador e repetir em drivers de aparelhos.
 - **Gate:** não avançar se houver discrepância visual sem explicação e limite aceito.
 
