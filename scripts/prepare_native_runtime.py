@@ -1064,6 +1064,26 @@ MAIN_RENDER_HANDOFF_PATCHED = r'''  SIM_RenderInit(NULL);
     fprintf(stderr, "Native renderer initialization failed; aborting startup.\n");
     return 1;
   }
+
+  // Record the actual OpenGL adapter and API before the first game frame.
+  // Driver strings can be NULL; diagnostics must never interrupt startup.
+  GLint glMajorVersion = 0;
+  GLint glMinorVersion = 0;
+  glGetIntegerv(GL_MAJOR_VERSION, &glMajorVersion);
+  glGetIntegerv(GL_MINOR_VERSION, &glMinorVersion);
+  const GLubyte *glVendor = glGetString(GL_VENDOR);
+  const GLubyte *glRenderer = glGetString(GL_RENDERER);
+  const GLubyte *glVersion = glGetString(GL_VERSION);
+  const GLubyte *glslVersion = glGetString(GL_SHADING_LANGUAGE_VERSION);
+  fprintf(stderr,
+          "[Platina-Renderer] backend=OpenGL vendor=%s renderer=%s version=%s api=%d.%d glsl=%s\n",
+          glVendor ? reinterpret_cast<const char *>(glVendor) : "unavailable",
+          glRenderer ? reinterpret_cast<const char *>(glRenderer) : "unavailable",
+          glVersion ? reinterpret_cast<const char *>(glVersion) : "unavailable",
+          glMajorVersion, glMinorVersion,
+          glslVersion ? reinterpret_cast<const char *>(glslVersion) : "unavailable");
+  fflush(stderr);
+
   G3SIM_DrawInit();
   fprintf(stderr, "[Platina-Progress] renderer-ready\n");
   fflush(stderr);'''

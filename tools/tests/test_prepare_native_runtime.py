@@ -572,6 +572,14 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn('if (SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval) != 0)', content)
             self.assertIn(GL_LOADER_PATCHED, content)
             self.assertIn(MAIN_RENDER_HANDOFF_PATCHED, content)
+            self.assertIn('[Platina-Renderer] backend=OpenGL', content)
+            self.assertIn('glGetIntegerv(GL_MAJOR_VERSION, &glMajorVersion)', content)
+            self.assertIn('glGetIntegerv(GL_MINOR_VERSION, &glMinorVersion)', content)
+            self.assertIn('glGetString(GL_VENDOR)', content)
+            self.assertIn('glGetString(GL_RENDERER)', content)
+            self.assertIn('glGetString(GL_VERSION)', content)
+            self.assertIn('glGetString(GL_SHADING_LANGUAGE_VERSION)', content)
+            self.assertIn('glRenderer ? reinterpret_cast<const char *>(glRenderer) : "unavailable"', content)
             self.assertIn(SDL_VIEWPORT_PATCHED, content)
             nvram_content = (root / "subprojects/libntr/libraries/sim7/src/spi/nvram/nvram_instruction.c").read_text(encoding="utf-8")
             self.assertIn(NVRAM_FILE_READ_PATCHED, nvram_content)
@@ -598,6 +606,23 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertIn(SHADER_LOG_LENGTH_QUERY_PATCHED, content)
             self.assertNotIn(SHADER_LOG_LENGTH_QUERY_ORIGINAL, content)
             self.assertFalse(prepare_native_runtime(root))
+
+    def test_renderer_handoff_logs_gpu_and_api_metadata_safely(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.make_source(root)
+
+            self.assertTrue(prepare_native_runtime(root))
+            content = source.read_text(encoding="utf-8")
+            self.assertEqual(content.count("[Platina-Renderer] backend=OpenGL"), 1)
+            self.assertIn('glVendor ? reinterpret_cast<const char *>(glVendor) : "unavailable"', content)
+            self.assertIn('glRenderer ? reinterpret_cast<const char *>(glRenderer) : "unavailable"', content)
+            self.assertIn('glVersion ? reinterpret_cast<const char *>(glVersion) : "unavailable"', content)
+            self.assertIn('glslVersion ? reinterpret_cast<const char *>(glslVersion) : "unavailable"', content)
+            self.assertLess(content.index("[Platina-Renderer] backend=OpenGL"), content.index("G3SIM_DrawInit();"))
+            self.assertFalse(prepare_native_runtime(root))
+            self.assertEqual(source.read_text(encoding="utf-8"), content)
+
 
     def test_shader_compilation_log_uses_the_shader_being_compiled(self):
         with tempfile.TemporaryDirectory() as tmp:
