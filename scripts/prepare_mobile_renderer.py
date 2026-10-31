@@ -194,6 +194,7 @@ SHADER_INCLUDE_BLOCKS = (
 #include "shaders/g2_fragment.glsl"
 #endif""",
 )
+)
 
 REQUIRED_SOURCE_PATHS = (
     "libraries/sim/src/sim_main.cpp",
