@@ -234,3 +234,189 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -    }
 -
      SIM::GUI::NewFrame();
+
+diff --git a/include/simulator/sim_gui.hpp b/include/simulator/sim_gui.hpp
+--- a/include/simulator/sim_gui.hpp
++++ b/include/simulator/sim_gui.hpp
+@@ -1,5 +1,6 @@
+ #ifndef LIBNTR_SIM_GUI_HPP
+ #define LIBNTR_SIM_GUI_HPP
+ 
++#include <cstdint>
+ #include <nitro/types.h>
+ #include <SDL2/SDL.h>
+ #include <functional>
+@@ -17,6 +18,14 @@
+ bool IsGameLogicPaused();
+ void AppButton(const char * label, bool * state, void (*aInitFunc)(void), void (*aAppFunc)(bool *));
+ 
++void ConfigureTouchOverlay(int width, int height,
++                           int safeLeft, int safeTop,
++                           int safeRight, int safeBottom);
++bool TouchOverlayHitTest(int x, int y);
++void TouchOverlayBegin(bool finger, std::int64_t deviceId,
++                       std::int64_t pointerId, int x, int y);
++void TouchOverlayMove(bool finger, std::int64_t deviceId,
++                      std::int64_t pointerId, int x, int y);
++void TouchOverlayEnd(bool finger, std::int64_t deviceId, std::int64_t pointerId);
++void TouchOverlayCancelAll();
++std::uint16_t TouchOverlayPressedMask();
+ 
+ 
+ 
+diff --git a/libraries/sim/src/sim_gui.cpp b/libraries/sim/src/sim_gui.cpp
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -6,6 +6,7 @@
+ #include "imgui_impl_sdl2.h"
+ #include "gui_internal.hpp"
+ 
++#include "virtual_touch_controls.hpp"
+ #include "ImGuiFileDialog.h"
+ 
+ namespace SIM::GUI {
+@@ -20,6 +21,108 @@
+ 
+ static std::function<void(std::string)> sFileDialogCallback = nullptr;
+ 
++static Platina::MobileInput::VirtualTouchControls sTouchControls;
++
++static ImVec2 ToImVec2(const Platina::MobileInput::Point &point) {
++    return ImVec2(static_cast<float>(point.x), static_cast<float>(point.y));
++}
++
++static void DrawCenteredText(ImDrawList *drawList, const ImVec2 &center,
++                             const char *label, ImU32 color) {
++    const ImVec2 textSize = ImGui::CalcTextSize(label);
++    drawList->AddText(
++        ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
++        color, label);
++}
++
++static void DrawDPadDirection(ImDrawList *drawList, const ImVec2 &center,
++                              float radius, const char *label, bool pressed) {
++    const ImU32 fill = pressed ? IM_COL32(55, 155, 235, 205)
++                               : IM_COL32(18, 25, 38, 155);
++    drawList->AddCircleFilled(center, radius, fill, 20);
++    drawList->AddCircle(center, radius, IM_COL32(220, 235, 250, 145), 20, 1.5f);
++    DrawCenteredText(drawList, center, label, IM_COL32(255, 255, 255, 235));
++}
++
++static void DrawMobileTouchOverlay() {
++#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)
++    const auto visuals = sTouchControls.Visuals();
++    if (!sTouchControls.IsConfigured()) {
++        return;
++    }
++
++    ImDrawList *drawList = ImGui::GetForegroundDrawList();
++    const auto &dpad = visuals[0];
++    const ImVec2 dpadCenter = ToImVec2(dpad.center);
++    drawList->AddCircleFilled(
++        dpadCenter, dpad.radius, IM_COL32(12, 18, 30, 112), 40);
++    drawList->AddCircle(
++        dpadCenter, dpad.radius, IM_COL32(225, 235, 248, 145), 40, 2.0f);
++
++    const auto pressed = sTouchControls.PressedMask();
++    const float offset = dpad.radius * 0.53f;
++    const float directionRadius = dpad.radius * 0.29f;
++    DrawDPadDirection(drawList,
++        ImVec2(dpadCenter.x, dpadCenter.y - offset), directionRadius, "U",
++        (pressed & Platina::MobileInput::VirtualButtonUp) != 0);
++    DrawDPadDirection(drawList,
++        ImVec2(dpadCenter.x, dpadCenter.y + offset), directionRadius, "D",
++        (pressed & Platina::MobileInput::VirtualButtonDown) != 0);
++    DrawDPadDirection(drawList,
++        ImVec2(dpadCenter.x - offset, dpadCenter.y), directionRadius, "L",
++        (pressed & Platina::MobileInput::VirtualButtonLeft) != 0);
++    DrawDPadDirection(drawList,
++        ImVec2(dpadCenter.x + offset, dpadCenter.y), directionRadius, "R",
++        (pressed & Platina::MobileInput::VirtualButtonRight) != 0);
++
++    for (std::size_t index = 1; index < visuals.size(); ++index) {
++        const auto &button = visuals[index];
++        const ImVec2 center = ToImVec2(button.center);
++        const ImU32 fill = button.pressed
++            ? IM_COL32(45, 145, 225, 205)
++            : IM_COL32(18, 25, 38, 145);
++        drawList->AddCircleFilled(center, button.radius, fill, 32);
++        drawList->AddCircle(center, button.radius,
++                            IM_COL32(225, 235, 248, 160), 32, 1.5f);
++        DrawCenteredText(drawList, center, button.label,
++                         IM_COL32(255, 255, 255, 238));
++    }
++#endif
++}
++
+ void PrjMain(bool *) __attribute__((weak));
+@@ -87,6 +190,7 @@
+         ImGui::End();
+     }
++
++    DrawMobileTouchOverlay();
+ }
+ 
+ void OpenFileDialog(std::function<void(std::string)> callback) {
+@@ -161,4 +265,49 @@
+     }
+ }
+ 
++void ConfigureTouchOverlay(int width, int height,
++                           int safeLeft, int safeTop,
++                           int safeRight, int safeBottom) {
++    sTouchControls.Configure(width, height,
++        {safeLeft, safeTop, safeRight, safeBottom});
++}
++
++bool TouchOverlayHitTest(int x, int y) {
++#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)
++    return sTouchControls.Claims({x, y});
++#else
++    (void)x;
++    (void)y;
++    return false;
++#endif
++}
++
++void TouchOverlayBegin(bool finger, std::int64_t deviceId,
++                       std::int64_t pointerId, int x, int y) {
++    sTouchControls.Begin({
++        finger ? Platina::MobileInput::PointerSource::Finger
++               : Platina::MobileInput::PointerSource::Mouse,
++        deviceId,
++        pointerId,
++    }, {x, y});
++}
++
++void TouchOverlayMove(bool finger, std::int64_t deviceId,
++                      std::int64_t pointerId, int x, int y) {
++    sTouchControls.Move({
++        finger ? Platina::MobileInput::PointerSource::Finger
++               : Platina::MobileInput::PointerSource::Mouse,
++        deviceId,
++        pointerId,
++    }, {x, y});
++}
++
++void TouchOverlayEnd(bool finger, std::int64_t deviceId, std::int64_t pointerId) {
++    sTouchControls.End({
++        finger ? Platina::MobileInput::PointerSource::Finger
++               : Platina::MobileInput::PointerSource::Mouse,
++        deviceId,
++        pointerId,
++    });
++}
++
++void TouchOverlayCancelAll() {
++    sTouchControls.CancelAll();
++}
++
++std::uint16_t TouchOverlayPressedMask() {
++#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)
++    return sTouchControls.PressedMask();
++#else
++    return 0;
++#endif
++}
++
+ }
