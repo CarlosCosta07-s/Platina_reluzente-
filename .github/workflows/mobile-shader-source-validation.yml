@@ -7,6 +7,7 @@ on:
       - "mobile/renderer/gles300/**"
       - "tools/validate_mobile_renderer_shaders.py"
       - "tools/tests/test_mobile_renderer_sources.py"
+      - "tools/tests/cpp/**"
       - ".github/workflows/mobile-shader-source-validation.yml"
   workflow_dispatch:
 
