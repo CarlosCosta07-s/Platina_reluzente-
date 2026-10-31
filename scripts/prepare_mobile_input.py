@@ -15,11 +15,13 @@ PINNED_LIBNTR_REVISION = "1555d911ac80c0190ac1c321f99f1323de8b3c09"
 SOURCE_RELATIVE_PATH = Path("libraries/sim/src/sim_main.cpp")
 HEADER_RELATIVE_PATH = Path("libraries/sim/src/touch_input_router.hpp")
 OVERLAY_HEADER_RELATIVE_PATH = Path("libraries/sim/src/virtual_touch_controls.hpp")
+IMGUI_OVERLAY_HEADER_RELATIVE_PATH = Path("libraries/sim/src/imgui_touch_overlay.hpp")
 PATCH_RELATIVE_PATH = Path(
     "mobile/input/patches/libntr-1555d911-touch-router.patch"
 )
 HEADER_SOURCE_RELATIVE_PATH = Path("mobile/input/touch_input_router.hpp")
 OVERLAY_HEADER_SOURCE_RELATIVE_PATH = Path("mobile/input/virtual_touch_controls.hpp")
+IMGUI_OVERLAY_HEADER_SOURCE_RELATIVE_PATH = Path("mobile/input/imgui_touch_overlay.hpp")
 PATCH_MARKER = "PLATINA_MOBILE_TOUCH_INPUT_ROUTER_V1"
 
 
@@ -88,11 +90,13 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
     installed_header = root / HEADER_RELATIVE_PATH
     header_source = repository_root / HEADER_SOURCE_RELATIVE_PATH
     overlay_header_source = repository_root / OVERLAY_HEADER_SOURCE_RELATIVE_PATH
+    imgui_overlay_header_source = repository_root / IMGUI_OVERLAY_HEADER_SOURCE_RELATIVE_PATH
     patch_path = repository_root / PATCH_RELATIVE_PATH
 
     source_bytes = read_regular_file(source_path)
     header_bytes = read_regular_file(header_source)
     overlay_header_bytes = read_regular_file(overlay_header_source)
+    imgui_overlay_header_bytes = read_regular_file(imgui_overlay_header_source)
     read_regular_file(patch_path)
     source_text = source_bytes.decode("utf-8")
 
@@ -118,11 +122,21 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
             raise MobileInputPreparationError(
                 "The installed virtual-control header differs from the reviewed source header."
             )
+        installed_imgui_overlay_header = root / IMGUI_OVERLAY_HEADER_RELATIVE_PATH
+        if not installed_imgui_overlay_header.is_file() or installed_imgui_overlay_header.is_symlink():
+            raise MobileInputPreparationError(
+                "The ImGui overlay patch is applied but its drawing header is missing."
+            )
+        if installed_imgui_overlay_header.read_bytes() != imgui_overlay_header_bytes:
+            raise MobileInputPreparationError(
+                "The installed ImGui overlay header differs from the reviewed source header."
+            )
         run_git(root, "diff", "--check")
         print("Mobile SDL touch input patch is already applied.")
         return False
 
     installed_overlay_header = root / OVERLAY_HEADER_RELATIVE_PATH
+    installed_imgui_overlay_header = root / IMGUI_OVERLAY_HEADER_RELATIVE_PATH
     if installed_header.exists() or installed_header.is_symlink():
         if installed_header.is_symlink() or installed_header.read_bytes() != header_bytes:
             raise MobileInputPreparationError(
@@ -132,6 +146,11 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
         if installed_overlay_header.is_symlink() or installed_overlay_header.read_bytes() != overlay_header_bytes:
             raise MobileInputPreparationError(
                 "A different virtual_touch_controls.hpp already exists in the libntr checkout."
+            )
+    if installed_imgui_overlay_header.exists() or installed_imgui_overlay_header.is_symlink():
+        if installed_imgui_overlay_header.is_symlink() or installed_imgui_overlay_header.read_bytes() != imgui_overlay_header_bytes:
+            raise MobileInputPreparationError(
+                "A different imgui_touch_overlay.hpp already exists in the libntr checkout."
             )
 
     # The exact source revision, patch context, and header are validated before
@@ -153,6 +172,7 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
         for destination, contents in (
             (installed_header, header_bytes),
             (installed_overlay_header, overlay_header_bytes),
+            (installed_imgui_overlay_header, imgui_overlay_header_bytes),
         ):
             if not destination.exists():
                 atomic_write(destination, contents)
@@ -171,6 +191,10 @@ def prepare_mobile_input(libntr_root: str | Path) -> bool:
         if installed_overlay_header.read_bytes() != overlay_header_bytes:
             raise MobileInputPreparationError(
                 "The installed virtual-control header failed content verification."
+            )
+        if installed_imgui_overlay_header.read_bytes() != imgui_overlay_header_bytes:
+            raise MobileInputPreparationError(
+                "The installed ImGui overlay header failed content verification."
             )
         run_git(root, "diff", "--check")
     except Exception:
