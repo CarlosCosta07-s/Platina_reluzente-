@@ -60,9 +60,11 @@ class MobileRendererPreparationTests(unittest.TestCase):
         shader_includes = "\n".join(original for original, _ in mobile.SHADER_INCLUDE_BLOCKS)
         (sim_src / "sim_shaders.cpp").write_text(shader_includes + "\n", encoding="utf-8")
         (sim_src / "meson.build").write_text(
-            "libsim_args = [ ]\n"
-            + mobile.GLAD_SOURCE_ORIGINAL
-            + "\n",
+            mobile.GLAD_SOURCE_GUARD + "\n",
+            encoding="utf-8",
+        )
+        (libntr / "libraries" / "sim" / "meson.build").write_text(
+            "libsim_args = [ ]\n",
             encoding="utf-8",
         )
 
@@ -117,11 +119,14 @@ class MobileRendererPreparationTests(unittest.TestCase):
             self.assertIn('shaders/gles300/g2_fragment.glsl', shaders)
             self.assertIn('shaders/g2_fragment.glsl', shaders)
 
-            meson = (libntr / "libraries/sim/src/meson.build").read_text(encoding="utf-8")
-            self.assertIn("build_target != 'android'", meson)
-            self.assertIn("-DSDK_BUILD_ANDROID", meson)
-            self.assertIn("-DSDK_BUILD_IOS", meson)
-            self.assertIn("-DIMGUI_IMPL_OPENGL_ES3", meson)
+            source_meson = (libntr / "libraries/sim/src/meson.build").read_text(encoding="utf-8")
+            self.assertEqual(source_meson, mobile.GLAD_SOURCE_GUARD + "\n")
+            parent_meson = (libntr / "libraries/sim/meson.build").read_text(encoding="utf-8")
+            self.assertIn("if build_target == 'android'", parent_meson)
+            self.assertIn("elif build_target == 'ios'", parent_meson)
+            self.assertIn("-DSDK_BUILD_ANDROID", parent_meson)
+            self.assertIn("-DSDK_BUILD_IOS", parent_meson)
+            self.assertIn("-DIMGUI_IMPL_OPENGL_ES3", parent_meson)
 
             for name in mobile.ASSET_NAMES:
                 self.assertTrue((libntr / "include/simulator" / name).is_file()
