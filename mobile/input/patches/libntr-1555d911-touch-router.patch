@@ -8,11 +8,11 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +// PLATINA_MOBILE_TOUCH_INPUT_ROUTER_V1
 +#include "touch_input_router.hpp"
 +#include "virtual_touch_controls.hpp"
-+#include "simulator/imgui/imgui.hpp"
++#include "imgui_touch_overlay.hpp"
  #include "git_info.h"
  
  // Simulator configuration
-@@ -69,6 +73,144 @@
+@@ -69,6 +73,78 @@
  extern OSThreadInfo OSi_ThreadInfo;
  
  static u32 s_TouchPanelCoords[4] = {}; // The bounding box of the touch screen
@@ -89,75 +89,9 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +  s_tpData.touch = 0;
 +}
 +
-+static ImVec2 SIM_TouchToImVec2(
-+    const Platina::MobileInput::Point &point) {
-+  return ImVec2(static_cast<float>(point.x), static_cast<float>(point.y));
-+}
-+
-+static void SIM_DrawTouchLabel(ImDrawList *drawList, const ImVec2 &center,
-+                               const char *label, ImU32 color) {
-+  const ImVec2 textSize = ImGui::CalcTextSize(label);
-+  drawList->AddText(
-+      ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
-+      color, label);
-+}
-+
-+static void SIM_DrawTouchDirection(ImDrawList *drawList,
-+                                   const ImVec2 &center, float radius,
-+                                   const char *label, bool pressed) {
-+  const ImU32 fill = pressed ? IM_COL32(55, 155, 235, 205)
-+                             : IM_COL32(18, 25, 38, 155);
-+  drawList->AddCircleFilled(center, radius, fill, 20);
-+  drawList->AddCircle(center, radius, IM_COL32(220, 235, 250, 145), 20, 1.5f);
-+  SIM_DrawTouchLabel(drawList, center, label, IM_COL32(255, 255, 255, 235));
-+}
-+
-+static void SIM_DrawMobileTouchOverlay() {
-+#if defined(SDK_BUILD_ANDROID) || defined(SDK_BUILD_IOS)
-+  if (!s_TouchControls.IsConfigured()) {
-+    return;
-+  }
-+  const auto visuals = s_TouchControls.Visuals();
-+  ImDrawList *drawList = ImGui::GetForegroundDrawList();
-+  const auto &dpad = visuals[0];
-+  const ImVec2 dpadCenter = SIM_TouchToImVec2(dpad.center);
-+  drawList->AddCircleFilled(dpadCenter, dpad.radius,
-+                            IM_COL32(12, 18, 30, 112), 40);
-+  drawList->AddCircle(dpadCenter, dpad.radius,
-+                      IM_COL32(225, 235, 248, 145), 40, 2.0f);
-+  const auto pressed = s_TouchControls.PressedMask();
-+  const float offset = dpad.radius * 0.53f;
-+  const float directionRadius = dpad.radius * 0.29f;
-+  SIM_DrawTouchDirection(drawList,
-+      ImVec2(dpadCenter.x, dpadCenter.y - offset), directionRadius, "U",
-+      (pressed & Platina::MobileInput::VirtualButtonUp) != 0);
-+  SIM_DrawTouchDirection(drawList,
-+      ImVec2(dpadCenter.x, dpadCenter.y + offset), directionRadius, "D",
-+      (pressed & Platina::MobileInput::VirtualButtonDown) != 0);
-+  SIM_DrawTouchDirection(drawList,
-+      ImVec2(dpadCenter.x - offset, dpadCenter.y), directionRadius, "L",
-+      (pressed & Platina::MobileInput::VirtualButtonLeft) != 0);
-+  SIM_DrawTouchDirection(drawList,
-+      ImVec2(dpadCenter.x + offset, dpadCenter.y), directionRadius, "R",
-+      (pressed & Platina::MobileInput::VirtualButtonRight) != 0);
-+  for (std::size_t index = 1; index < visuals.size(); ++index) {
-+    const auto &button = visuals[index];
-+    const ImVec2 center = SIM_TouchToImVec2(button.center);
-+    const ImU32 fill = button.pressed
-+        ? IM_COL32(45, 145, 225, 205)
-+        : IM_COL32(18, 25, 38, 145);
-+    drawList->AddCircleFilled(center, button.radius, fill, 32);
-+    drawList->AddCircle(center, button.radius,
-+                        IM_COL32(225, 235, 248, 160), 32, 1.5f);
-+    SIM_DrawTouchLabel(drawList, center, button.label,
-+                       IM_COL32(255, 255, 255, 238));
-+  }
-+#endif
-+}
-+
  // SND
  #include <nitro/snd/common/work.h>
-@@ -211,8 +353,6 @@
+@@ -211,8 +287,6 @@
  
  u8 s_mosaicTable[16][256];
  
@@ -166,13 +100,13 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
  // Local Procedure Declarations
  static void ConvertMsgParams(draw_msg_t *msg);
  static u8 GetNumParamsFromCommandType(draw_command_type_t type);
-@@ -219,5 +359,4 @@
+@@ -219,5 +293,4 @@
  static u8 GetParamSizeFromCommandType(draw_command_type_t type);
  static u8 isParamSigned(draw_command_type_t type);
 -static u64 map(u64 x, u64 in_min, u64 in_max, u64 out_min, u64 out_max);
  static void process_nibble(unsigned char data4bit, int *Index, int *Pcm16bit);
  static void DrawScreenQuad();
-@@ -261,9 +400,5 @@
+@@ -261,9 +334,5 @@
  SIM_config_type *SIM_GetConfigPtr() { return &s_SIM_config; }
  
  SDL_Window * SIM_GetSDLWindow() {return window;}
@@ -182,7 +116,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -}
 -
  void SIM_u16ToRGB(u16 in, u8 *r, u8 *g, u8 *b) {
-@@ -945,12 +1080,13 @@
+@@ -945,12 +1014,13 @@
  
    SDL_Event Event;
    char c;
@@ -198,7 +132,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 +  static u16 touchOverlayBasePadKeys = 0xFFFF;
 +  static u16 touchOverlayBaseXy = 0xFFFF;
    G3SIM_FlushArray();
-@@ -1065,15 +1201,32 @@
+@@ -1065,15 +1135,32 @@
      }
  
 +    s_TouchControls.Configure(windowWidth, windowHeight, {});
@@ -231,7 +165,7 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
        if (Event.type == SDL_KEYDOWN) {
          int keyRead = Event.key.keysym.sym;
          if (keyRead == s_SIM_config.padSettings.aKey) {
-@@ -1235,34 +1388,124 @@
+@@ -1235,34 +1322,124 @@
            HandleJoystickKeyUp(Event.jaxis.axis |
                                SIM_CONFIG_JOY_AXIS_MINUS_MASK);
          }
@@ -376,6 +310,6 @@ diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
 -
      SIM::GUI::NewFrame();
      SIM::GUI::Main();
-+    SIM_DrawMobileTouchOverlay();
++    Platina::MobileInput::DrawVirtualTouchControls(s_TouchControls);
  
 
