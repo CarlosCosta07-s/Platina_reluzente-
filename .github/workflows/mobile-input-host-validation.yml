@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "mobile/input/**"
+      - "tools/tests/cpp/virtual_touch_controls_test.cpp"
+      - "tools/tests/test_mobile_virtual_controls.py"
       - "scripts/prepare_mobile_renderer.py"
       - "scripts/prepare_mobile_input.py"
       - "tools/tests/cpp/touch_input_router_test.cpp"
@@ -61,3 +63,6 @@ jobs:
 
       - name: Compile and run source-only touch router tests
         run: python tools/tests/test_mobile_touch_input_router.py
+
+      - name: Compile and run virtual touch control overlay tests
+        run: python tools/tests/test_mobile_virtual_controls.py
