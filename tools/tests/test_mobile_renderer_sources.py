@@ -51,9 +51,14 @@ class MobileRendererSourceTests(unittest.TestCase):
 
     def test_g2_sampler_arrays_are_accessed_only_with_literal_indices(self):
         source = without_glsl_comments(self.read_shader("g2_fragment.glsl"))
+        access_source = re.sub(
+            r"(?m)^\s*uniform\s+sampler2D\s+\w+\s*\[\s*\d+\s*\]\s*;\s*$",
+            "",
+            source,
+        )
         sampler_arrays = re.findall(
             r"\b(?:bgTexture|objTexture)\s*\[\s*([^\]]+)\s*\]",
-            source,
+            access_source,
         )
         self.assertTrue(sampler_arrays, "Expected explicit sampler-array accesses.")
         for index in sampler_arrays:
