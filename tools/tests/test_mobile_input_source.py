@@ -60,6 +60,8 @@ def main() -> int:
         raise SystemExit("Legacy polling path remains after the event-driven router patch.")
     if "static u8 isMouseDown = 0;" in source:
         raise SystemExit("Legacy single-pointer mouse state remains after the router patch.")
+    if "static u64 map(u64 x, u64 in_min" in source:
+        raise SystemExit("Unused legacy mouse coordinate mapper remains after the event-driven router patch.")
 
     # The existing viewport/screen-layout calculation must remain the source
     # of DS touch geometry; the patch must not replace or duplicate it.
