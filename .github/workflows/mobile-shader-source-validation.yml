@@ -6,7 +6,9 @@ on:
     paths:
       - "mobile/renderer/gles300/**"
       - "tools/validate_mobile_renderer_shaders.py"
+      - "scripts/prepare_mobile_renderer.py"
       - "tools/tests/test_mobile_renderer_sources.py"
+      - "tools/tests/test_prepare_mobile_renderer.py"
       - "tools/tests/cpp/**"
       - ".github/workflows/mobile-shader-source-validation.yml"
   workflow_dispatch:
@@ -34,6 +36,9 @@ jobs:
 
       - name: Run ROM-free shader source contract tests
         run: python tools/tests/test_mobile_renderer_sources.py
+
+      - name: Test fail-closed mobile renderer source preparation
+        run: python tools/tests/test_prepare_mobile_renderer.py
 
       - name: Install host GLSL validator
         run: |
