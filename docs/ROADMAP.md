@@ -4,20 +4,19 @@ O foco é concluir e estabilizar a base nativa de **Windows x64 e Linux x86-64**
 
 ## Ordem de plataformas e gate de paridade
 
-Windows x64 e Linux x86-64 continuam sendo a referência de comportamento e a baseline desktop. O mantenedor informou que os dois alvos compilaram; o teste manual com ROM ainda aguarda acesso a um PC. A trilha Android/iOS foi reaberta para **desenvolvimento de código-fonte, arquitetura, contratos e provas em host**, sem gerar builds móveis.
+Windows x64 e Linux x86-64 são a prioridade ativa e a referência de comportamento. O objetivo imediato é estabilizar o renderer OpenGL existente, confirmar a inicialização e o gameplay reais com uma cópia local compatível de Pokémon Platinum USA Rev. 1, concluir a validação de idioma/saves/entrada e, depois, implementar Vulkan como backend independente e selecionável no Desktop.
 
-A regra solicitada para a etapa móvel é obrigatória: **Android e iOS só poderão ser compilados depois de alcançarem paridade funcional 1:1 com o Desktop**. Até esse gate, não criar APK/AAB/IPA, não executar builds NDK/Xcode, não publicar artefatos móveis e não adicionar workflows que compilem os apps móveis.
+**Android e iOS estão pausados.** Nenhum trabalho novo de arquitetura, código-fonte, testes de plataforma, build NDK/Xcode, APK, AAB ou IPA será iniciado enquanto a versão Desktop não cumprir todos os critérios de prontidão definidos em [docs/DESKTOP_FIRST_PLAN.md](DESKTOP_FIRST_PLAN.md). A documentação móvel, os contratos, as auditorias e as referências já existentes permanecem preservados; a pausa não significa apagar nem abandonar esse trabalho.
 
-O trabalho source-only pode incluir:
-- auditoria e adaptação do renderer com provas sintéticas executadas em host;
-- API C/C++ compartilhada de ciclo de vida e serviços de plataforma;
-- adaptadores de armazenamento, importação, preparação, saves, idioma e logs;
-- shells Kotlin/Compose e Swift/SwiftUI como código-fonte, sem build dos alvos;
-- testes ROM-free e comparadores de pixels com dados sintéticos.
+Durante a pausa:
+- Não criar nem alterar alvos de compilação Android/iOS.
+- Não adicionar etapas móveis aos workflows Desktop.
+- Não iniciar novas integrações ou testes específicos de dispositivos móveis.
+- Corrigir no Desktop somente problemas que afetem Windows/Linux ou a qualidade comum do runtime.
 
-O contrato de funcionalidades, as provas obrigatórias e o gate de primeira compilação estão em [docs/MOBILE_PARITY_CONTRACT.md](MOBILE_PARITY_CONTRACT.md). A matriz precisa estar 100% implementada e aprovada antes do primeiro build Android/iOS. A compilação do Desktop, por si só, não substitui a validação manual de gameplay com ROM. A auditoria do primeiro bloqueio técnico, o renderer, está em [docs/MOBILE_RENDERER_AUDIT.md](MOBILE_RENDERER_AUDIT.md). A arquitetura dos hosts móveis também foi comparada com [docs/GEN1RECOMP_MOBILE_REFERENCE.md](GEN1RECOMP_MOBILE_REFERENCE.md).
+O Desktop será considerado pronto para a retomada móvel somente depois de haver evidência reproduzível de builds e pacotes Windows/Linux, inicialização com ROM local válida, sequência mínima de gameplay, áudio/entrada, gravação e retomada de saves, idioma original e PT-BR validados, renderers OpenGL e Vulkan comparados e fallback testado, além da revisão de distribuição e licenças. Os critérios detalhados e a ordem de execução estão no plano Desktop-first.
 
-O projeto continua sem usar ROMs ou dados extraídos na CI. Os workflows Desktop devem permanecer independentes dos trabalhos móveis e não podem ser alterados para suportar builds móveis.
+O projeto continua sem usar ROMs ou dados extraídos na CI. Os workflows Desktop devem permanecer independentes dos trabalhos móveis e não podem gerar artefatos Android/iOS.
 
 ## Trilha paralela — Pokémon Black Version
 
