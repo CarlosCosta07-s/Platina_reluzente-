@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/native-desktop.yml"
+      - ".github/workflows/mobile-input-host-validation.yml"
+      - "mobile/input/**"
       - ".gitmodules"
       - "scripts/**"
       - "tools/**"
@@ -92,6 +94,10 @@ jobs:
           set -Eeuo pipefail
           ./drun.sh make meson
           python3 subprojects/meson-1.12.0/meson.py subprojects download --sourcedir "$PWD"
+          # Patch the temporary pinned libntr checkout before compiling the
+          # existing Linux target. No Android/iOS target or package is built.
+          python3 "$GITHUB_WORKSPACE/scripts/prepare_mobile_renderer.py" "$PWD/subprojects/libntr"
+          python3 "$GITHUB_WORKSPACE/scripts/prepare_mobile_input.py" "$PWD/subprojects/libntr"
           python3 "$GITHUB_WORKSPACE/scripts/prepare_native_runtime.py" "$PWD"
       - name: Compile native Linux target
         working-directory: vendor/pokeplatinum-native
@@ -254,6 +260,11 @@ jobs:
           .\Launch_MSys2.ps1 "make meson"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\Launch_MSys2.ps1 "python subprojects/meson-1.12.0/meson.py subprojects download --sourcedir ."
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $libntrRoot = Join-Path (Get-Location).Path "subprojects/libntr"
+          python (Join-Path $env:GITHUB_WORKSPACE "scripts/prepare_mobile_renderer.py") $libntrRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python (Join-Path $env:GITHUB_WORKSPACE "scripts/prepare_mobile_input.py") $libntrRoot
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python (Join-Path $env:GITHUB_WORKSPACE "scripts/prepare_native_runtime.py") (Get-Location).Path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
